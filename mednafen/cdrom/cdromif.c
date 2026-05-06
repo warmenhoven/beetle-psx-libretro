@@ -77,7 +77,7 @@
 #include "../error.h"
 #include "../Stream.h"
 #include "CDUtility.h"
-#include "CDAccess_c.h"
+#include "CDAccess.h"
 #include "cdromif.h"
 
 extern retro_log_printf_t log_cb;

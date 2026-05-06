@@ -15,6 +15,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include <new>
+#include <map>
+#include <string>
 #include <boolean.h>
 #include <streams/file_stream.h>
 
@@ -30,6 +33,7 @@
 #include "../MemoryStream.h"
 
 #include "CDAccess.h"
+#include "cdaccess_track.h"
 #include "CDAccess_PBP.h"
 #include "CDUtility.h"
 
@@ -100,8 +104,66 @@ typedef struct {
    unsigned char *buf;
 } PGD_HEADER;
 
-bool CDAccess_PBP::ImageOpen(const char *path, bool image_memcache)
+struct CDAccess_PBP
 {
+   CDAccess  base;
+
+   Stream   *fp;
+   uint32_t  pbp_file_offsets[8];   /* PBP_NUM_FILES */
+
+   uint8_t   buff_raw[16][2352];
+   uint8_t   buff_compressed[2352 * 16];
+   uint32_t *index_table;
+   uint32_t  index_len;
+   uint32_t  current_block;
+   uint32_t  sector_in_blk;
+
+   int32_t   NumTracks;
+   int32_t   FirstTrack;
+   int32_t   LastTrack;
+   int32_t   total_sectors;
+
+   std::string sbi_path;
+   uint32_t  discs_start_offset[5];
+   uint32_t  psisoimg_offset;
+
+   uint16_t  fixed_sectors;
+   bool      is_official;
+
+   CDRFILE_TRACK_INFO Tracks[100];
+   std::map<uint32, cpp11_array_doodad> SubQReplaceMap;
+};
+
+enum PBP_FILES{
+   PARAM_SFO,
+   ICON0_PNG,
+   ICON1_PMF,
+   PIC0_PNG,
+   PIC1_PNG,
+   SND0_AT3,
+   DATA_PSP,
+   DATA_PSAR,
+   PBP_NUM_FILES
+};
+
+/* Forward declarations - methods reference each other regardless of
+ * source order. */
+static bool CDAccess_PBP_ImageOpen(CDAccess_PBP *self, const char *path, bool image_memcache);
+static void CDAccess_PBP_Cleanup(CDAccess_PBP *self);
+static void CDAccess_PBP_MakeSubPQ(CDAccess_PBP *self, int32 lba, uint8 *SubPWBuf);
+static int CDAccess_PBP_decompress2(CDAccess_PBP *self, void *out, uint32_t *out_size, void *in, uint32_t in_size);
+static int CDAccess_PBP_LoadSBI(CDAccess_PBP *self, const char* sbi_path);
+static int CDAccess_PBP_decrypt_pgd(CDAccess_PBP *self, unsigned char* pgd_data, int pgd_size);
+static int CDAccess_PBP_decode_range(CDAccess_PBP *self, unsigned int *range, unsigned int *code, unsigned char **src);
+static int CDAccess_PBP_decode_bit(CDAccess_PBP *self, unsigned int *range, unsigned int *code, int *index, unsigned char **src, unsigned char *c);
+static int CDAccess_PBP_decode_word(CDAccess_PBP *self, unsigned char *ptr, int index, int *bit_flag, unsigned int *range, unsigned int *code, unsigned char **src);
+static int CDAccess_PBP_decode_number(CDAccess_PBP *self, unsigned char *ptr, int index, int *bit_flag, unsigned int *range, unsigned int *code, unsigned char **src);
+static int CDAccess_PBP_decompress(CDAccess_PBP *self, unsigned char *out, unsigned char *in, unsigned int size);
+static int CDAccess_PBP_fix_sector(CDAccess_PBP *self, uint8_t* sector, int32_t lba);
+
+
+
+static bool CDAccess_PBP_ImageOpen(CDAccess_PBP *self, const char *path, bool image_memcache){
    uint8 magic[4];
    char psar_sig[12];
    std::string base_dir, file_base, file_ext;
@@ -130,42 +192,42 @@ bool CDAccess_PBP::ImageOpen(const char *path, bool image_memcache)
             stream_destroy(&mem->base);
          return false;
       }
-      fp = &mem->base;
+      self->fp = &mem->base;
    }
    else
-      fp = &file->base;
+      self->fp = &file->base;
 
    // check for valid pbp
-   if(stream_read(fp, magic, 4) != 4 || magic[0] != 0 || magic[1] != 'P' || magic[2] != 'B' || magic[3] != 'P')
+   if(stream_read(self->fp, magic, 4) != 4 || magic[0] != 0 || magic[1] != 'P' || magic[2] != 'B' || magic[3] != 'P')
    {
       log_cb(RETRO_LOG_ERROR, "Invalid PBP header: %s\n", path);
       return false;
    }
 
    // offsets of internal files
-   stream_seek(fp, 0x8, SEEK_SET);
+   stream_seek(self->fp, 0x8, SEEK_SET);
    for(int i = 0; i < PBP_NUM_FILES; i++)
-      pbp_file_offsets[i] = stream_get_le_u32(fp);
+      self->pbp_file_offsets[i] = stream_get_le_u32(self->fp);
 
    // only data.psar is relevant
-   psisoimg_offset = pbp_file_offsets[DATA_PSAR];
-   stream_seek(fp, pbp_file_offsets[DATA_PSAR], SEEK_SET);
+   self->psisoimg_offset = self->pbp_file_offsets[DATA_PSAR];
+   stream_seek(self->fp, self->pbp_file_offsets[DATA_PSAR], SEEK_SET);
 
-   stream_read(fp, psar_sig, sizeof(psar_sig));
+   stream_read(self->fp, psar_sig, sizeof(psar_sig));
    if(strncmp(psar_sig, "PSTITLEIMG00", sizeof(psar_sig)) == 0)
    {
       // multidisk image
       uint8_t iso_map[0x2A0];
       uint32_t read_offset = 0;
 
-      stream_seek(fp, pbp_file_offsets[DATA_PSAR] + 0x200, SEEK_SET);
-      stream_read(fp, iso_map, sizeof(iso_map));
+      stream_seek(self->fp, self->pbp_file_offsets[DATA_PSAR] + 0x200, SEEK_SET);
+      stream_read(self->fp, iso_map, sizeof(iso_map));
 
       // check for "\0PGD", should indicate whether TOC is encrypted or not?
       if(iso_map[0] == 0 && iso_map[1] == 'P' && iso_map[2] == 'G' && iso_map[3] == 'D')
       {
          log_cb(RETRO_LOG_DEBUG, "[PBP] decrypting multi-disc iso map...\n");
-         int pdg_size = decrypt_pgd(iso_map, sizeof(iso_map));
+         int pdg_size = CDAccess_PBP_decrypt_pgd(self, iso_map, sizeof(iso_map));
 
          if(pdg_size < 1 || pdg_size > sizeof(iso_map))
          {
@@ -173,19 +235,19 @@ bool CDAccess_PBP::ImageOpen(const char *path, bool image_memcache)
             return false;
          }
 
-         is_official = true;
+         self->is_official = true;
          read_offset += 0x90;
       }
 
       for(int i = 0; i < 5; i++)
       {
-         memcpy(&discs_start_offset[i], iso_map+read_offset, sizeof(int32_t));
-         if(discs_start_offset[i] == 0)
+         memcpy(&self->discs_start_offset[i], iso_map+read_offset, sizeof(int32_t));
+         if(self->discs_start_offset[i] == 0)
             break;
 
          PBP_DiscCount = i+1;
          read_offset += sizeof(int32_t);
-         log_cb(RETRO_LOG_DEBUG, "[PBP] DISC[%i] offset = %#x\n", i, pbp_file_offsets[DATA_PSAR]+discs_start_offset[i]);
+         log_cb(RETRO_LOG_DEBUG, "[PBP] DISC[%i] offset = %#x\n", i, self->pbp_file_offsets[DATA_PSAR]+self->discs_start_offset[i]);
       }
 
       if(PBP_DiscCount == 0)
@@ -195,10 +257,10 @@ bool CDAccess_PBP::ImageOpen(const char *path, bool image_memcache)
       }
 
       // default to first disc on loading
-      psisoimg_offset += discs_start_offset[0];
-      stream_seek(fp, psisoimg_offset, SEEK_SET);
+      self->psisoimg_offset += self->discs_start_offset[0];
+      stream_seek(self->fp, self->psisoimg_offset, SEEK_SET);
 
-      stream_read(fp, psar_sig, sizeof(psar_sig));
+      stream_read(self->fp, psar_sig, sizeof(psar_sig));
    }
 
    if(strncmp(psar_sig, "PSISOIMG0000", sizeof(psar_sig)) != 0)
@@ -216,47 +278,36 @@ bool CDAccess_PBP::ImageOpen(const char *path, bool image_memcache)
             sbi_ext[i] += 'A' - 'a';
       }
    }
-   sbi_path = MDFN_EvalFIP(base_dir, file_base + std::string(".") + std::string(sbi_ext));
+   self->sbi_path = MDFN_EvalFIP(base_dir, file_base + std::string(".") + std::string(sbi_ext));
 
    // for multi-disc images change the sbi file syntax to [filename]_[disc_number].sbi instead of [filename].sbi
    if(PBP_DiscCount > 1)
    {
-      // use a substitute char here, set the proper one in Read_TOC()
-      sbi_path.insert(sbi_path.length()-4, "_x");
+      // use a substitute char here, set the proper one in CDAccess_PBP_Read_TOC(self)
+      self->sbi_path.insert(self->sbi_path.length()-4, "_x");
    }
 
    return true;
 }
 
-void CDAccess_PBP::Cleanup(void)
-{
-   if (fp != NULL)
+static void CDAccess_PBP_Cleanup(CDAccess_PBP *self){
+   if (self->fp != NULL)
    {
-      stream_destroy(fp);
-      fp = NULL;
+      stream_destroy(self->fp);
+      self->fp = NULL;
    }
-   if(index_table != NULL)
-      free(index_table);
+   if(self->index_table != NULL)
+      free(self->index_table);
 }
 
-CDAccess_PBP::CDAccess_PBP(bool *success, const char *path, bool image_memcache) : NumTracks(0), FirstTrack(0), LastTrack(0), total_sectors(0)
-{
-   is_official = false;
-   index_table = NULL;
-   fp = NULL;
-   kirk_init();
-   if (!ImageOpen(path, image_memcache))
-      *success = false;
-}
+/* (constructor/destructor handled by factory below) */
 
-CDAccess_PBP::~CDAccess_PBP()
-{
-   Cleanup();
-}
+
+/* (constructor/destructor handled by factory below) */
+
 
 // Note: this function makes use of the current contents(as in |=) in SubPWBuf.
-void CDAccess_PBP::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
-{
+static void CDAccess_PBP_MakeSubPQ(CDAccess_PBP *self, int32 lba, uint8 *SubPWBuf){
    unsigned i;
    uint8_t buf[0xC], adr, control;
    int32_t track;
@@ -266,9 +317,9 @@ void CDAccess_PBP::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
    uint8_t pause_or = 0x00;
    bool track_found = false;
 
-   for(track = FirstTrack; track < (FirstTrack + NumTracks); track++)
+   for(track = self->FirstTrack; track < (self->FirstTrack + self->NumTracks); track++)
    {
-      if(lba >= (Tracks[track].LBA - Tracks[track].pregap_dv - Tracks[track].pregap) && lba < (Tracks[track].LBA + Tracks[track].sectors + Tracks[track].postgap))
+      if(lba >= (self->Tracks[track].LBA - self->Tracks[track].pregap_dv - self->Tracks[track].pregap) && lba < (self->Tracks[track].LBA + self->Tracks[track].sectors + self->Tracks[track].postgap))
       {
          track_found = true;
          break;
@@ -276,9 +327,9 @@ void CDAccess_PBP::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
    }
 
    if(!track_found)
-      track = FirstTrack;
+      track = self->FirstTrack;
 
-   lba_relative = abs((int32)lba - Tracks[track].LBA);
+   lba_relative = abs((int32)lba - self->Tracks[track].LBA);
 
    f            = (lba_relative % 75);
    s            = ((lba_relative / 75) % 60);
@@ -289,15 +340,15 @@ void CDAccess_PBP::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
    ma           = ((lba + 150) / 75 / 60);
 
    adr          = 0x1; // Q channel data encodes position
-   control      = Tracks[track].subq_control;
+   control      = self->Tracks[track].subq_control;
 
    // Handle pause(D7 of interleaved subchannel byte) bit, should be set to 1 when in pregap or postgap.
-   if((lba < Tracks[track].LBA) || (lba >= Tracks[track].LBA + Tracks[track].sectors))
+   if((lba < self->Tracks[track].LBA) || (lba >= self->Tracks[track].LBA + self->Tracks[track].sectors))
       pause_or = 0x80;
 
    // Handle pregap between audio->data track
    {
-      int32_t pg_offset = (int32)lba - Tracks[track].LBA;
+      int32_t pg_offset = (int32)lba - self->Tracks[track].LBA;
 
       // If we're more than 2 seconds(150 sectors) from the real "start" of the track/INDEX 01, and the track is a data track,
       // and the preceding track is an audio track, encode it as audio(by taking the SubQ control field from the preceding track).
@@ -306,8 +357,8 @@ void CDAccess_PBP::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
       //
       if(pg_offset < -150)
       {
-         if((Tracks[track].subq_control & SUBQ_CTRLF_DATA) && (FirstTrack < track) && !(Tracks[track - 1].subq_control & SUBQ_CTRLF_DATA))
-            control = Tracks[track - 1].subq_control;
+         if((self->Tracks[track].subq_control & SUBQ_CTRLF_DATA) && (self->FirstTrack < track) && !(self->Tracks[track - 1].subq_control & SUBQ_CTRLF_DATA))
+            control = self->Tracks[track - 1].subq_control;
       }
    }
 
@@ -315,7 +366,7 @@ void CDAccess_PBP::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
    buf[0] = (adr << 0) | (control << 4);
    buf[1] = U8_to_BCD(track);
 
-   if(lba < Tracks[track].LBA) // Index is 00 in pregap
+   if(lba < self->Tracks[track].LBA) // Index is 00 in pregap
       buf[2] = U8_to_BCD(0x00);
    else
       buf[2] = U8_to_BCD(0x01);
@@ -332,11 +383,11 @@ void CDAccess_PBP::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
 
    subq_generate_checksum(buf);
 
-   if(!SubQReplaceMap.empty())
+   if(!self->SubQReplaceMap.empty())
    {
-      std::map<uint32, cpp11_array_doodad>::const_iterator it = SubQReplaceMap.find(LBA_to_ABA(lba));
+      std::map<uint32, cpp11_array_doodad>::const_iterator it = self->SubQReplaceMap.find(LBA_to_ABA(lba));
 
-      if(it != SubQReplaceMap.end())
+      if(it != self->SubQReplaceMap.end())
          memcpy(buf, it->second.data, 12);
    }
 
@@ -344,16 +395,15 @@ void CDAccess_PBP::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
       SubPWBuf[i] |= (((buf[i >> 3] >> (7 - (i & 0x7))) & 1) ? 0x40 : 0x00) | pause_or;
 }
 
-bool CDAccess_PBP::Read_Raw_PW(uint8_t *buf, int32_t lba)
-{
+static bool CDAccess_PBP_Read_Raw_PW(CDAccess *base_self, uint8_t *buf, int32_t lba){
+   CDAccess_PBP *self = (CDAccess_PBP *)base_self;
    memset(buf, 0, 96);
-   MakeSubPQ(lba, buf);
+   CDAccess_PBP_MakeSubPQ(self, lba, buf);
    return true;
 }
 
 
-int CDAccess_PBP::decompress2(void *out, uint32_t *out_size, void *in, uint32_t in_size)
-{
+static int CDAccess_PBP_decompress2(CDAccess_PBP *self, void *out, uint32_t *out_size, void *in, uint32_t in_size){
    static z_stream z;
    int ret = 0;
 
@@ -382,54 +432,54 @@ int CDAccess_PBP::decompress2(void *out, uint32_t *out_size, void *in, uint32_t 
    return ret == 1 ? 0 : ret;
 }
 
-bool CDAccess_PBP::Read_Raw_Sector(uint8 *buf, int32 lba)
-{
+static bool CDAccess_PBP_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int32 lba){
+   CDAccess_PBP *self = (CDAccess_PBP *)base_self;
    uint8_t SimuQ[0xC];
 
    int32_t block = lba >> 4;
-   sector_in_blk = lba & 0xf;
+   self->sector_in_blk = lba & 0xf;
 
    memset(buf + 2352, 0, 96);
-   MakeSubPQ(lba, buf + 2352);
+   CDAccess_PBP_MakeSubPQ(self, lba, buf + 2352);
    subq_deinterleave(buf + 2352, SimuQ);
 
-   if (block != current_block)
+   if (block != self->current_block)
    {
-      uint32_t start_byte = index_table[block];
-      uint32_t size = index_table[block+1] - start_byte;
+      uint32_t start_byte = self->index_table[block];
+      uint32_t size = self->index_table[block+1] - start_byte;
       bool is_compressed = true;
 
-      if (lba >= index_len * 16)
+      if (lba >= self->index_len * 16)
       {
          log_cb(RETRO_LOG_ERROR, "[PBP] sector %d is past img end\n", lba);
          return false;
       }
 
-      if (size > sizeof(buff_compressed))
+      if (size > sizeof(self->buff_compressed))
       {
          log_cb(RETRO_LOG_ERROR, "[PBP] %u: block %d is too large (%u)\n", lba, block, size);
          return false;
       }
-      else if(size == sizeof(buff_compressed))
+      else if(size == sizeof(self->buff_compressed))
          is_compressed = false;  // should be the case here?
 
-      stream_seek(fp, start_byte, SEEK_SET);
-      stream_read(fp, is_compressed ? buff_compressed : buff_raw[0], size);
+      stream_seek(self->fp, start_byte, SEEK_SET);
+      stream_read(self->fp, is_compressed ? self->buff_compressed : self->buff_raw[0], size);
 
-//log_cb(RETRO_LOG_DEBUG, "lba = %d, block = %u, start_byte = %#x, index_table[%i] = %#x\n", lba, block, start_byte, block, index_table[block]);
+//log_cb(RETRO_LOG_DEBUG, "lba = %d, block = %u, start_byte = %#x, self->index_table[%i] = %#x\n", lba, block, start_byte, block, self->index_table[block]);
 
       if (is_compressed)
       {
-         if(is_official)
+         if(self->is_official)
          {
-            decompress(buff_raw[0], buff_compressed, sizeof(buff_compressed));
-            fixed_sectors = 0;
+            CDAccess_PBP_decompress(self, self->buff_raw[0], self->buff_compressed, sizeof(self->buff_compressed));
+            self->fixed_sectors = 0;
          }
          else
          {
-            uint32_t cdbuffer_size_expect = sizeof(buff_raw[0]) << 4;
+            uint32_t cdbuffer_size_expect = sizeof(self->buff_raw[0]) << 4;
             uint32_t cdbuffer_size = cdbuffer_size_expect;
-            int ret = decompress2(buff_raw[0], &cdbuffer_size, buff_compressed, size);
+            int ret = CDAccess_PBP_decompress2(self, self->buff_raw[0], &cdbuffer_size, self->buff_compressed, size);
             if (ret != 0)
             {
                log_cb(RETRO_LOG_ERROR, "[PBP] uncompress failed with %d for block %d, sector %d (%u)\n", ret, block, lba, size);
@@ -442,28 +492,28 @@ bool CDAccess_PBP::Read_Raw_Sector(uint8 *buf, int32 lba)
             }
          }
       }
-      current_block = block;
+      self->current_block = block;
    }
 
-   if(is_official)
+   if(self->is_official)
    {
       // this will probably rarely get caught but better than trying to do it every time I guess...
-      if(!(fixed_sectors & (0x1 << sector_in_blk)))
+      if(!(self->fixed_sectors & (0x1 << self->sector_in_blk)))
       {
-         if(fix_sector(buff_raw[sector_in_blk], lba) != 0)
+         if(CDAccess_PBP_fix_sector(self, self->buff_raw[self->sector_in_blk], lba) != 0)
             log_cb(RETRO_LOG_WARN, "[PBP] Failed to fix sector %d\n", lba);
          else
-            fixed_sectors |= (0x1 << sector_in_blk);
+            self->fixed_sectors |= (0x1 << self->sector_in_blk);
       }
    }
 
-   memcpy(buf, buff_raw[sector_in_blk], 2352);
+   memcpy(buf, self->buff_raw[self->sector_in_blk], 2352);
 
    return true;
 }
 
-bool CDAccess_PBP::Read_TOC(TOC *toc)
-{
+static bool CDAccess_PBP_Read_TOC(CDAccess *base_self, TOC *toc){
+   CDAccess_PBP *self = (CDAccess_PBP *)base_self;
    struct {
       uint8_t type;
       uint8_t pad0;
@@ -487,25 +537,25 @@ bool CDAccess_PBP::Read_TOC(TOC *toc)
    uint32_t read_offset;
    uint32_t toc_offset = 0x400;
    uint32_t index_table_offset = 0x3C00;
-   uint32_t cdimg_base = psisoimg_offset + 0x100000;
+   uint32_t cdimg_base = self->psisoimg_offset + 0x100000;
 
    uint8_t* iso_header = (uint8_t*)malloc(0xB6600);
 
    if(!iso_header)
    {
-      log_cb(RETRO_LOG_ERROR, "[PBP] Read_TOC() - unable to allocate memory\n");
+      log_cb(RETRO_LOG_ERROR, "[PBP] CDAccess_PBP_Read_TOC(self) - unable to allocate memory\n");
       return false;
    }
    
    TOC_Clear(toc);
-   memset(Tracks, 0, sizeof(Tracks));
+   memset(self->Tracks, 0, sizeof(self->Tracks));
 
-   stream_seek(fp, psisoimg_offset + 0x400, SEEK_SET);
-   stream_read(fp, iso_header, 0xB6600);
+   stream_seek(self->fp, self->psisoimg_offset + 0x400, SEEK_SET);
+   stream_read(self->fp, iso_header, 0xB6600);
    if(iso_header[0] == 0 && iso_header[1] == 'P' && iso_header[2] == 'G' && iso_header[3] == 'D')
    {
       log_cb(RETRO_LOG_DEBUG, "[PBP] decrypting iso header...\n");
-      int pdg_size = decrypt_pgd(iso_header, 0xB6600);
+      int pdg_size = CDAccess_PBP_decrypt_pgd(self, iso_header, 0xB6600);
 
       if(pdg_size < 1 || pdg_size > 0xB6600)
       {
@@ -513,14 +563,14 @@ bool CDAccess_PBP::Read_TOC(TOC *toc)
          return false;
       }
 
-      is_official = true;
+      self->is_official = true;
       toc_offset += 0x90;
       index_table_offset += 0x90;
    }
    
    // initialize opposites
-   FirstTrack = 99;
-   LastTrack = 0;
+   self->FirstTrack = 99;
+   self->LastTrack = 0;
 
    // read TOC, first three entries are special, skip first one
    read_offset = toc_offset + sizeof(toc_entry);
@@ -528,113 +578,113 @@ bool CDAccess_PBP::Read_TOC(TOC *toc)
    // number of tracks
    memcpy(&toc_entry, iso_header+read_offset, sizeof(toc_entry));
    read_offset += sizeof(toc_entry);
-   NumTracks = BCD_to_U8(toc_entry.index1[0]);
+   self->NumTracks = BCD_to_U8(toc_entry.index1[0]);
 
    // total length
    memcpy(&toc_entry, iso_header+read_offset, sizeof(toc_entry));
    read_offset += sizeof(toc_entry);
-   total_sectors = (BCD_to_U8(toc_entry.index1[0])*60 + BCD_to_U8(toc_entry.index1[1])) * 75 + BCD_to_U8(toc_entry.index1[2]);
+   self->total_sectors = (BCD_to_U8(toc_entry.index1[0])*60 + BCD_to_U8(toc_entry.index1[1])) * 75 + BCD_to_U8(toc_entry.index1[2]);
 
-   log_cb(RETRO_LOG_DEBUG, "[PBP] psisoimg_offset = %#x, toc_offset = %#x, index_table_offset = %#x, Numtracks = %d, total_sectors = %d\n", psisoimg_offset, toc_offset, index_table_offset, NumTracks, total_sectors);
+   log_cb(RETRO_LOG_DEBUG, "[PBP] self->psisoimg_offset = %#x, toc_offset = %#x, index_table_offset = %#x, Numtracks = %d, self->total_sectors = %d\n", self->psisoimg_offset, toc_offset, index_table_offset, self->NumTracks, self->total_sectors);
 
    // read track info
-   for(i = 1; i <= NumTracks; i++)
+   for(i = 1; i <= self->NumTracks; i++)
    {
       memcpy(&toc_entry, iso_header+read_offset, sizeof(toc_entry));
       read_offset += sizeof(toc_entry);
 
-      if(toc_entry.track < FirstTrack)
-         FirstTrack = BCD_to_U8(toc_entry.track);
-      if(toc_entry.track > LastTrack)
-         LastTrack = BCD_to_U8(toc_entry.track);
+      if(toc_entry.track < self->FirstTrack)
+         self->FirstTrack = BCD_to_U8(toc_entry.track);
+      if(toc_entry.track > self->LastTrack)
+         self->LastTrack = BCD_to_U8(toc_entry.track);
 
       if(toc_entry.type == 1)
       {
-         Tracks[i].DIFormat = DI_FORMAT_AUDIO;
-         Tracks[i].subq_control &= ~SUBQ_CTRLF_DATA;
+         self->Tracks[i].DIFormat = DI_FORMAT_AUDIO;
+         self->Tracks[i].subq_control &= ~SUBQ_CTRLF_DATA;
       }
       else  // TOCHECK: are there any psx games that have other formats than AUDIO and MODE2/2352?
       {
-         Tracks[i].DIFormat = DI_FORMAT_MODE2_RAW;
-         Tracks[i].subq_control |= SUBQ_CTRLF_DATA;
+         self->Tracks[i].DIFormat = DI_FORMAT_MODE2_RAW;
+         self->Tracks[i].subq_control |= SUBQ_CTRLF_DATA;
       }
 
-      Tracks[i].index[0] = (BCD_to_U8(toc_entry.index0[0])*60 + BCD_to_U8(toc_entry.index0[1])) * 75 + BCD_to_U8(toc_entry.index0[2]);
-      Tracks[i].index[1] = (BCD_to_U8(toc_entry.index1[0])*60 + BCD_to_U8(toc_entry.index1[1])) * 75 + BCD_to_U8(toc_entry.index1[2]);
+      self->Tracks[i].index[0] = (BCD_to_U8(toc_entry.index0[0])*60 + BCD_to_U8(toc_entry.index0[1])) * 75 + BCD_to_U8(toc_entry.index0[2]);
+      self->Tracks[i].index[1] = (BCD_to_U8(toc_entry.index1[0])*60 + BCD_to_U8(toc_entry.index1[1])) * 75 + BCD_to_U8(toc_entry.index1[2]);
 
       // HACK: force these values for converted files since conversion tools like PSX2PSP seem to specify an offset for data tracks at 00:02:00 which is not the actual location in the converted image data (but rather 00:00:00)
-      if (!is_official && Tracks[i].DIFormat == DI_FORMAT_MODE2_RAW)
+      if (!self->is_official && self->Tracks[i].DIFormat == DI_FORMAT_MODE2_RAW)
       {
-         Tracks[i].index[0] = 0;
-         Tracks[i].index[1] = 0;
+         self->Tracks[i].index[0] = 0;
+         self->Tracks[i].index[1] = 0;
       }
 
-      Tracks[i].LBA = Tracks[i].index[1];
+      self->Tracks[i].LBA = self->Tracks[i].index[1];
 
       // pre/postgaps shouldn't be required, dont know if the pbp format even supports it
-      Tracks[i].pregap = 0;
-      Tracks[i].postgap = 0;
+      self->Tracks[i].pregap = 0;
+      self->Tracks[i].postgap = 0;
 
-      Tracks[i].pregap_dv = Tracks[i].index[1]-Tracks[i].index[0];
-      if(Tracks[i].pregap_dv < 0)
-         Tracks[i].pregap_dv = 0;
+      self->Tracks[i].pregap_dv = self->Tracks[i].index[1]-self->Tracks[i].index[0];
+      if(self->Tracks[i].pregap_dv < 0)
+         self->Tracks[i].pregap_dv = 0;
 
       if(i > 1)
-         Tracks[i-1].sectors = Tracks[i].index[0] - Tracks[i-1].index[1];
-      sector_count += Tracks[i-1].sectors;
+         self->Tracks[i-1].sectors = self->Tracks[i].index[0] - self->Tracks[i-1].index[1];
+      sector_count += self->Tracks[i-1].sectors;
 
-      if(i == NumTracks)
+      if(i == self->NumTracks)
       {
-         Tracks[i].sectors = total_sectors - sector_count;
-         sector_count += Tracks[i].sectors;
+         self->Tracks[i].sectors = self->total_sectors - sector_count;
+         sector_count += self->Tracks[i].sectors;
       }
 
-      toc->tracks[i].control = Tracks[i].subq_control;
+      toc->tracks[i].control = self->Tracks[i].subq_control;
       toc->tracks[i].adr = ADR_CURPOS;
-      toc->tracks[i].lba = Tracks[i].LBA;
+      toc->tracks[i].lba = self->Tracks[i].LBA;
 
-      log_cb(RETRO_LOG_DEBUG, "[PBP] track[%i]: %s, lba = %i, adr = %i, control = %i, index[0] = %i, index[1] = %i\n", BCD_to_U8(toc_entry.track), DI_CUE_Strings[Tracks[i].DIFormat], toc->tracks[i].lba, toc->tracks[i].adr, toc->tracks[i].control, Tracks[i].index[0], Tracks[i].index[1]);
+      log_cb(RETRO_LOG_DEBUG, "[PBP] track[%i]: %s, lba = %i, adr = %i, control = %i, index[0] = %i, index[1] = %i\n", BCD_to_U8(toc_entry.track), DI_CUE_Strings[self->Tracks[i].DIFormat], toc->tracks[i].lba, toc->tracks[i].adr, toc->tracks[i].control, self->Tracks[i].index[0], self->Tracks[i].index[1]);
 
       if(BCD_to_U8(toc_entry.track) < i || BCD_to_U8(toc_entry.track) > i)
       {
-         log_cb(RETRO_LOG_ERROR, "Tracks out of order\n");   // can this happen?
+         log_cb(RETRO_LOG_ERROR, "self->Tracks out of order\n");   // can this happen?
          return false;
       }
    }
    
-   if(total_sectors != sector_count)
-      log_cb(RETRO_LOG_WARN, "[PBP] sector counts dont match (%i != %i)\n", total_sectors, sector_count);
+   if(self->total_sectors != sector_count)
+      log_cb(RETRO_LOG_WARN, "[PBP] sector counts dont match (%i != %i)\n", self->total_sectors, sector_count);
 
    // HACK: disable audio tracks for official pbp files for now until more is known about them
-   if(is_official)
+   if(self->is_official)
    {
       // causes a lot of "Attempt to read LBA..." messages to pop up in the log but cant think of an easier way to only omit the audio tracks for now
-      FirstTrack = LastTrack = NumTracks = 1;
+      self->FirstTrack = self->LastTrack = self->NumTracks = 1;
    }
 
-   toc->first_track = FirstTrack;
-   toc->last_track = LastTrack;
+   toc->first_track = self->FirstTrack;
+   toc->last_track = self->LastTrack;
    toc->disc_type = DISC_TYPE_CD_XA;   // always?
 
    // now to ISO disc map table
    read_offset = index_table_offset;
 
    // set class variables
-   fixed_sectors = 0;
-   current_block = (uint32_t)-1;
-   index_len = 0xAFC80 / sizeof(index_entry);   // disc map table has a fixed size of 0xAFC80 (22500 entries)?
+   self->fixed_sectors = 0;
+   self->current_block = (uint32_t)-1;
+   self->index_len = 0xAFC80 / sizeof(index_entry);   // disc map table has a fixed size of 0xAFC80 (22500 entries)?
 
-   if(index_table != NULL)
-      free(index_table);
+   if(self->index_table != NULL)
+      free(self->index_table);
 
-   index_table = (unsigned int*)malloc((index_len + 1) * sizeof(*index_table));
-   if (index_table == NULL)
+   self->index_table = (unsigned int*)malloc((self->index_len + 1) * sizeof(*self->index_table));
+   if (self->index_table == NULL)
    {
       log_cb(RETRO_LOG_ERROR, "Unable to allocate memory\n");
       return false;
    }
 
-   for (i = 0; i < index_len; i++)
+   for (i = 0; i < self->index_len; i++)
    {
       // TOCHECK: does struct reading (with entries that could be affected by endianness) work reliably between different platforms?
       memcpy(&index_entry, iso_header+read_offset, sizeof(index_entry));
@@ -645,11 +695,11 @@ bool CDAccess_PBP::Read_TOC(TOC *toc)
       if (index_entry.size == 0)
          break;
 
-      index_table[i] = cdimg_base + index_entry.offset;
+      self->index_table[i] = cdimg_base + index_entry.offset;
    }
-   index_table[i] = cdimg_base + index_entry.offset + index_entry.size;
+   self->index_table[i] = cdimg_base + index_entry.offset + index_entry.size;
 
-   toc->tracks[100].lba = total_sectors;
+   toc->tracks[100].lba = self->total_sectors;
    toc->tracks[100].adr = ADR_CURPOS;
    toc->tracks[100].control = toc->tracks[toc->last_track].control & 0x4;
 
@@ -661,29 +711,28 @@ bool CDAccess_PBP::Read_TOC(TOC *toc)
 
    // sbi stuff
    if(PBP_DiscCount > 1 && PBP_DiscCount < 10)
-      sbi_path[sbi_path.length()-5] = (CD_SelectedDisc+1) + '0';
+      self->sbi_path[self->sbi_path.length()-5] = (CD_SelectedDisc+1) + '0';
 
    // Load SBI file, if present
-   if (filestream_exists(sbi_path.c_str()))
+   if (filestream_exists(self->sbi_path.c_str()))
    {
-      if(!SubQReplaceMap.empty())
-         SubQReplaceMap.clear();
+      if(!self->SubQReplaceMap.empty())
+         self->SubQReplaceMap.clear();
 
-      LoadSBI(sbi_path.c_str());
+      CDAccess_PBP_LoadSBI(self, self->sbi_path.c_str());
    }
-   else if (!SubQReplaceMap.empty())
+   else if (!self->SubQReplaceMap.empty())
    {
-      SubQReplaceMap.clear();
+      self->SubQReplaceMap.clear();
 
       // SBI should probably be loaded in this case but file path is invalid
-      log_cb(RETRO_LOG_WARN, "[PBP] Invalid path/filename for SBI file %s\n", sbi_path.c_str());
+      log_cb(RETRO_LOG_WARN, "[PBP] Invalid path/filename for SBI file %s\n", self->sbi_path.c_str());
    }
 
    return true;
 }
 
-int CDAccess_PBP::LoadSBI(const char* sbi_path)
-{
+static int CDAccess_PBP_LoadSBI(CDAccess_PBP *self, const char* sbi_path){
    /* Loading SBI file */
    uint8 header[4];
    uint8 ed[4 + 10];
@@ -718,10 +767,10 @@ int CDAccess_PBP::LoadSBI(const char* sbi_path)
 
       uint32 aba = AMSF_to_ABA(BCD_to_U8(ed[0]), BCD_to_U8(ed[1]), BCD_to_U8(ed[2]));
 
-      memcpy(SubQReplaceMap[aba].data, tmpq, 12);
+      memcpy(self->SubQReplaceMap[aba].data, tmpq, 12);
    }
 
-   log_cb(RETRO_LOG_INFO, "[PBP] Loaded SBI file %s\n", sbi_path);
+   log_cb(RETRO_LOG_INFO, "[PBP] Loaded SBI file %s\n", self->sbi_path);
    filestream_close(sbis);
    return 0;
 
@@ -731,20 +780,19 @@ error:
    return -1;
 }
 
-void CDAccess_PBP::Eject(bool eject_status)
-{
+static void CDAccess_PBP_Eject(CDAccess *base_self, bool eject_status){
+   CDAccess_PBP *self = (CDAccess_PBP *)base_self;
    if(!eject_status && CD_SelectedDisc >= 0 
          && CD_SelectedDisc < PBP_DiscCount)
    {
       log_cb(RETRO_LOG_DEBUG, "[PBP] changing offset: old = %#x, new = %#x (%i of %i)\n",
-            psisoimg_offset, pbp_file_offsets[DATA_PSAR]+discs_start_offset[CD_SelectedDisc],
+            self->psisoimg_offset, self->pbp_file_offsets[DATA_PSAR]+self->discs_start_offset[CD_SelectedDisc],
             CD_SelectedDisc+1, PBP_DiscCount);
-      psisoimg_offset = pbp_file_offsets[DATA_PSAR]+discs_start_offset[CD_SelectedDisc];
+      self->psisoimg_offset = self->pbp_file_offsets[DATA_PSAR]+self->discs_start_offset[CD_SelectedDisc];
    }
 }
 
-int CDAccess_PBP::decrypt_pgd(unsigned char* pgd_data, int pgd_size)
-{
+static int CDAccess_PBP_decrypt_pgd(CDAccess_PBP *self, unsigned char* pgd_data, int pgd_size){
    int result;
    PGD_HEADER PGD[1];
    MAC_KEY mkey;
@@ -836,8 +884,7 @@ int CDAccess_PBP::decrypt_pgd(unsigned char* pgd_data, int pgd_size)
    return PGD->data_size;
 }
 
-int CDAccess_PBP::decode_range(unsigned int *range, unsigned int *code, unsigned char **src)
-{
+static int CDAccess_PBP_decode_range(CDAccess_PBP *self, unsigned int *range, unsigned int *code, unsigned char **src){
    if (!((*range) >> 24))
    {
       (*range) <<= 8;
@@ -848,12 +895,11 @@ int CDAccess_PBP::decode_range(unsigned int *range, unsigned int *code, unsigned
    return 0;
 }
 
-int CDAccess_PBP::decode_bit(unsigned int *range, unsigned int *code, 
-      int *index, unsigned char **src, unsigned char *c)
-{
+static int CDAccess_PBP_decode_bit(CDAccess_PBP *self, unsigned int *range, unsigned int *code, 
+      int *index, unsigned char **src, unsigned char *c){
    unsigned int val = *range;
 
-   if (decode_range(range, code, src))
+   if (CDAccess_PBP_decode_range(self, range, code, src))
       val *= (*c);
    else
       val = (val >> 8) * (*c);
@@ -875,22 +921,21 @@ int CDAccess_PBP::decode_bit(unsigned int *range, unsigned int *code,
    return 0;
 }
 
-int CDAccess_PBP::decode_word(unsigned char *ptr, int index, 
+static int CDAccess_PBP_decode_word(CDAccess_PBP *self, unsigned char *ptr, int index, 
       int *bit_flag, unsigned int *range, 
-      unsigned int *code, unsigned char **src)
-{
+      unsigned int *code, unsigned char **src){
    int i = 1;
    index >>= 3;
 
    if (index >= 3)
    {
-      decode_bit(range, code, &i, src, ptr);          // Offset 0x8A8
+      CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr);          // Offset 0x8A8
       if (index >= 4)
       {
-         decode_bit(range, code, &i, src, ptr);      // Offset 0x8A8
+         CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr);      // Offset 0x8A8
          if (index >= 5)
          {
-            decode_range(range, code, src);
+            CDAccess_PBP_decode_range(self, range, code, src);
             for (; index >= 5; index--)
             {
                i <<= 1;
@@ -904,34 +949,33 @@ int CDAccess_PBP::decode_word(unsigned char *ptr, int index,
       }
    }
 
-   *bit_flag = decode_bit(range, code, &i, src, ptr + 3);   // Offset 0x8A8 + 3
+   *bit_flag = CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr + 3);   // Offset 0x8A8 + 3
 
    if (index >= 1)
    {
-      decode_bit(range, code, &i, src, ptr + 2);           // Offset 0x8A8 + 2
+      CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr + 2);           // Offset 0x8A8 + 2
       if (index >= 2)
       {
-         decode_bit(range, code, &i, src, ptr + 1);       // Offset 0x8A8 + 1
+         CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr + 1);       // Offset 0x8A8 + 1
       }
    }
 
    return i;
 }
 
-int CDAccess_PBP::decode_number(unsigned char *ptr, int index, int *bit_flag, 
-      unsigned int *range, unsigned int *code, unsigned char **src)
-{
+static int CDAccess_PBP_decode_number(CDAccess_PBP *self, unsigned char *ptr, int index, int *bit_flag, 
+      unsigned int *range, unsigned int *code, unsigned char **src){
    int i = 1;
 
    if (index >= 3)
    {
-      decode_bit(range, code, &i, src, ptr + 0x18);         // Offset 0x978
+      CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr + 0x18);         // Offset 0x978
       if (index >= 4)
       {
-         decode_bit(range, code, &i, src, ptr + 0x18);     // Offset 0x978
+         CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr + 0x18);     // Offset 0x978
          if (index >= 5)
          {
-            decode_range(range, code, src);
+            CDAccess_PBP_decode_range(self, range, code, src);
             for (; index >= 5; index--)
             {
                i <<= 1;
@@ -945,22 +989,21 @@ int CDAccess_PBP::decode_number(unsigned char *ptr, int index, int *bit_flag,
       }
    }
 
-   *bit_flag = decode_bit(range, code, &i, src, ptr);       // Offset 0x960
+   *bit_flag = CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr);       // Offset 0x960
 
    if (index >= 1) 
    {
-      decode_bit(range, code, &i, src, ptr + 0x8);         // Offset 0x968
+      CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr + 0x8);         // Offset 0x968
       if (index >= 2)
       {
-         decode_bit(range, code, &i, src, ptr + 0x10);    // Offset 0x970
+         CDAccess_PBP_decode_bit(self, range, code, &i, src, ptr + 0x10);    // Offset 0x970
       }
    }
 
    return i;
 }
 
-int CDAccess_PBP::decompress(unsigned char *out, unsigned char *in, unsigned int size)
-{
+static int CDAccess_PBP_decompress(CDAccess_PBP *self, unsigned char *out, unsigned char *in, unsigned int size){
    int result;
 
    unsigned char tmp[0xA70];
@@ -999,7 +1042,7 @@ int CDAccess_PBP::decompress(unsigned char *out, unsigned char *in, unsigned int
       {
          // Start reading at 0x920.
          tmp_sect1 = tmp + offset + 0x920;
-         if (!decode_bit(&range, &code, 0, &in, tmp_sect1))  // Raw char.
+         if (!CDAccess_PBP_decode_bit(self, &range, &code, 0, &in, tmp_sect1))  // Raw char.
          {
             // Adjust offset and check for stream end.
             if (offset > 0) offset--;
@@ -1013,7 +1056,7 @@ int CDAccess_PBP::decompress(unsigned char *out, unsigned char *in, unsigned int
             // Read, decode and write back.
             do
             {
-               decode_bit(&range, &code, &index, &in, tmp_sect1 + index);
+               CDAccess_PBP_decode_bit(self, &range, &code, &index, &in, tmp_sect1 + index);
             } while ((index >> 8) == 0);
 
             // Save index.
@@ -1026,7 +1069,7 @@ int CDAccess_PBP::decompress(unsigned char *out, unsigned char *in, unsigned int
             // Identify the data length bit field.
             do {
                tmp_sect1 += 8;
-               bit_flag = decode_bit(&range, &code, 0, &in, tmp_sect1);
+               bit_flag = CDAccess_PBP_decode_bit(self, &range, &code, 0, &in, tmp_sect1);
                index += bit_flag;
             } while ((bit_flag != 0) && (index < 6));
 
@@ -1042,7 +1085,7 @@ int CDAccess_PBP::decompress(unsigned char *out, unsigned char *in, unsigned int
                tmp_sect1 = tmp + 0x960 + sect;
 
                // Decode the data length (8 bit fields).
-               data_length = decode_number(tmp_sect1, index, &bit_flag, &range, &code, &in);
+               data_length = CDAccess_PBP_decode_number(self, tmp_sect1, index, &bit_flag, &range, &code, &in);
 
                // If we got valid parameters, seek to find data offset.
                if ((data_length != 3) && ((index > 0) || (bit_flag != 0))) {
@@ -1060,7 +1103,7 @@ int CDAccess_PBP::decompress(unsigned char *out, unsigned char *in, unsigned int
             // Identify the data offset bit field.
             do {
                diff = (shift << 4) - b_size;
-               bit_flag = decode_bit(&range, &code, &shift, &in, tmp_sect2 + (shift << 3));
+               bit_flag = CDAccess_PBP_decode_bit(self, &range, &code, &shift, &in, tmp_sect2 + (shift << 3));
             } while (diff < 0);
 
             // If the data offset was found, parse it as a number.
@@ -1073,7 +1116,7 @@ int CDAccess_PBP::decompress(unsigned char *out, unsigned char *in, unsigned int
                tmp_sect3 = tmp + 0x8A8 + diff;
 
                // Decode the data offset (1 bit fields).
-               data_offset = decode_word(tmp_sect3, diff, &bit_flag, &range, &code, &in);
+               data_offset = CDAccess_PBP_decode_word(self, tmp_sect3, diff, &bit_flag, &range, &code, &in);
             } else {
                // Assume one byte of advance.
                data_offset = 1;
@@ -1174,8 +1217,7 @@ static unsigned short RSPCTable[43][256] =
 #define CDROMXA_FORM1_USER_DATA_SIZE   2048
 #define CDROMXA_FORM1_PARITY_P_SIZE    (43 * 2 * 2)
 
-int CDAccess_PBP::fix_sector(uint8_t* sector, int32_t lba)
-{
+static int CDAccess_PBP_fix_sector(CDAccess_PBP *self, uint8_t* sector, int32_t lba){
    // Find mode.
    unsigned char mode = sector[HEADER_OFFSET + 3];
 
@@ -1285,4 +1327,55 @@ int CDAccess_PBP::fix_sector(uint8_t* sector, int32_t lba)
       return -1;
 
    return 0;
+}
+
+/* ------------------------------------------------------------------
+ * destroy and factory.
+ * ------------------------------------------------------------------ */
+
+static void CDAccess_PBP_destroy(CDAccess *base_self)
+{
+   CDAccess_PBP *self = (CDAccess_PBP *)base_self;
+   CDAccess_PBP_Cleanup(self);
+   /* Manually call destructors for C++ members embedded in self. */
+   self->SubQReplaceMap.~map();
+   self->sbi_path.~basic_string();
+   free(self);
+}
+
+extern "C" CDAccess *CDAccess_PBP_New(bool *success, const char *path,
+      bool image_memcache)
+{
+   CDAccess_PBP *self = (CDAccess_PBP *)calloc(1, sizeof(*self));
+   if (!self)
+   {
+      *success = false;
+      return NULL;
+   }
+
+   /* Placement-new the C++ members so destructors can run later. */
+   new (&self->SubQReplaceMap) std::map<uint32, cpp11_array_doodad>();
+   new (&self->sbi_path) std::string();
+
+   /* Vtable */
+   self->base.Read_Raw_Sector = CDAccess_PBP_Read_Raw_Sector;
+   self->base.Read_Raw_PW     = CDAccess_PBP_Read_Raw_PW;
+   self->base.Read_TOC        = CDAccess_PBP_Read_TOC;
+   self->base.Eject           = CDAccess_PBP_Eject;
+   self->base.destroy         = CDAccess_PBP_destroy;
+
+   self->NumTracks     = 0;
+   self->FirstTrack    = 0;
+   self->LastTrack     = 0;
+   self->total_sectors = 0;
+   self->is_official   = false;
+   self->index_table   = NULL;
+   self->fp            = NULL;
+
+   kirk_init();
+
+   if (!CDAccess_PBP_ImageOpen(self, path, image_memcache))
+      *success = false;
+
+   return &self->base;
 }

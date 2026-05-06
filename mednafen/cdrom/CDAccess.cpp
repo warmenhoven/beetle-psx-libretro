@@ -16,6 +16,10 @@
  */
 
 
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <direct.h>
@@ -35,79 +39,71 @@
 #include "CDAccess_CHD.h"
 #endif
 
-CDAccess::CDAccess()
+extern "C" CDAccess *cdaccess_open_image(bool *success, const char *path,
+      bool image_memcache)
 {
-
-}
-
-CDAccess::~CDAccess()
-{
-
-}
-
-extern "C" CDAccess *cdaccess_open_image(bool *success, const char *path, bool image_memcache)
-{
-   size_t path_len = strlen(path);
-   CDAccess *cda = NULL;
+   size_t    path_len = strlen(path);
+   CDAccess *cda      = NULL;
 
    if (path_len >= 3 && !strcasecmp(path + path_len - 3, "ccd"))
-      cda = new CDAccess_CCD(success, path, image_memcache);
+      cda = CDAccess_CCD_New(success, path, image_memcache);
 #ifdef HAVE_PBP
    else if (path_len >= 3 && !strcasecmp(path + path_len - 3, "pbp"))
-      cda = new CDAccess_PBP(success, path, image_memcache);
+      cda = CDAccess_PBP_New(success, path, image_memcache);
 #endif
 #ifdef HAVE_CHD
    else if (path_len >= 3 && !strcasecmp(path + path_len - 3, "chd"))
-      cda = new CDAccess_CHD(success, path, image_memcache);
+      cda = CDAccess_CHD_New(success, path, image_memcache);
 #endif
    else
-      cda = new CDAccess_Image(success, path, image_memcache);
+      cda = CDAccess_Image_New(success, path, image_memcache);
 
-   /* Caller is responsible for deleting cda when *success is false. */
+   /* Caller is responsible for destroying cda when *success is false. */
    return cda;
 }
 
-bool CDAccess::Read_Raw_PW(uint8_t *buf, int32_t lba)
-{
-   uint8 tmpbuf[2352 + 96];
+/* ------------------------------------------------------------------
+ * Public dispatch wrappers - vtable invocations.
+ *
+ * Read_Raw_PW falls back to Read_Raw_Sector + 96-byte memcpy if a
+ * backend doesn't supply a specialised implementation.  This is the
+ * default that the old C++ CDAccess base class implemented; backends
+ * that want the cheap subchannel-only path (CCD, CHD) override it.
+ * ------------------------------------------------------------------ */
 
-   if (!Read_Raw_Sector(tmpbuf, lba))
-      return false;
-   memcpy(buf, tmpbuf + 2352, 96);
-
-   return true;
-}
-
-/*
- * C-linkage shims so plain-C consumers (cdromif.c) can drive
- * CDAccess instances without needing to parse the C++ class
- * declaration. Each one resolves to a single virtual call (the
- * CDAccess instance is still a vtable-bearing C++ object); the
- * wrappers route the unmangled symbol to the mangled member.
- */
 extern "C" bool CDAccess_Read_Raw_Sector(CDAccess *cda, uint8_t *buf,
       int32_t lba)
 {
-   return cda->Read_Raw_Sector(buf, lba);
+   return cda->Read_Raw_Sector(cda, buf, lba);
 }
 
 extern "C" bool CDAccess_Read_Raw_PW(CDAccess *cda, uint8_t *buf,
       int32_t lba)
 {
-   return cda->Read_Raw_PW(buf, lba);
+   if (cda->Read_Raw_PW)
+      return cda->Read_Raw_PW(cda, buf, lba);
+   else
+   {
+      uint8_t tmpbuf[2352 + 96];
+      if (!cda->Read_Raw_Sector(cda, tmpbuf, lba))
+         return false;
+      memcpy(buf, tmpbuf + 2352, 96);
+      return true;
+   }
 }
 
 extern "C" bool CDAccess_Read_TOC(CDAccess *cda, TOC *toc)
 {
-   return cda->Read_TOC(toc);
+   return cda->Read_TOC(cda, toc);
 }
 
 extern "C" void CDAccess_Eject(CDAccess *cda, bool eject_status)
 {
-   cda->Eject(eject_status);
+   cda->Eject(cda, eject_status);
 }
 
 extern "C" void CDAccess_destroy(CDAccess *cda)
 {
-   delete cda;
+   if (cda)
+      cda->destroy(cda);
 }

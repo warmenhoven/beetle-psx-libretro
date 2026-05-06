@@ -30,6 +30,7 @@
 	Trying to read sectors at an LBA of less than 0 is not supported.  TODO: support it(at least up to -150).
 */
 
+#include <new>
 #include <boolean.h>
 #include <streams/file_stream.h>
 
@@ -46,6 +47,8 @@
 #include "../MemoryStream.h"
 
 #include "CDAccess.h"
+#include "misc.h"
+#include "cdaccess_track.h"
 #include "CDAccess_Image.h"
 #include "CDUtility.h"
 
@@ -194,8 +197,33 @@ static size_t UnQuotify(const std::string &src, size_t source_offset,
    return source_offset;
 }
 
-uint32 CDAccess_Image::GetSectorCount(CDRFILE_TRACK_INFO *track)
+struct CDAccess_Image
 {
+   CDAccess  base;
+
+   int32_t   NumTracks;
+   int32_t   FirstTrack;
+   int32_t   LastTrack;
+   int32_t   total_sectors;
+   uint8_t   disc_type;
+   CDRFILE_TRACK_INFO Tracks[100];
+
+   std::map<uint32, cpp11_array_doodad> SubQReplaceMap;
+   std::string base_dir;
+};
+
+/* Forward declarations - methods reference each other regardless of
+ * source order. */
+static uint32 CDAccess_Image_GetSectorCount(CDAccess_Image *self, CDRFILE_TRACK_INFO *track);
+static bool CDAccess_Image_ParseTOCFileLineInfo(CDAccess_Image *self, CDRFILE_TRACK_INFO *track, const int tracknum, const std::string &filename, const char *binoffset, const char *msfoffset, const char *length, bool image_memcache, std::map<std::string, Stream*> &toc_streamcache);
+static int CDAccess_Image_LoadSBI(CDAccess_Image *self, const char* sbi_path);
+static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, bool image_memcache);
+static void CDAccess_Image_Cleanup(CDAccess_Image *self);
+static void CDAccess_Image_MakeSubPQ(CDAccess_Image *self, int32 lba, uint8 *SubPWBuf);
+
+
+
+static uint32 CDAccess_Image_GetSectorCount(CDAccess_Image *self, CDRFILE_TRACK_INFO *track){
    int64 size;
 
    if(track->DIFormat == DI_FORMAT_AUDIO)
@@ -215,10 +243,9 @@ uint32 CDAccess_Image::GetSectorCount(CDRFILE_TRACK_INFO *track)
    return((size - track->FileOffset) / DI_Size_Table[track->DIFormat]);
 }
 
-bool CDAccess_Image::ParseTOCFileLineInfo(CDRFILE_TRACK_INFO *track, const int tracknum,
+static bool CDAccess_Image_ParseTOCFileLineInfo(CDAccess_Image *self, CDRFILE_TRACK_INFO *track, const int tracknum,
       const std::string &filename, const char *binoffset, const char *msfoffset,
-      const char *length, bool image_memcache, std::map<std::string, Stream*> &toc_streamcache)
-{
+      const char *length, bool image_memcache, std::map<std::string, Stream*> &toc_streamcache){
    long offset = 0; // In bytes!
    long tmp_long;
    int m, s, f;
@@ -240,7 +267,7 @@ bool CDAccess_Image::ParseTOCFileLineInfo(CDRFILE_TRACK_INFO *track, const int t
 
       track->FirstFileInstance = 1;
 
-      efn = MDFN_EvalFIP(base_dir, filename);
+      efn = MDFN_EvalFIP(self->base_dir, filename);
 
       if(image_memcache)
       {
@@ -308,8 +335,8 @@ bool CDAccess_Image::ParseTOCFileLineInfo(CDRFILE_TRACK_INFO *track, const int t
       offset += ((m * 60 + s) * 75 + f) * sector_mult;
    }
 
-   track->FileOffset = offset; // Make sure this is set before calling GetSectorCount()!
-   sectors = GetSectorCount(track);
+   track->FileOffset = offset; // Make sure this is set before calling CDAccess_Image_GetSectorCount(self)!
+   sectors = CDAccess_Image_GetSectorCount(self, track);
 
    if(length)
    {
@@ -345,8 +372,7 @@ bool CDAccess_Image::ParseTOCFileLineInfo(CDRFILE_TRACK_INFO *track, const int t
    return true;
 }
 
-int CDAccess_Image::LoadSBI(const char* sbi_path)
-{
+static int CDAccess_Image_LoadSBI(CDAccess_Image *self, const char* sbi_path){
    /* Loading SBI file */
    uint8 header[4];
    uint8 ed[4 + 10];
@@ -381,7 +407,7 @@ int CDAccess_Image::LoadSBI(const char* sbi_path)
 
       uint32 aba = AMSF_to_ABA(BCD_to_U8(ed[0]), BCD_to_U8(ed[1]), BCD_to_U8(ed[2]));
 
-      memcpy(SubQReplaceMap[aba].data, tmpq, 12);
+      memcpy(self->SubQReplaceMap[aba].data, tmpq, 12);
    }
 
    log_cb(RETRO_LOG_INFO, "[Image] Loaded SBI file %s\n", sbi_path);
@@ -394,8 +420,7 @@ error:
    return -1;
 }
 
-bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
-{
+static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, bool image_memcache){
    FileStream *probe = mdfn_filestream_new(path);
    if (!mdfn_filestream_is_open(probe))
    {
@@ -439,10 +464,10 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
    std::string file_base, file_ext;
    std::map<std::string, Stream*> toc_streamcache;
 
-   disc_type = DISC_TYPE_CDDA_OR_M1;
+   self->disc_type = DISC_TYPE_CDDA_OR_M1;
    memset(&TmpTrack, 0, sizeof(TmpTrack));
 
-   MDFN_GetFilePathComponents(path, &base_dir, &file_base, &file_ext);
+   MDFN_GetFilePathComponents(path, &self->base_dir, &file_base, &file_ext);
 
    if(!strcasecmp(file_ext.c_str(), ".toc"))
    {
@@ -465,8 +490,8 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
 
 
    // Assign opposite maximum values so our tests will work!
-   FirstTrack = 99;
-   LastTrack = 0;
+   self->FirstTrack = 99;
+   self->LastTrack = 0;
 
    linebuf.reserve(1024);
    while(stream_get_line_string(&fp.base, linebuf) >= 0)
@@ -509,7 +534,7 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
          {
             if(active_track >= 0)
             {
-               memcpy(&Tracks[active_track], &TmpTrack, sizeof(TmpTrack));
+               memcpy(&self->Tracks[active_track], &TmpTrack, sizeof(TmpTrack));
                memset(&TmpTrack, 0, sizeof(TmpTrack));
                active_track = -1;
             }
@@ -521,10 +546,10 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
             }
 
             active_track = AutoTrackInc++;
-            if(active_track < FirstTrack)
-               FirstTrack = active_track;
-            if(active_track > LastTrack)
-               LastTrack = active_track;
+            if(active_track < self->FirstTrack)
+               self->FirstTrack = active_track;
+            if(active_track > self->LastTrack)
+               self->LastTrack = active_track;
 
             int format_lookup;
             for(format_lookup = 0; format_lookup < _DI_FORMAT_COUNT; format_lookup++)
@@ -585,7 +610,7 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
                msfoffset = args[1].c_str();
                length = args[2].c_str();
             }
-            ParseTOCFileLineInfo(&TmpTrack, active_track, args[0], binoffset, msfoffset, length, image_memcache, toc_streamcache);
+            CDAccess_Image_ParseTOCFileLineInfo(self, &TmpTrack, active_track, args[0], binoffset, msfoffset, length, image_memcache, toc_streamcache);
          }
          else if(cmdbuf == "DATAFILE")
          {
@@ -600,7 +625,7 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
             else
                length = args[1].c_str();
 
-            ParseTOCFileLineInfo(&TmpTrack, active_track, args[0], binoffset, NULL, length, image_memcache, toc_streamcache);
+            CDAccess_Image_ParseTOCFileLineInfo(self, &TmpTrack, active_track, args[0], binoffset, NULL, length, image_memcache, toc_streamcache);
          }
          else if(cmdbuf == "INDEX")
          {
@@ -664,11 +689,11 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
          }
          // TODO: Confirm that these are taken from the TOC of the disc, and not synthesized by cdrdao.
          else if(cmdbuf == "CD_DA")
-            disc_type = DISC_TYPE_CDDA_OR_M1;
+            self->disc_type = DISC_TYPE_CDDA_OR_M1;
          else if(cmdbuf == "CD_ROM")
-            disc_type = DISC_TYPE_CDDA_OR_M1;
+            self->disc_type = DISC_TYPE_CDDA_OR_M1;
          else if(cmdbuf == "CD_ROM_XA")
-            disc_type = DISC_TYPE_CD_XA;
+            self->disc_type = DISC_TYPE_CD_XA;
          else
          {
             //throw MDFN_Error(0, "Unsupported directive: %s", cmdbuf.c_str());
@@ -682,7 +707,7 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
          {
             if(active_track >= 0)
             {
-               memcpy(&Tracks[active_track], &TmpTrack, sizeof(TmpTrack));
+               memcpy(&self->Tracks[active_track], &TmpTrack, sizeof(TmpTrack));
                memset(&TmpTrack, 0, sizeof(TmpTrack));
                active_track = -1;
             }
@@ -690,7 +715,7 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
             std::string efn;
 
             if(args[0].find("cdrom://") == std::string::npos)
-               efn = MDFN_EvalFIP(base_dir, args[0]);
+               efn = MDFN_EvalFIP(self->base_dir, args[0]);
             else
                efn = args[0];
 
@@ -745,7 +770,7 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
          {
             if(active_track >= 0)
             {
-               memcpy(&Tracks[active_track], &TmpTrack, sizeof(TmpTrack));
+               memcpy(&self->Tracks[active_track], &TmpTrack, sizeof(TmpTrack));
                TmpTrack.FirstFileInstance = 0;
                TmpTrack.pregap = 0;
                TmpTrack.pregap_dv = 0;
@@ -755,10 +780,10 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
             }
             active_track = atoi(args[0].c_str());
 
-            if(active_track < FirstTrack)
-               FirstTrack = active_track;
-            if(active_track > LastTrack)
-               LastTrack = active_track;
+            if(active_track < self->FirstTrack)
+               self->FirstTrack = active_track;
+            if(active_track > self->LastTrack)
+               self->LastTrack = active_track;
 
             int format_lookup;
             for(format_lookup = 0; format_lookup < _DI_FORMAT_COUNT; format_lookup++)
@@ -875,32 +900,32 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
    } // end of fgets() loop
 
    if(active_track >= 0)
-      memcpy(&Tracks[active_track], &TmpTrack, sizeof(TmpTrack));
+      memcpy(&self->Tracks[active_track], &TmpTrack, sizeof(TmpTrack));
 
-   if(FirstTrack > LastTrack)
+   if(self->FirstTrack > self->LastTrack)
    {
       MDFN_Error(0, "No tracks found!\n");
       { ok = false; goto cleanup; }
    }
 
-   NumTracks  = 1 + LastTrack - FirstTrack;
+   self->NumTracks  = 1 + self->LastTrack - self->FirstTrack;
 
-   for(int x = FirstTrack; x < (FirstTrack + NumTracks); x++)
+   for(int x = self->FirstTrack; x < (self->FirstTrack + self->NumTracks); x++)
    {
-      if(Tracks[x].DIFormat == DI_FORMAT_AUDIO)
-         Tracks[x].subq_control &= ~SUBQ_CTRLF_DATA;
+      if(self->Tracks[x].DIFormat == DI_FORMAT_AUDIO)
+         self->Tracks[x].subq_control &= ~SUBQ_CTRLF_DATA;
       else
-         Tracks[x].subq_control |= SUBQ_CTRLF_DATA;
+         self->Tracks[x].subq_control |= SUBQ_CTRLF_DATA;
 
-      if(!IsTOC)	// TOC-format disc_type calculation is handled differently.
+      if(!IsTOC)	// TOC-format self->disc_type calculation is handled differently.
       {
-         switch(Tracks[x].DIFormat)
+         switch(self->Tracks[x].DIFormat)
          {
             case DI_FORMAT_MODE2:
             case DI_FORMAT_MODE2_FORM1:
             case DI_FORMAT_MODE2_FORM2:
             case DI_FORMAT_MODE2_RAW:
-               disc_type = DISC_TYPE_CD_XA;	
+               self->disc_type = DISC_TYPE_CD_XA;	
                break;
             default:
                break;
@@ -909,57 +934,57 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
 
       if(IsTOC)
       {
-         RunningLBA += Tracks[x].pregap;
-         Tracks[x].LBA = RunningLBA;
-         RunningLBA += Tracks[x].sectors;
-         RunningLBA += Tracks[x].postgap;
+         RunningLBA += self->Tracks[x].pregap;
+         self->Tracks[x].LBA = RunningLBA;
+         RunningLBA += self->Tracks[x].sectors;
+         RunningLBA += self->Tracks[x].postgap;
       }
       else // else handle CUE sheet...
       {
-         if(Tracks[x].FirstFileInstance) 
+         if(self->Tracks[x].FirstFileInstance) 
          {
             LastIndex = 0;
             FileOffset = 0;
          }
 
-         RunningLBA += Tracks[x].pregap;
+         RunningLBA += self->Tracks[x].pregap;
 
-         Tracks[x].pregap_dv = 0;
+         self->Tracks[x].pregap_dv = 0;
 
-         if(Tracks[x].index[0] != -1)
-            Tracks[x].pregap_dv = Tracks[x].index[1] - Tracks[x].index[0];
+         if(self->Tracks[x].index[0] != -1)
+            self->Tracks[x].pregap_dv = self->Tracks[x].index[1] - self->Tracks[x].index[0];
 
-         FileOffset += Tracks[x].pregap_dv * DI_Size_Table[Tracks[x].DIFormat];
+         FileOffset += self->Tracks[x].pregap_dv * DI_Size_Table[self->Tracks[x].DIFormat];
 
-         RunningLBA += Tracks[x].pregap_dv;
+         RunningLBA += self->Tracks[x].pregap_dv;
 
-         Tracks[x].LBA = RunningLBA;
+         self->Tracks[x].LBA = RunningLBA;
 
-         // Make sure FileOffset this is set before the call to GetSectorCount()
-         Tracks[x].FileOffset = FileOffset;
-         Tracks[x].sectors = GetSectorCount(&Tracks[x]);
+         // Make sure FileOffset this is set before the call to CDAccess_Image_GetSectorCount(self)
+         self->Tracks[x].FileOffset = FileOffset;
+         self->Tracks[x].sectors = CDAccess_Image_GetSectorCount(self, &self->Tracks[x]);
 
-         if((x + 1) >= (FirstTrack + NumTracks) || Tracks[x+1].FirstFileInstance)
+         if((x + 1) >= (self->FirstTrack + self->NumTracks) || self->Tracks[x+1].FirstFileInstance)
          {
 
          }
          else
          { 
             // Fix the sector count if we have multiple tracks per one binary image file.
-            if(Tracks[x + 1].index[0] == -1)
-               Tracks[x].sectors = Tracks[x + 1].index[1] - Tracks[x].index[1];
+            if(self->Tracks[x + 1].index[0] == -1)
+               self->Tracks[x].sectors = self->Tracks[x + 1].index[1] - self->Tracks[x].index[1];
             else
-               Tracks[x].sectors = Tracks[x + 1].index[0] - Tracks[x].index[1];	//Tracks[x + 1].index - Tracks[x].index;
+               self->Tracks[x].sectors = self->Tracks[x + 1].index[0] - self->Tracks[x].index[1];	//self->Tracks[x + 1].index - self->Tracks[x].index;
          }
 
-         RunningLBA += Tracks[x].sectors;
-         RunningLBA += Tracks[x].postgap;
+         RunningLBA += self->Tracks[x].sectors;
+         RunningLBA += self->Tracks[x].postgap;
 
-         FileOffset += Tracks[x].sectors * DI_Size_Table[Tracks[x].DIFormat];
+         FileOffset += self->Tracks[x].sectors * DI_Size_Table[self->Tracks[x].DIFormat];
       } // end to cue sheet handling
    } // end to track loop
 
-   total_sectors = RunningLBA;
+   self->total_sectors = RunningLBA;
 
    //
    // Load SBI file, if present
@@ -979,10 +1004,10 @@ bool CDAccess_Image::ImageOpen(const char *path, bool image_memcache)
          }
       }
 
-      sbi_path = MDFN_EvalFIP(base_dir, file_base + std::string(".") + std::string(sbi_ext));
+      sbi_path = MDFN_EvalFIP(self->base_dir, file_base + std::string(".") + std::string(sbi_ext));
 
       if (filestream_exists(sbi_path.c_str()))
-         LoadSBI(sbi_path.c_str());
+         CDAccess_Image_LoadSBI(self, sbi_path.c_str());
    }
 
 cleanup:
@@ -990,20 +1015,19 @@ cleanup:
    return ok;
 }
 
-void CDAccess_Image::Cleanup(void)
-{
+static void CDAccess_Image_Cleanup(CDAccess_Image *self){
    int32_t track;
 
    for(track = 0; track < 100; track++)
    {
-      CDRFILE_TRACK_INFO *this_track = &Tracks[track];
+      CDRFILE_TRACK_INFO *this_track = &self->Tracks[track];
 
       if(this_track->FirstFileInstance)
       {
-         if(Tracks[track].AReader)
+         if(self->Tracks[track].AReader)
          {
-            delete Tracks[track].AReader;
-            Tracks[track].AReader = NULL;
+            delete self->Tracks[track].AReader;
+            self->Tracks[track].AReader = NULL;
          }
 
          if(this_track->fp)
@@ -1015,35 +1039,27 @@ void CDAccess_Image::Cleanup(void)
    }
 }
 
-CDAccess_Image::CDAccess_Image(bool *success, const char *path, bool image_memcache) : 
-   NumTracks(0), FirstTrack(0), LastTrack(0), total_sectors(0)
-{
-   memset(Tracks, 0, sizeof(Tracks));
+/* (constructor/destructor handled by factory below) */
 
-   if (!ImageOpen(path, image_memcache))
-      *success = false;
-}
 
-CDAccess_Image::~CDAccess_Image()
-{
-   Cleanup();
-}
+/* (constructor/destructor handled by factory below) */
 
-bool CDAccess_Image::Read_Raw_Sector(uint8 *buf, int32 lba)
-{
+
+static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int32 lba){
+   CDAccess_Image *self = (CDAccess_Image *)base_self;
    int32_t track;
    uint8_t SimuQ[0xC];
    bool TrackFound = false;
 
    memset(buf + 2352, 0, 96);
 
-   MakeSubPQ(lba, buf + 2352);
+   CDAccess_Image_MakeSubPQ(self, lba, buf + 2352);
 
    subq_deinterleave(buf + 2352, SimuQ);
 
-   for(track = FirstTrack; track < (FirstTrack + NumTracks); track++)
+   for(track = self->FirstTrack; track < (self->FirstTrack + self->NumTracks); track++)
    {
-      CDRFILE_TRACK_INFO *ct = &Tracks[track];
+      CDRFILE_TRACK_INFO *ct = &self->Tracks[track];
 
       if(lba >= (ct->LBA - ct->pregap_dv - ct->pregap) && lba < (ct->LBA + ct->sectors + ct->postgap))
       {
@@ -1141,8 +1157,7 @@ bool CDAccess_Image::Read_Raw_Sector(uint8 *buf, int32 lba)
 }
 
 // Note: this function makes use of the current contents(as in |=) in SubPWBuf.
-void CDAccess_Image::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
-{
+static void CDAccess_Image_MakeSubPQ(CDAccess_Image *self, int32 lba, uint8 *SubPWBuf){
    unsigned i;
    uint8_t buf[0xC], adr, control;
    int32_t track;
@@ -1152,10 +1167,10 @@ void CDAccess_Image::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
    uint8_t pause_or = 0x00;
    bool track_found = false;
 
-   for(track = FirstTrack; track < (FirstTrack + NumTracks); track++)
+   for(track = self->FirstTrack; track < (self->FirstTrack + self->NumTracks); track++)
    {
-      if(lba >= (Tracks[track].LBA - Tracks[track].pregap_dv - Tracks[track].pregap) 
-            && lba < (Tracks[track].LBA + Tracks[track].sectors + Tracks[track].postgap))
+      if(lba >= (self->Tracks[track].LBA - self->Tracks[track].pregap_dv - self->Tracks[track].pregap) 
+            && lba < (self->Tracks[track].LBA + self->Tracks[track].sectors + self->Tracks[track].postgap))
       {
          track_found = true;
          break;
@@ -1163,9 +1178,9 @@ void CDAccess_Image::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
    }
 
    if(!track_found)
-      track = FirstTrack;
+      track = self->FirstTrack;
 
-   lba_relative = abs((int32)lba - Tracks[track].LBA);
+   lba_relative = abs((int32)lba - self->Tracks[track].LBA);
 
    f            = (lba_relative % 75);
    s            = ((lba_relative / 75) % 60);
@@ -1176,15 +1191,15 @@ void CDAccess_Image::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
    ma           = ((lba + 150) / 75 / 60);
 
    adr          = 0x1; // Q channel data encodes position
-   control      = Tracks[track].subq_control;
+   control      = self->Tracks[track].subq_control;
 
    // Handle pause(D7 of interleaved subchannel byte) bit, should be set to 1 when in pregap or postgap.
-   if((lba < Tracks[track].LBA) || (lba >= Tracks[track].LBA + Tracks[track].sectors))
+   if((lba < self->Tracks[track].LBA) || (lba >= self->Tracks[track].LBA + self->Tracks[track].sectors))
       pause_or = 0x80;
 
    // Handle pregap between audio->data track
    {
-      int32_t pg_offset = (int32)lba - Tracks[track].LBA;
+      int32_t pg_offset = (int32)lba - self->Tracks[track].LBA;
 
       // If we're more than 2 seconds(150 sectors) from the real "start" of the track/INDEX 01, and the track is a data track,
       // and the preceding track is an audio track, encode it as audio(by taking the SubQ control field from the preceding track).
@@ -1193,8 +1208,8 @@ void CDAccess_Image::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
       //
       if(pg_offset < -150)
       {
-         if((Tracks[track].subq_control & SUBQ_CTRLF_DATA) && (FirstTrack < track) && !(Tracks[track - 1].subq_control & SUBQ_CTRLF_DATA))
-            control = Tracks[track - 1].subq_control;
+         if((self->Tracks[track].subq_control & SUBQ_CTRLF_DATA) && (self->FirstTrack < track) && !(self->Tracks[track - 1].subq_control & SUBQ_CTRLF_DATA))
+            control = self->Tracks[track - 1].subq_control;
       }
    }
 
@@ -1202,7 +1217,7 @@ void CDAccess_Image::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
    buf[0] = (adr << 0) | (control << 4);
    buf[1] = U8_to_BCD(track);
 
-   if(lba < Tracks[track].LBA) // Index is 00 in pregap
+   if(lba < self->Tracks[track].LBA) // Index is 00 in pregap
       buf[2] = U8_to_BCD(0x00);
    else
       buf[2] = U8_to_BCD(0x01);
@@ -1219,11 +1234,11 @@ void CDAccess_Image::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
 
    subq_generate_checksum(buf);
 
-   if(!SubQReplaceMap.empty())
+   if(!self->SubQReplaceMap.empty())
    {
-      std::map<uint32, cpp11_array_doodad>::const_iterator it = SubQReplaceMap.find(LBA_to_ABA(lba));
+      std::map<uint32, cpp11_array_doodad>::const_iterator it = self->SubQReplaceMap.find(LBA_to_ABA(lba));
 
-      if(it != SubQReplaceMap.end())
+      if(it != self->SubQReplaceMap.end())
          memcpy(buf, it->second.data, 12);
    }
 
@@ -1231,31 +1246,31 @@ void CDAccess_Image::MakeSubPQ(int32 lba, uint8 *SubPWBuf)
       SubPWBuf[i] |= (((buf[i >> 3] >> (7 - (i & 0x7))) & 1) ? 0x40 : 0x00) | pause_or;
 }
 
-bool CDAccess_Image::Read_Raw_PW(uint8_t *buf, int32_t lba)
-{
+static bool CDAccess_Image_Read_Raw_PW(CDAccess *base_self, uint8_t *buf, int32_t lba){
+   CDAccess_Image *self = (CDAccess_Image *)base_self;
    memset(buf, 0, 96);
-   MakeSubPQ(lba, buf);
+   CDAccess_Image_MakeSubPQ(self, lba, buf);
    return true;
 }
 
-bool CDAccess_Image::Read_TOC(TOC *toc)
-{
+static bool CDAccess_Image_Read_TOC(CDAccess *base_self, TOC *toc){
+   CDAccess_Image *self = (CDAccess_Image *)base_self;
    unsigned i;
 
    TOC_Clear(toc);
 
-   toc->first_track = FirstTrack;
-   toc->last_track = FirstTrack + NumTracks - 1;
-   toc->disc_type = disc_type;
+   toc->first_track = self->FirstTrack;
+   toc->last_track = self->FirstTrack + self->NumTracks - 1;
+   toc->disc_type = self->disc_type;
 
    for(i = toc->first_track; i <= toc->last_track; i++)
    {
-      toc->tracks[i].lba = Tracks[i].LBA;
+      toc->tracks[i].lba = self->Tracks[i].LBA;
       toc->tracks[i].adr = ADR_CURPOS;
-      toc->tracks[i].control = Tracks[i].subq_control;
+      toc->tracks[i].control = self->Tracks[i].subq_control;
    }
 
-   toc->tracks[100].lba = total_sectors;
+   toc->tracks[100].lba = self->total_sectors;
    toc->tracks[100].adr = ADR_CURPOS;
    toc->tracks[100].control = toc->tracks[toc->last_track].control & 0x4;
 
@@ -1266,7 +1281,55 @@ bool CDAccess_Image::Read_TOC(TOC *toc)
    return true;
 }
 
-void CDAccess_Image::Eject(bool eject_status)
-{
+static void CDAccess_Image_Eject(CDAccess *base_self, bool eject_status){
+   CDAccess_Image *self = (CDAccess_Image *)base_self;
 
+}
+
+/* ------------------------------------------------------------------
+ * destroy and factory.
+ * ------------------------------------------------------------------ */
+
+static void CDAccess_Image_destroy(CDAccess *base_self)
+{
+   CDAccess_Image *self = (CDAccess_Image *)base_self;
+   CDAccess_Image_Cleanup(self);
+   /* Manually call destructors for the C++ members embedded in self. */
+   self->SubQReplaceMap.~map();
+   self->base_dir.~basic_string();
+   free(self);
+}
+
+extern "C" CDAccess *CDAccess_Image_New(bool *success, const char *path,
+      bool image_memcache)
+{
+   CDAccess_Image *self = (CDAccess_Image *)calloc(1, sizeof(*self));
+   if (!self)
+   {
+      *success = false;
+      return NULL;
+   }
+
+   /* Placement-new the C++ members so their destructors can run later. */
+   new (&self->SubQReplaceMap) std::map<uint32, cpp11_array_doodad>();
+   new (&self->base_dir) std::string();
+
+   /* Vtable */
+   self->base.Read_Raw_Sector = CDAccess_Image_Read_Raw_Sector;
+   self->base.Read_Raw_PW     = CDAccess_Image_Read_Raw_PW;
+   self->base.Read_TOC        = CDAccess_Image_Read_TOC;
+   self->base.Eject           = CDAccess_Image_Eject;
+   self->base.destroy         = CDAccess_Image_destroy;
+
+   self->NumTracks     = 0;
+   self->FirstTrack    = 0;
+   self->LastTrack     = 0;
+   self->total_sectors = 0;
+   /* Tracks already zeroed by calloc; that matches memset() in the
+    * old constructor. */
+
+   if (!CDAccess_Image_ImageOpen(self, path, image_memcache))
+      *success = false;
+
+   return &self->base;
 }
