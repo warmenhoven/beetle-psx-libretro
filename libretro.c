@@ -35,7 +35,8 @@ retro_input_state_t dbg_input_state_cb = 0;
 #if defined(HAVE_ASHMEM) || defined(HAVE_SHM)
 #include <errno.h>
 #endif
-#include <vector>
+#include <stdlib.h>
+#include <string.h>
 #define ISHEXDEC ((codeLine[cursor]>='0') && (codeLine[cursor]<='9')) || ((codeLine[cursor]>='a') && (codeLine[cursor]<='f')) || ((codeLine[cursor]>='A') && (codeLine[cursor]<='F'))
 
 #ifdef HAVE_LIGHTREC
@@ -68,9 +69,7 @@ retro_input_state_t dbg_input_state_cb = 0;
 #endif
 
 //Fast Save States exclude string labels from variables in the savestate, and are at least 20% faster.
-extern "C" {
-    extern bool FastSaveStates;
-}
+extern bool FastSaveStates;
 
 const int DEFAULT_STATE_SIZE = 16 * 1024 * 1024;
 
@@ -115,11 +114,9 @@ bool fast_pal = false;
 unsigned image_height = 0;
 
 #ifdef HAVE_LIGHTREC
-extern "C" {
 enum DYNAREC psx_dynarec;
 bool         psx_dynarec_invalidate;
 uint8        psx_mmap = 0;
-}
 uint8 *psx_mem = NULL;
 uint8 *psx_bios = NULL;
 uint8 *psx_scratch = NULL;
@@ -144,9 +141,7 @@ unsigned psx_gpu_overclock_shift = 0;
 static int psx_skipbios;
 static int override_bios;
 
-extern "C" {
 bool psx_gte_overclock;
-}
 enum dither_mode psx_gpu_dither_mode;
 
 //iCB: PGXP options
@@ -165,9 +160,9 @@ char retro_cd_base_directory[4096];
 static char retro_cd_path[4096];
 char retro_cd_base_name[4096];
 #ifdef _WIN32
-   static char retro_slash = '\\';
+   static const char retro_slash = '\\';
 #else
-   static char retro_slash = '/';
+   static const char retro_slash = '/';
 #endif
 
 enum
@@ -426,7 +421,7 @@ struct MDFN_PseudoRNG
    uint64_t lcgo;
 };
 
-static MDFN_PseudoRNG PSX_PRNG;
+static struct MDFN_PseudoRNG PSX_PRNG;
 
 uint32_t PSX_GetRandU32(uint32_t mina, uint32_t maxa)
 {
@@ -571,12 +566,65 @@ extern int PBP_DiscCount;
  * frontend disk control interface will fail */
 static int PBP_PhysicalDiscCount;
 
+/* Dynamic array of C strings.  Used for the disk-control image
+ * paths/labels lists and the M3U file list - all places where the
+ * C++ code carried std::vector<std::string>.  count is the number
+ * of strings, cap is the allocated slot count; strings are
+ * strdup-ed and freed individually by sv_clear. */
 typedef struct
 {
-   unsigned initial_index;
-   std::string initial_path;
-   std::vector<std::string> image_paths;
-   std::vector<std::string> image_labels;
+   char  **items;
+   size_t  count;
+   size_t  cap;
+} string_vec_t;
+
+static void sv_clear(string_vec_t *v)
+{
+   size_t i;
+   for (i = 0; i < v->count; i++)
+      free(v->items[i]);
+   free(v->items);
+   v->items = NULL;
+   v->count = 0;
+   v->cap   = 0;
+}
+
+static void sv_push(string_vec_t *v, const char *s)
+{
+   if (v->count == v->cap)
+   {
+      size_t new_cap = v->cap ? v->cap * 2 : 8;
+      char **new_items = (char **)realloc(v->items, new_cap * sizeof(char *));
+      if (!new_items) return;
+      v->items = new_items;
+      v->cap   = new_cap;
+   }
+   v->items[v->count++] = strdup(s ? s : "");
+}
+
+static void sv_set(string_vec_t *v, size_t idx, const char *s)
+{
+   if (idx >= v->count) return;
+   free(v->items[idx]);
+   v->items[idx] = strdup(s ? s : "");
+}
+
+static void sv_erase(string_vec_t *v, size_t idx)
+{
+   if (idx >= v->count) return;
+   free(v->items[idx]);
+   if (idx < v->count - 1)
+      memmove(&v->items[idx], &v->items[idx + 1],
+              (v->count - idx - 1) * sizeof(char *));
+   v->count--;
+}
+
+typedef struct
+{
+   unsigned     initial_index;
+   char        *initial_path;
+   string_vec_t image_paths;
+   string_vec_t image_labels;
 } disk_control_ext_info_t;
 
 static disk_control_ext_info_t disk_control_ext_info;
@@ -593,6 +641,30 @@ MultiAccessSizeMem *PIOMem = NULL;
 MultiAccessSizeMem *MainRAM = NULL;
 MultiAccessSizeMem *ScratchRAM = NULL;
 
+/* Helper inline funcs that dispatch reads/writes to a
+ * MultiAccessSizeMem instance by size at runtime.  Replaces the
+ * Read<T> / Write<T> templated member functions; size is always
+ * a literal constant at the call site so the optimizer folds the
+ * switch away. */
+static INLINE uint32_t MASMEM_Read_size(MultiAccessSizeMem *mem, uint32_t address, unsigned size)
+{
+   if (size == 4)
+      return MASMEM_ReadU32(mem, address);
+   if (size == 2)
+      return MASMEM_ReadU16(mem, address);
+   return MASMEM_ReadU8(mem, address);
+}
+
+static INLINE void MASMEM_Write_size(MultiAccessSizeMem *mem, uint32_t address, uint32_t value, unsigned size)
+{
+   if (size == 4)
+      MASMEM_WriteU32(mem, address, value);
+   else if (size == 2)
+      MASMEM_WriteU16(mem, address, value);
+   else
+      MASMEM_WriteU8(mem, address, value);
+}
+
 /*
  * C-linkage accessors for MainRAM declared in mednafen/psx/psx_mem.h.
  * MainRAM itself is a MultiAccessSizeMem<> template instance and so
@@ -602,27 +674,27 @@ MultiAccessSizeMem *ScratchRAM = NULL;
  *
  * Inline away to a single load/store under -O2 / LTO.
  */
-extern "C" uint32_t MainRAM_ReadU32(uint32_t address)
+uint32_t MainRAM_ReadU32(uint32_t address)
 {
-   return MainRAM->ReadU32(address);
+   return MASMEM_ReadU32(MainRAM, address);
 }
 
-extern "C" void MainRAM_WriteU32(uint32_t address, uint32_t value)
+void MainRAM_WriteU32(uint32_t address, uint32_t value)
 {
-   MainRAM->WriteU32(address, value);
+   MASMEM_WriteU32(MainRAM, address, value);
 }
 
-extern "C" uint8_t  ScratchRAM_ReadU8 (uint32_t address) { return ScratchRAM->ReadU8 (address); }
-extern "C" uint16_t ScratchRAM_ReadU16(uint32_t address) { return ScratchRAM->ReadU16(address); }
-extern "C" uint32_t ScratchRAM_ReadU24(uint32_t address) { return ScratchRAM->ReadU24(address); }
-extern "C" uint32_t ScratchRAM_ReadU32(uint32_t address) { return ScratchRAM->ReadU32(address); }
-extern "C" void     ScratchRAM_WriteU8 (uint32_t address, uint8_t  value) { ScratchRAM->WriteU8 (address, value); }
-extern "C" void     ScratchRAM_WriteU16(uint32_t address, uint16_t value) { ScratchRAM->WriteU16(address, value); }
-extern "C" void     ScratchRAM_WriteU24(uint32_t address, uint32_t value) { ScratchRAM->WriteU24(address, value); }
-extern "C" void     ScratchRAM_WriteU32(uint32_t address, uint32_t value) { ScratchRAM->WriteU32(address, value); }
-extern "C" uint8_t *ScratchRAM_data8(void) { return ScratchRAM->data8; }
-extern "C" uint8_t *MainRAM_data8   (void) { return MainRAM->data8;    }
-extern "C" uint8_t *BIOSROM_data8   (void) { return BIOSROM->data8;    }
+uint8_t  ScratchRAM_ReadU8 (uint32_t address) { return MASMEM_ReadU8(ScratchRAM, address); }
+uint16_t ScratchRAM_ReadU16(uint32_t address) { return MASMEM_ReadU16(ScratchRAM, address); }
+uint32_t ScratchRAM_ReadU24(uint32_t address) { return MASMEM_ReadU24(ScratchRAM, address); }
+uint32_t ScratchRAM_ReadU32(uint32_t address) { return MASMEM_ReadU32(ScratchRAM, address); }
+void     ScratchRAM_WriteU8 (uint32_t address, uint8_t  value) { MASMEM_WriteU8(ScratchRAM, address, value); }
+void     ScratchRAM_WriteU16(uint32_t address, uint16_t value) { MASMEM_WriteU16(ScratchRAM, address, value); }
+void     ScratchRAM_WriteU24(uint32_t address, uint32_t value) { MASMEM_WriteU24(ScratchRAM, address, value); }
+void     ScratchRAM_WriteU32(uint32_t address, uint32_t value) { MASMEM_WriteU32(ScratchRAM, address, value); }
+uint8_t *ScratchRAM_data8(void) { return ScratchRAM->data8; }
+uint8_t *MainRAM_data8   (void) { return MainRAM->data8;    }
+uint8_t *BIOSROM_data8   (void) { return BIOSROM->data8;    }
 
 #ifdef HAVE_LIGHTREC
 /* Size of Expansion 1 (8MB) */
@@ -638,20 +710,20 @@ extern "C" uint8_t *BIOSROM_data8   (void) { return BIOSROM->data8;    }
  * and leaked on every core unload. */
 static uint8_t *psx_expansion1 = NULL;
 
-extern "C" const uint8_t *PSX_LoadExpansion1(void)
+const uint8_t *PSX_LoadExpansion1(void)
 {
    uint32_t *p;
    unsigned i;
 
    if (psx_expansion1 == NULL)
    {
-      psx_expansion1 = new uint8_t[PSX_EXPANSION1_SIZE];
+      psx_expansion1 = (uint8_t *)malloc(PSX_EXPANSION1_SIZE);
       if (!psx_expansion1)
          return NULL;
    }
 
    /* Read 32 bits at a time to speed things up. */
-   p = reinterpret_cast<uint32_t *>(psx_expansion1);
+   p = (uint32_t *)psx_expansion1;
    for (i = 0; i < PSX_EXPANSION1_SIZE / 4; i++)
       p[i] = PSX_MemPeek32(PSX_EXPANSION1_BASE + i * 4);
 
@@ -662,14 +734,31 @@ static void PSX_FreeExpansion1(void)
 {
    if (psx_expansion1)
    {
-      delete[] psx_expansion1;
+      free(psx_expansion1);
       psx_expansion1 = NULL;
    }
 }
 #endif
 
 static uint32_t TextMem_Start;
-static std::vector<uint8> TextMem;
+/* TextMem is a dynamic byte buffer that grows as PSX EXEs are
+ * loaded; keeps PIOMem text segments contiguous from a base
+ * address.  Realloc'd in place, freed on Cleanup. */
+static uint8_t *TextMem      = NULL;
+static size_t   TextMem_size = 0;
+
+static void TextMem_resize(size_t new_size)
+{
+   if (new_size == TextMem_size)
+      return;
+   uint8_t *new_buf = (uint8_t *)realloc(TextMem, new_size);
+   if (!new_buf && new_size)
+      return;
+   if (new_size > TextMem_size)
+      memset(new_buf + TextMem_size, 0, new_size - TextMem_size);
+   TextMem      = new_buf;
+   TextMem_size = new_size;
+}
 
 static const uint32_t SysControl_Mask[9] = { 0x00ffffff, 0x00ffffff, 0xffffffff, 0x2f1fffff,
                                              0xffffffff, 0x2f1fffff, 0x2f1fffff, 0xffffffff,
@@ -720,11 +809,11 @@ struct event_list_entry
 {
    uint32_t which;
    int32_t event_time;
-   event_list_entry *prev;
-   event_list_entry *next;
+   struct event_list_entry *prev;
+   struct event_list_entry *next;
 };
 
-static event_list_entry events[PSX_EVENT__COUNT];
+static struct event_list_entry events[PSX_EVENT__COUNT];
 
 static void EventReset(void)
 {
@@ -760,13 +849,13 @@ static void RebaseTS(const int32_t timestamp)
    CPU_SetEventNT(events[PSX_EVENT__SYNFIRST].next->event_time);
 }
 
-extern "C" void PSX_SetEventNT(const int type, const int32_t next_timestamp)
+void PSX_SetEventNT(const int type, const int32_t next_timestamp)
 {
-   event_list_entry *e = &events[type];
+   struct event_list_entry *e = &events[type];
 
    if(next_timestamp < e->event_time)
    {
-      event_list_entry *fe = e;
+      struct event_list_entry *fe = e;
 
       do
       {
@@ -787,7 +876,7 @@ extern "C" void PSX_SetEventNT(const int type, const int32_t next_timestamp)
    }
    else if(next_timestamp > e->event_time)
    {
-      event_list_entry *fe = e;
+      struct event_list_entry *fe = e;
 
       do
       {
@@ -827,12 +916,12 @@ void ForceEventUpdates(const int32_t timestamp)
 
 bool MDFN_FASTCALL PSX_EventHandler(const int32_t timestamp)
 {
-   event_list_entry *e = events[PSX_EVENT__SYNFIRST].next;
+   struct event_list_entry *e = events[PSX_EVENT__SYNFIRST].next;
 
    while(timestamp >= e->event_time)   // If Running = 0, PSX_EventHandler() may be called even if there isn't an event per-se, so while() instead of do { ... } while
    {
       int32_t nt;
-      event_list_entry *prev = e->prev;
+      struct event_list_entry *prev = e->prev;
 
       switch(e->which)
       {
@@ -865,7 +954,7 @@ bool MDFN_FASTCALL PSX_EventHandler(const int32_t timestamp)
 }
 
 
-extern "C" void PSX_RequestMLExit(void)
+void PSX_RequestMLExit(void)
 {
    Running = 0;
    CPU_SetEventNT(0);
@@ -878,47 +967,47 @@ extern "C" void PSX_RequestMLExit(void)
 
 
 /* Remember to update MemPeek<>() and MemPoke<>() when we change address decoding in MemRW() */
-template<typename T, bool IsWrite, bool Access24> static INLINE void MemRW(int32_t &timestamp, uint32_t A, uint32_t &V)
+static INLINE void MemRW(int32_t *timestamp, uint32_t A, uint32_t *V_p, unsigned size, bool is_write, bool access24)
 {
 #if 0
-   if(IsWrite)
-      printf("Write%d: %08x(orig=%08x), %08x\n", (int)(sizeof(T) * 8), A & mask[A >> 29], A, V);
+   if(is_write)
+      printf("Write%d: %08x(orig=%08x), %08x\n", (int)(size * 8), A & mask[A >> 29], A, (*V_p));
    else
-      printf("Read%d: %08x(orig=%08x)\n", (int)(sizeof(T) * 8), A & mask[A >> 29], A);
+      printf("Read%d: %08x(orig=%08x)\n", (int)(size * 8), A & mask[A >> 29], A);
 #endif
 
-   if(!IsWrite)
-      timestamp += DMACycleSteal;
+   if(!is_write)
+      *timestamp += DMACycleSteal;
 
-   //if(A == 0xa0 && IsWrite)
+   //if(A == 0xa0 && is_write)
    // DBG_Break();
 
    if(A < 0x00800000)
    {
-      if(IsWrite)
+      if(is_write)
       {
-         //timestamp++; // Best-case timing.
+         //(*timestamp)++; // Best-case timing.
       }
       else
       {
          // Overclock: get rid of memory access latency
          if (!psx_gte_overclock)
-            timestamp += 3;
+            *timestamp += 3;
       }
 
-      if(Access24)
+      if(access24)
       {
-         if(IsWrite)
-            MainRAM->WriteU24(A & 0x1FFFFF, V);
+         if(is_write)
+            MASMEM_WriteU24(MainRAM, A & 0x1FFFFF, (*V_p));
          else
-            V = MainRAM->ReadU24(A & 0x1FFFFF);
+            (*V_p) = MASMEM_ReadU24(MainRAM, A & 0x1FFFFF);
       }
       else
       {
-         if(IsWrite)
-            MainRAM->Write<T>(A & 0x1FFFFF, V);
+         if(is_write)
+            MASMEM_Write_size(MainRAM, A & 0x1FFFFF, (*V_p), size);
          else
-            V = MainRAM->Read<T>(A & 0x1FFFFF);
+            (*V_p) = MASMEM_Read_size(MainRAM, A & 0x1FFFFF, size);
       }
 
       return;
@@ -926,71 +1015,71 @@ template<typename T, bool IsWrite, bool Access24> static INLINE void MemRW(int32
 
    if(A >= 0x1FC00000 && A <= 0x1FC7FFFF)
    {
-      if(!IsWrite)
+      if(!is_write)
       {
-         if(Access24)
-            V = BIOSROM->ReadU24(A & 0x7FFFF);
+         if(access24)
+            (*V_p) = MASMEM_ReadU24(BIOSROM, A & 0x7FFFF);
          else
-            V = BIOSROM->Read<T>(A & 0x7FFFF);
+            (*V_p) = MASMEM_Read_size(BIOSROM, A & 0x7FFFF, size);
       }
 
       return;
    }
 
-   if(timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
-      PSX_EventHandler(timestamp);
+   if(*timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
+      PSX_EventHandler(*timestamp);
 
    if(A >= 0x1F801000 && A <= 0x1F802FFF)
    {
 
-      //if(IsWrite)
-      // printf("HW Write%d: %08x %08x\n", (unsigned int)(sizeof(T)*8), (unsigned int)A, (unsigned int)V);
+      //if(is_write)
+      // printf("HW Write%d: %08x %08x\n", (unsigned int)(size*8), (unsigned int)A, (unsigned int)V);
       //else
-      // printf("HW Read%d: %08x\n", (unsigned int)(sizeof(T)*8), (unsigned int)A);
+      // printf("HW Read%d: %08x\n", (unsigned int)(size*8), (unsigned int)A);
 
       if(A >= 0x1F801C00 && A <= 0x1F801FFF) // SPU
       {
-         if(sizeof(T) == 4 && !Access24)
+         if(size == 4 && !access24)
          {
-            if(IsWrite)
+            if(is_write)
             {
-               //timestamp += 15;
+               //*timestamp += 15;
 
-               //if(timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
-               // PSX_EventHandler(timestamp);
+               //if(*timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
+               // PSX_EventHandler(*timestamp);
 
-               SPU_Write(timestamp, A | 0, V);
-               SPU_Write(timestamp, A | 2, V >> 16);
+               SPU_Write(*timestamp, A | 0, (*V_p));
+               SPU_Write(*timestamp, A | 2, (*V_p) >> 16);
             }
             else
             {
-               timestamp += 36;
+               *timestamp += 36;
 
-               if(timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
-                  PSX_EventHandler(timestamp);
+               if(*timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
+                  PSX_EventHandler(*timestamp);
 
-               V = SPU_Read(timestamp, A) | (SPU_Read(timestamp, A | 2) << 16);
+               (*V_p) = SPU_Read(*timestamp, A) | (SPU_Read(*timestamp, A | 2) << 16);
             }
          }
          else
          {
-            if(IsWrite)
+            if(is_write)
             {
-               //timestamp += 8;
+               //*timestamp += 8;
 
-               //if(timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
-               // PSX_EventHandler(timestamp);
+               //if(*timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
+               // PSX_EventHandler(*timestamp);
 
-               SPU_Write(timestamp, A & ~1, V);
+               SPU_Write(*timestamp, A & ~1, (*V_p));
             }
             else
             {
-               timestamp += 16; // Just a guess, need to test.
+               *timestamp += 16; // Just a guess, need to test.
 
-               if(timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
-                  PSX_EventHandler(timestamp);
+               if(*timestamp >= events[PSX_EVENT__SYNFIRST].next->event_time)
+                  PSX_EventHandler(*timestamp);
 
-               V = SPU_Read(timestamp, A & ~1);
+               (*V_p) = SPU_Read(*timestamp, A & ~1);
             }
          }
          return;
@@ -1000,41 +1089,41 @@ template<typename T, bool IsWrite, bool Access24> static INLINE void MemRW(int32
       // CDC: TODO - 8-bit access.
       if(A >= 0x1f801800 && A <= 0x1f80180F)
       {
-         if(!IsWrite)
+         if(!is_write)
          {
-            timestamp += 6 * sizeof(T); //24;
+            *timestamp += 6 * size; //24;
          }
 
-         if(IsWrite)
-            PS_CDC_Write(PSX_CDC, timestamp, A & 0x3, V);
+         if(is_write)
+            PS_CDC_Write(PSX_CDC, *timestamp, A & 0x3, (*V_p));
          else
-            V = PS_CDC_Read(PSX_CDC, timestamp, A & 0x3);
+            (*V_p) = PS_CDC_Read(PSX_CDC, *timestamp, A & 0x3);
 
          return;
       }
 
       if(A >= 0x1F801810 && A <= 0x1F801817)
       {
-         if(!IsWrite)
-            timestamp++;
+         if(!is_write)
+            (*timestamp)++;
 
-         if(IsWrite)
-            GPU_Write(timestamp, A, V);
+         if(is_write)
+            GPU_Write(*timestamp, A, (*V_p));
          else
-            V = GPU_Read(timestamp, A);
+            (*V_p) = GPU_Read(*timestamp, A);
 
          return;
       }
 
       if(A >= 0x1F801820 && A <= 0x1F801827)
       {
-         if(!IsWrite)
-            timestamp++;
+         if(!is_write)
+            (*timestamp)++;
 
-         if(IsWrite)
-            MDEC_Write(timestamp, A, V);
+         if(is_write)
+            MDEC_Write(*timestamp, A, (*V_p));
          else
-            V = MDEC_Read(timestamp, A);
+            (*V_p) = MDEC_Read(*timestamp, A);
 
          return;
       }
@@ -1043,84 +1132,84 @@ template<typename T, bool IsWrite, bool Access24> static INLINE void MemRW(int32
       {
          unsigned index = (A & 0x1F) >> 2;
 
-         if(!IsWrite)
-            timestamp++;
+         if(!is_write)
+            (*timestamp)++;
 
-         //if(A == 0x1F801014 && IsWrite)
+         //if(A == 0x1F801014 && is_write)
          // fprintf(stderr, "%08x %08x\n",A,V);
 
-         if(IsWrite)
+         if(is_write)
          {
-            V <<= (A & 3) * 8;
-            SysControl.Regs[index] = V & SysControl_Mask[index];
+            (*V_p) <<= (A & 3) * 8;
+            SysControl.Regs[index] = (*V_p) & SysControl_Mask[index];
          }
          else
          {
-            V = SysControl.Regs[index] | SysControl_OR[index];
-            V >>= (A & 3) * 8;
+            (*V_p) = SysControl.Regs[index] | SysControl_OR[index];
+            (*V_p) >>= (A & 3) * 8;
          }
          return;
       }
 
       if(A >= 0x1F801040 && A <= 0x1F80104F)
       {
-         if(!IsWrite)
-            timestamp++;
+         if(!is_write)
+            (*timestamp)++;
 
-         if(IsWrite)
-            FrontIO_Write(PSX_FIO, timestamp, A, V);
+         if(is_write)
+            FrontIO_Write(PSX_FIO, *timestamp, A, (*V_p));
          else
-            V = FrontIO_Read(PSX_FIO, timestamp, A);
+            (*V_p) = FrontIO_Read(PSX_FIO, *timestamp, A);
          return;
       }
 
       if(A >= 0x1F801050 && A <= 0x1F80105F)
       {
-         if(!IsWrite)
-            timestamp++;
+         if(!is_write)
+            (*timestamp)++;
 
-         if(IsWrite)
-            SIO_Write(timestamp, A, V);
+         if(is_write)
+            SIO_Write(*timestamp, A, (*V_p));
          else
-            V = SIO_Read(timestamp, A);
+            (*V_p) = SIO_Read(*timestamp, A);
          return;
       }
 
 
       if(A >= 0x1F801070 && A <= 0x1F801077) // IRQ
       {
-         if(!IsWrite)
-            timestamp++;
+         if(!is_write)
+            (*timestamp)++;
 
-         if(IsWrite)
-            ::IRQ_Write(A, V);
+         if(is_write)
+            IRQ_Write(A, (*V_p));
          else
-            V = ::IRQ_Read(A);
+            (*V_p) = IRQ_Read(A);
          return;
       }
 
       if(A >= 0x1F801080 && A <= 0x1F8010FF)    // DMA
       {
-         if(!IsWrite)
-            timestamp++;
+         if(!is_write)
+            (*timestamp)++;
 
-         if(IsWrite)
-            DMA_Write(timestamp, A, V);
+         if(is_write)
+            DMA_Write(*timestamp, A, (*V_p));
          else
-            V = DMA_Read(timestamp, A);
+            (*V_p) = DMA_Read(*timestamp, A);
 
          return;
       }
 
       if(A >= 0x1F801100 && A <= 0x1F80113F) // Root counters
       {
-         if(!IsWrite)
-            timestamp++;
+         if(!is_write)
+            (*timestamp)++;
 
-         if(IsWrite)
-            TIMER_Write(timestamp, A, V);
+         if(is_write)
+            TIMER_Write(*timestamp, A, (*V_p));
          else
-            V = TIMER_Read(timestamp, A);
+            (*V_p) = TIMER_Read(*timestamp, A);
 
          return;
       }
@@ -1129,28 +1218,28 @@ template<typename T, bool IsWrite, bool Access24> static INLINE void MemRW(int32
 
    if(A >= 0x1F000000 && A <= 0x1F7FFFFF)
    {
-      if(!IsWrite)
+      if(!is_write)
       {
-         V = ~0U; // A game this affects:  Tetris with Cardcaptor Sakura
+         (*V_p) = ~0U; // A game this affects:  Tetris with Cardcaptor Sakura
 
          if(PIOMem)
          {
             if((A & 0x7FFFFF) < 65536)
             {
-               if(Access24)
-                  V = PIOMem->ReadU24(A & 0x7FFFFF);
+               if(access24)
+                  (*V_p) = MASMEM_ReadU24(PIOMem, A & 0x7FFFFF);
                else
-                  V = PIOMem->Read<T>(A & 0x7FFFFF);
+                  (*V_p) = MASMEM_Read_size(PIOMem, A & 0x7FFFFF, size);
             }
-            else if((A & 0x7FFFFF) < (65536 + TextMem.size()))
+            else if((A & 0x7FFFFF) < (65536 + TextMem_size))
             {
-               if(Access24)
-                  V = MDFN_de24lsb(&TextMem[(A & 0x7FFFFF) - 65536]);
-               else switch(sizeof(T))
+               if(access24)
+                  (*V_p) = MDFN_de24lsb(&TextMem[(A & 0x7FFFFF) - 65536]);
+               else switch(size)
                {
-                  case 1: V = TextMem[(A & 0x7FFFFF) - 65536]; break;
-                  case 2: V = MDFN_de16lsb(&TextMem[(A & 0x7FFFFF) - 65536]); break;
-                  case 4: V = MDFN_de32lsb(&TextMem[(A & 0x7FFFFF) - 65536]); break;
+                  case 1: (*V_p) = TextMem[(A & 0x7FFFFF) - 65536]; break;
+                  case 2: (*V_p) = MDFN_de16lsb(&TextMem[(A & 0x7FFFFF) - 65536]); break;
+                  case 4: (*V_p) = MDFN_de32lsb(&TextMem[(A & 0x7FFFFF) - 65536]); break;
                }
             }
          }
@@ -1160,86 +1249,82 @@ template<typename T, bool IsWrite, bool Access24> static INLINE void MemRW(int32
 
    if(A == 0xFFFE0130) // Per tests on PS1, ignores the access(sort of, on reads the value is forced to 0 if not aligned) if not aligned to 4-bytes.
    {
-      if(!IsWrite)
-         V = CPU_GetBIU(PSX_CPU);
+      if(!is_write)
+         (*V_p) = CPU_GetBIU(PSX_CPU);
       else
-         CPU_SetBIU(PSX_CPU, V);
+         CPU_SetBIU(PSX_CPU, (*V_p));
 
       return;
    }
 
-   if(!IsWrite)
-      V = 0;
+   if(!is_write)
+      (*V_p) = 0;
 }
 
 void MDFN_FASTCALL PSX_MemWrite8(int32_t timestamp, uint32_t A, uint32_t V)
 {
-   MemRW<uint8, true, false>(timestamp, A, V);
+   MemRW(&timestamp, A, &V, 1, true, false);
 }
 
 void MDFN_FASTCALL PSX_MemWrite16(int32_t timestamp, uint32_t A, uint32_t V)
 {
-   MemRW<uint16, true, false>(timestamp, A, V);
+   MemRW(&timestamp, A, &V, 2, true, false);
 }
 
 void MDFN_FASTCALL PSX_MemWrite24(int32_t timestamp, uint32_t A, uint32_t V)
 {
-   MemRW<uint32, true, true>(timestamp, A, V);
+   MemRW(&timestamp, A, &V, 4, true, true);
 }
 
 void MDFN_FASTCALL PSX_MemWrite32(int32_t timestamp, uint32_t A, uint32_t V)
 {
-   MemRW<uint32, true, false>(timestamp, A, V);
+   MemRW(&timestamp, A, &V, 4, true, false);
 }
 
-/* PSX_MemRead{8,16,24,32}: the original C++ signature took
- * `int32_t &timestamp` so the dispatcher could update the cycle
- * count for memory-access timing.  cpu.c (now C) calls these from
- * its ReadMemory_uN helpers, so the signatures are C-linkage with
- * `int32_t *timestamp`; the body dereferences and passes through
- * to MemRW which still uses a C++ reference internally. */
-extern "C" uint8_t MDFN_FASTCALL PSX_MemRead8(int32_t *timestamp, uint32_t A)
+/* PSX_MemRead{8,16,24,32}: signatures take int32_t *timestamp;
+ * cpu.c calls these from its ReadMemory_uN helpers. */
+uint8_t MDFN_FASTCALL PSX_MemRead8(int32_t *timestamp, uint32_t A)
 {
    uint32_t V;
-   MemRW<uint8, false, false>(*timestamp, A, V);
+   MemRW(timestamp, A, &V, 1, false, false);
    return V;
 }
 
-extern "C" uint16_t MDFN_FASTCALL PSX_MemRead16(int32_t *timestamp, uint32_t A)
+uint16_t MDFN_FASTCALL PSX_MemRead16(int32_t *timestamp, uint32_t A)
 {
    uint32_t V;
-   MemRW<uint16, false, false>(*timestamp, A, V);
+   MemRW(timestamp, A, &V, 2, false, false);
    return V;
 }
 
-extern "C" uint32_t MDFN_FASTCALL PSX_MemRead24(int32_t *timestamp, uint32_t A)
+uint32_t MDFN_FASTCALL PSX_MemRead24(int32_t *timestamp, uint32_t A)
 {
    uint32_t V;
-   MemRW<uint32, false, true>(*timestamp, A, V);
+   MemRW(timestamp, A, &V, 4, false, true);
    return V;
 }
 
-extern "C" uint32_t MDFN_FASTCALL PSX_MemRead32(int32_t *timestamp, uint32_t A)
+uint32_t MDFN_FASTCALL PSX_MemRead32(int32_t *timestamp, uint32_t A)
 {
    uint32_t V;
-   MemRW<uint32, false, false>(*timestamp, A, V);
+   MemRW(timestamp, A, &V, 4, false, false);
    return V;
 }
 
-template<typename T, bool Access24> static INLINE uint32_t MemPeek(int32_t timestamp, uint32_t A)
+static INLINE uint32_t MemPeek(int32_t timestamp, uint32_t A, unsigned size, bool access24)
 {
    if(A < 0x00800000)
    {
-      if(Access24)
-         return(MainRAM->ReadU24(A & 0x1FFFFF));
-      return(MainRAM->Read<T>(A & 0x1FFFFF));
+      if(access24)
+         return(MASMEM_ReadU24(MainRAM, A & 0x1FFFFF));
+      return(MASMEM_Read_size(MainRAM, A & 0x1FFFFF, size));
    }
 
    if(A >= 0x1FC00000 && A <= 0x1FC7FFFF)
    {
-      if(Access24)
-         return(BIOSROM->ReadU24(A & 0x7FFFF));
-      return(BIOSROM->Read<T>(A & 0x7FFFF));
+      if(access24)
+         return(MASMEM_ReadU24(BIOSROM, A & 0x7FFFF));
+      return(MASMEM_Read_size(BIOSROM, A & 0x7FFFF, size));
    }
 
    if(A >= 0x1F801000 && A <= 0x1F802FFF)
@@ -1315,15 +1400,15 @@ template<typename T, bool Access24> static INLINE uint32_t MemPeek(int32_t times
       {
          if((A & 0x7FFFFF) < 65536)
          {
-            if(Access24)
-               return(PIOMem->ReadU24(A & 0x7FFFFF));
-            return(PIOMem->Read<T>(A & 0x7FFFFF));
+            if(access24)
+               return(MASMEM_ReadU24(PIOMem, A & 0x7FFFFF));
+            return(MASMEM_Read_size(PIOMem, A & 0x7FFFFF, size));
          }
-         else if((A & 0x7FFFFF) < (65536 + TextMem.size()))
+         else if((A & 0x7FFFFF) < (65536 + TextMem_size))
          {
-            if(Access24)
+            if(access24)
                return(MDFN_de24lsb(&TextMem[(A & 0x7FFFFF) - 65536]));
-            else switch(sizeof(T))
+            else switch(size)
             {
                case 1:
                   return(TextMem[(A & 0x7FFFFF) - 65536]);
@@ -1345,17 +1430,17 @@ template<typename T, bool Access24> static INLINE uint32_t MemPeek(int32_t times
 
 uint8_t PSX_MemPeek8(uint32_t A)
 {
-   return MemPeek<uint8, false>(0, A);
+   return MemPeek(0, A, 1, false);
 }
 
 uint16_t PSX_MemPeek16(uint32_t A)
 {
-   return MemPeek<uint16, false>(0, A);
+   return MemPeek(0, A, 2, false);
 }
 
 uint32_t PSX_MemPeek32(uint32_t A)
 {
-   return MemPeek<uint32, false>(0, A);
+   return MemPeek(0, A, 4, false);
 }
 
 // FIXME: Add PSX_Reset() and Reset() so that emulated input devices don't get power-reset on reset-button reset.
@@ -1371,7 +1456,7 @@ static void PSX_Power(void)
 
    cd_warned_slow = false;
 
-   memset(MainRAM->get_data32(), 0, 2048 * 1024);
+   memset(MultiAccessSizeMem_get_data32(MainRAM), 0, 2048 * 1024);
 
    for(i = 0; i < 9; i++)
       SysControl.Regs[i] = 0;
@@ -1397,24 +1482,24 @@ static void PSX_Power(void)
    startup_frame_count = 0;
 }
 
-template<typename T, bool Access24> static INLINE void MemPoke(pscpu_timestamp_t timestamp, uint32 A, T V)
+static INLINE void MemPoke(pscpu_timestamp_t timestamp, uint32 A, uint32_t V, unsigned size, bool access24)
 {
    if(A < 0x00800000)
    {
-      if(Access24)
-         MainRAM->WriteU24(A & 0x1FFFFF, V);
+      if(access24)
+         MASMEM_WriteU24(MainRAM, A & 0x1FFFFF, V);
       else
-         MainRAM->Write<T>(A & 0x1FFFFF, V);
+         MASMEM_Write_size(MainRAM, A & 0x1FFFFF, V, size);
 
       return;
    }
 
    if(A >= 0x1FC00000 && A <= 0x1FC7FFFF)
    {
-      if(Access24)
-         BIOSROM->WriteU24(A & 0x7FFFF, V);
+      if(access24)
+         MASMEM_WriteU24(BIOSROM, A & 0x7FFFF, V);
       else
-         BIOSROM->Write<T>(A & 0x7FFFF, V);
+         MASMEM_Write_size(BIOSROM, A & 0x7FFFF, V, size);
 
       return;
    }
@@ -1438,7 +1523,7 @@ template<typename T, bool Access24> static INLINE void MemPoke(pscpu_timestamp_t
 
 void PSX_MemPoke8(uint32 A, uint8 V)
 {
-   MemPoke<uint8, false>(0, A, V);
+   MemPoke(0, A, V, 1, false);
 }
 
 /* Test whether the supplied file looks like a PS-X EXE. The original
@@ -1465,7 +1550,7 @@ static const char *CalcDiscSCEx_BySYSTEMCNF(CDIF *c, unsigned *rr)
    uint8_t pvd[2048];
    uint32_t rdel, rdel_len;
    const char *ret = NULL;
-   Stream *fp      = NULL;
+   struct Stream *fp = NULL;
    unsigned pvd_search_count = 0;
 
    fp = CDIF_MakeStream(c, 0, ~0U);
@@ -1742,30 +1827,30 @@ static void SetDiscWrapper(const bool CD_TrayOpen) {
 
 static const uintptr_t supported_io_bases[] = {
 #if !__MACOS__
-	static_cast<uintptr_t>(0x00000000),
-	static_cast<uintptr_t>(0x10000000),
-	static_cast<uintptr_t>(0x20000000),
-	static_cast<uintptr_t>(0x30000000),
+	(uintptr_t)(0x00000000),
+	(uintptr_t)(0x10000000),
+	(uintptr_t)(0x20000000),
+	(uintptr_t)(0x30000000),
 #else
-   static_cast<uintptr_t>(MACOS_VM_BASE),
+   (uintptr_t)(MACOS_VM_BASE),
 #endif
-	static_cast<uintptr_t>(0x40000000),
-	static_cast<uintptr_t>(0x50000000),
-	static_cast<uintptr_t>(0x60000000),
-	static_cast<uintptr_t>(0x70000000),
-	static_cast<uintptr_t>(0x80000000),
-	static_cast<uintptr_t>(0x90000000),
+	(uintptr_t)(0x40000000),
+	(uintptr_t)(0x50000000),
+	(uintptr_t)(0x60000000),
+	(uintptr_t)(0x70000000),
+	(uintptr_t)(0x80000000),
+	(uintptr_t)(0x90000000),
    /* Some platforms need higher address base for mmap to work */
 #if UINTPTR_MAX == UINT64_MAX
-	static_cast<uintptr_t>(0x100000000),
-	static_cast<uintptr_t>(0x200000000),
-	static_cast<uintptr_t>(0x300000000),
-	static_cast<uintptr_t>(0x400000000),
-	static_cast<uintptr_t>(0x500000000),
-	static_cast<uintptr_t>(0x600000000),
-	static_cast<uintptr_t>(0x700000000),
-	static_cast<uintptr_t>(0x800000000),
-	static_cast<uintptr_t>(0x900000000),
+	(uintptr_t)(0x100000000),
+	(uintptr_t)(0x200000000),
+	(uintptr_t)(0x300000000),
+	(uintptr_t)(0x400000000),
+	(uintptr_t)(0x500000000),
+	(uintptr_t)(0x600000000),
+	(uintptr_t)(0x700000000),
+	(uintptr_t)(0x800000000),
+	(uintptr_t)(0x900000000),
 #endif
 };
 
@@ -2025,7 +2110,7 @@ static void CDInsertEject(void);
 static void CDEject(void);
 static void Cleanup(void);
 
-static void InitCommon(const bool EmulateMemcards = true, const bool WantPIOMem = false)
+static void InitCommon(const bool EmulateMemcards, const bool WantPIOMem)
 {
    unsigned region, i;
    bool emulate_memcard[8];
@@ -2122,10 +2207,10 @@ static void InitCommon(const bool EmulateMemcards = true, const bool WantPIOMem 
       if ((disk_control_ext_info.initial_index > 0) &&
           (disk_control_ext_info.initial_index < disk_get_num_images()))
          if (disk_control_ext_info.initial_index <
-               disk_control_ext_info.image_paths.size())
+               disk_control_ext_info.image_paths.count)
             if (string_is_equal(
-                  disk_control_ext_info.image_paths[disk_control_ext_info.initial_index].c_str(),
-                  disk_control_ext_info.initial_path.c_str()))
+                  disk_control_ext_info.image_paths.items[disk_control_ext_info.initial_index],
+                  disk_control_ext_info.initial_path))
                CD_SelectedDisc = (int)disk_control_ext_info.initial_index;
    }
 
@@ -2151,48 +2236,41 @@ static void InitCommon(const bool EmulateMemcards = true, const bool WantPIOMem 
 
    if (psx_mmap > 0)
    {
-      MainRAM    = new MultiAccessSizeMem();
-      MainRAM->attach(psx_mem,     RAM_SIZE);
-      ScratchRAM = new MultiAccessSizeMem();
-      ScratchRAM->attach(psx_scratch, SCRATCH_SIZE);
-      BIOSROM    = new MultiAccessSizeMem();
-      BIOSROM->attach(psx_bios,    BIOS_SIZE);
+      MainRAM = MultiAccessSizeMem_Attach(psx_mem, RAM_SIZE);
+      ScratchRAM = MultiAccessSizeMem_Attach(psx_scratch, SCRATCH_SIZE);
+      BIOSROM = MultiAccessSizeMem_Attach(psx_bios, BIOS_SIZE);
    }
    else
 #endif
    {
-      MainRAM    = new MultiAccessSizeMem();
-      MainRAM->init(RAM_SIZE);
-      ScratchRAM = new MultiAccessSizeMem();
-      ScratchRAM->init(SCRATCH_SIZE);
-      BIOSROM    = new MultiAccessSizeMem();
-      BIOSROM->init(BIOS_SIZE);
+      MainRAM = MultiAccessSizeMem_New(RAM_SIZE);
+      ScratchRAM = MultiAccessSizeMem_New(SCRATCH_SIZE);
+      BIOSROM = MultiAccessSizeMem_New(BIOS_SIZE);
    }
 
    PIOMem = NULL;
 
    if (WantPIOMem)
    {
-      PIOMem = new MultiAccessSizeMem();
-      PIOMem->init(PIO_SIZE);
+      PIOMem = MultiAccessSizeMem_New(PIO_SIZE);
    }
 
    for(uint32_t ma = 0x00000000; ma < 0x00800000; ma += 2048 * 1024)
    {
-      CPU_SetFastMap(PSX_CPU, MainRAM->get_data32(), 0x00000000 + ma, 2048 * 1024);
-      CPU_SetFastMap(PSX_CPU, MainRAM->get_data32(), 0x80000000 + ma, 2048 * 1024);
-      CPU_SetFastMap(PSX_CPU, MainRAM->get_data32(), 0xA0000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(MainRAM), 0x00000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(MainRAM), 0x80000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(MainRAM), 0xA0000000 + ma, 2048 * 1024);
    }
 
-   CPU_SetFastMap(PSX_CPU, BIOSROM->get_data32(), 0x1FC00000, 512 * 1024);
-   CPU_SetFastMap(PSX_CPU, BIOSROM->get_data32(), 0x9FC00000, 512 * 1024);
-   CPU_SetFastMap(PSX_CPU, BIOSROM->get_data32(), 0xBFC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(BIOSROM), 0x1FC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(BIOSROM), 0x9FC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(BIOSROM), 0xBFC00000, 512 * 1024);
 
    if(PIOMem)
    {
-      CPU_SetFastMap(PSX_CPU, PIOMem->get_data32(), 0x1F000000, 65536);
-      CPU_SetFastMap(PSX_CPU, PIOMem->get_data32(), 0x9F000000, 65536);
-      CPU_SetFastMap(PSX_CPU, PIOMem->get_data32(), 0xBF000000, 65536);
+      CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(PIOMem), 0x1F000000, 65536);
+      CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(PIOMem), 0x9F000000, 65536);
+      CPU_SetFastMap(PSX_CPU, MultiAccessSizeMem_get_data32(PIOMem), 0xBF000000, 65536);
    }
 
 
@@ -2298,7 +2376,7 @@ static void InitCommon(const bool EmulateMemcards = true, const bool WantPIOMem 
    PSX_Power();
 }
 
-static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp = false)
+static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 {
    uint32 PC        = MDFN_de32lsb(&data[0x10]);
    uint32 SP        = MDFN_de32lsb(&data[0x30]);
@@ -2330,31 +2408,31 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp =
       return false;
    }
 
-   if(!TextMem.size())
+   if(!TextMem_size)
    {
       TextMem_Start = TextStart;
-      TextMem.resize(TextSize);
+      TextMem_resize(TextSize);
    }
 
    if(TextStart < TextMem_Start)
    {
-      uint32 old_size = TextMem.size();
+      uint32 old_size = TextMem_size;
 
       //printf("RESIZE: 0x%08x\n", TextMem_Start - TextStart);
 
-      TextMem.resize(old_size + TextMem_Start - TextStart);
+      TextMem_resize(old_size + TextMem_Start - TextStart);
       memmove(&TextMem[TextMem_Start - TextStart], &TextMem[0], old_size);
 
       TextMem_Start = TextStart;
    }
 
-   if(TextMem.size() < (TextStart - TextMem_Start + TextSize))
-      TextMem.resize(TextStart - TextMem_Start + TextSize);
+   if(TextMem_size < (TextStart - TextMem_Start + TextSize))
+      TextMem_resize(TextStart - TextMem_Start + TextSize);
 
    memcpy(&TextMem[TextStart - TextMem_Start], data + 0x800, TextSize);
 
    // BIOS patch
-   BIOSROM->WriteU32(0x6990, (3 << 26) | ((0xBF001000 >> 2) & ((1 << 26) - 1)));
+   MASMEM_WriteU32(BIOSROM, 0x6990, (3 << 26) | ((0xBF001000 >> 2) & ((1 << 26) - 1)));
 
    uint8 *po;
 
@@ -2397,9 +2475,9 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp =
    po += 4;
 
    // Load size into r10
-   MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem.size() >> 16)); // LUI
+   MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_size >> 16)); // LUI
    po += 4;
-   MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (10 << 16) | (TextMem.size() & 0xFFFF));    // ORI
+   MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (10 << 16) | (TextMem_size & 0xFFFF));    // ORI
    po += 4;
 
    //
@@ -2495,7 +2573,7 @@ static int Load(const char *name, RFILE *fp)
 
    InitCommon(true, true);
 
-   TextMem.resize(0);
+   TextMem_resize(0);
 
    if (size >= 0x800)
    {
@@ -2508,7 +2586,7 @@ static int Load(const char *name, RFILE *fp)
          return -1;
       }
 
-      if (!LoadEXE((const uint8_t *)header, (uint32_t)len))
+      if (!LoadEXE((const uint8_t *)header, (uint32_t)len, false))
       {
          free(header);
          Cleanup();
@@ -2518,26 +2596,26 @@ static int Load(const char *name, RFILE *fp)
       free(header);
    }
 
-   disk_control_ext_info.image_paths.push_back(name);
+   sv_push(&disk_control_ext_info.image_paths, name);
    extract_basename(image_label, name, sizeof(image_label));
-   disk_control_ext_info.image_labels.push_back(image_label);
+   sv_push(&disk_control_ext_info.image_labels, image_label);
 
    return 1;
 }
 
 static int LoadCD(void)
 {
-   InitCommon();
+   InitCommon(true, false);
 
    if (psx_skipbios == 1 && BIOSROM)
-      BIOSROM->WriteU32(0x6990, 0);
+      MASMEM_WriteU32(BIOSROM, 0x6990, 0);
 
    return 1;
 }
 
 static void Cleanup(void)
 {
-   TextMem.resize(0);
+   TextMem_resize(0);
 
    if (PSX_CDC)
    {
@@ -2579,31 +2657,31 @@ static void Cleanup(void)
    else
    {
       if (MainRAM)
-         delete MainRAM;
+         MultiAccessSizeMem_Free(MainRAM);
       if (ScratchRAM)
-         delete ScratchRAM;
+         MultiAccessSizeMem_Free(ScratchRAM);
       if (BIOSROM)
-         delete BIOSROM;
+         MultiAccessSizeMem_Free(BIOSROM);
    }
    MainRAM    = NULL;
    ScratchRAM = NULL;
    BIOSROM    = NULL;
 #else
    if (MainRAM)
-      delete MainRAM;
+      MultiAccessSizeMem_Free(MainRAM);
    MainRAM = NULL;
 
    if (ScratchRAM)
-      delete ScratchRAM;
+      MultiAccessSizeMem_Free(ScratchRAM);
    ScratchRAM = NULL;
 
    if (BIOSROM)
-      delete BIOSROM;
+      MultiAccessSizeMem_Free(BIOSROM);
    BIOSROM = NULL;
 #endif
 
    if(PIOMem)
-      delete PIOMem;
+      MultiAccessSizeMem_Free(PIOMem);
    PIOMem = NULL;
 
 #ifdef HAVE_LIGHTREC
@@ -2692,7 +2770,7 @@ static void CDSelect(void)
    }
 }
 
-extern "C" int StateAction(StateMem *sm, int load, int data_only)
+int StateAction(StateMem *sm, int load, int data_only)
 {
    SFORMAT StateRegs[] =
    {
@@ -3067,10 +3145,8 @@ static bool disk_replace_image_index(unsigned index, const struct retro_game_inf
       if ((int)index < CD_SelectedDisc)
          CD_SelectedDisc--;
 
-      disk_control_ext_info.image_paths.erase(
-            disk_control_ext_info.image_paths.begin() + index);
-      disk_control_ext_info.image_labels.erase(
-            disk_control_ext_info.image_labels.begin() + index);
+      sv_erase(&disk_control_ext_info.image_paths, index);
+      sv_erase(&disk_control_ext_info.image_labels, index);
 
       // Poke into psx.cpp
       CalcDiscSCEx();
@@ -3098,8 +3174,8 @@ static bool disk_replace_image_index(unsigned index, const struct retro_game_inf
       extract_basename(retro_cd_base_name, info->path, sizeof(retro_cd_base_name));
 
       /* Update disk path/label vectors */
-      disk_control_ext_info.image_paths[index]  = info->path;
-      disk_control_ext_info.image_labels[index] = retro_cd_base_name;
+      sv_set(&disk_control_ext_info.image_paths, index, info->path);
+      sv_set(&disk_control_ext_info.image_labels, index, retro_cd_base_name);
    }
 
    return true;
@@ -3112,8 +3188,8 @@ static bool disk_add_image_index(void)
 
    if (cdif_array_push(&cdifs, NULL) < 0)
       return false;
-   disk_control_ext_info.image_paths.push_back("");
-   disk_control_ext_info.image_labels.push_back("");
+   sv_push(&disk_control_ext_info.image_paths, "");
+   sv_push(&disk_control_ext_info.image_labels, "");
    return true;
 }
 
@@ -3123,7 +3199,7 @@ static bool disk_set_initial_image(unsigned index, const char *path)
 		return false;
 
 	disk_control_ext_info.initial_index = index;
-	disk_control_ext_info.initial_path  = path;
+	(free(disk_control_ext_info.initial_path), disk_control_ext_info.initial_path = strdup(path));
 
 	return true;
 }
@@ -3134,11 +3210,11 @@ static bool disk_get_image_path(unsigned index, char *path, size_t len)
 		return false;
 
 	if ((index < disk_get_num_images()) &&
-		 (index < disk_control_ext_info.image_paths.size()))
+		 (index < disk_control_ext_info.image_paths.count))
 	{
-		if (!string_is_empty(disk_control_ext_info.image_paths[index].c_str()))
+		if (!string_is_empty(disk_control_ext_info.image_paths.items[index]))
 		{
-			strlcpy(path, disk_control_ext_info.image_paths[index].c_str(), len);
+			strlcpy(path, disk_control_ext_info.image_paths.items[index], len);
 			return true;
 		}
 	}
@@ -3152,11 +3228,11 @@ static bool disk_get_image_label(unsigned index, char *label, size_t len)
 		return false;
 
 	if ((index < disk_get_num_images()) &&
-		 (index < disk_control_ext_info.image_labels.size()))
+		 (index < disk_control_ext_info.image_labels.count))
 	{
-		if (!string_is_empty(disk_control_ext_info.image_labels[index].c_str()))
+		if (!string_is_empty(disk_control_ext_info.image_labels.items[index]))
 		{
-			strlcpy(label, disk_control_ext_info.image_labels[index].c_str(), len);
+			strlcpy(label, disk_control_ext_info.image_labels.items[index], len);
 			return true;
 		}
 	}
@@ -3243,9 +3319,9 @@ void retro_init(void)
 
    /* Initialise disk control interface */
    disk_control_ext_info.initial_index = 0;
-   disk_control_ext_info.initial_path.clear();
-   disk_control_ext_info.image_paths.clear();
-   disk_control_ext_info.image_labels.clear();
+   (free(disk_control_ext_info.initial_path), disk_control_ext_info.initial_path = NULL);
+   sv_clear(&disk_control_ext_info.image_paths);
+   sv_clear(&disk_control_ext_info.image_labels);
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION, &dci_version) && (dci_version >= 1))
       environ_cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE, &disk_interface_ext);
@@ -4219,7 +4295,7 @@ static void check_variables(bool startup)
  *      legitimate playlist fits well within that. */
 #define M3U_MAX_DEPTH 8
 
-static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsigned depth = 0)
+static void ReadM3U(string_vec_t *file_list, const char *path, unsigned depth)
 {
    char  dir_path[4096];
    char  linebuf[2048];
@@ -4228,23 +4304,24 @@ static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsig
    if (depth >= M3U_MAX_DEPTH)
    {
       log_cb(RETRO_LOG_ERROR, "M3U recursion limit (%u) reached at \"%s\"\n",
-            M3U_MAX_DEPTH, path.c_str());
+            M3U_MAX_DEPTH, path);
       return;
    }
 
-   fp = filestream_open(path.c_str(), RETRO_VFS_FILE_ACCESS_READ,
+   fp = filestream_open(path, RETRO_VFS_FILE_ACCESS_READ,
          RETRO_VFS_FILE_ACCESS_HINT_NONE);
 
    if (fp == NULL)
       return;
 
-   MDFN_GetFilePathComponents_c(path.c_str(),
+   MDFN_GetFilePathComponents_c(path,
          dir_path, sizeof(dir_path),
          NULL, 0, NULL, 0);
 
    while(filestream_gets(fp, linebuf, sizeof(linebuf)) != NULL)
    {
       char efp_buf[4096];
+      size_t efp_len;
 
       if(linebuf[0] == '#')
          continue;
@@ -4254,23 +4331,21 @@ static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsig
 
       MDFN_EvalFIP_c(dir_path, linebuf, efp_buf, sizeof(efp_buf));
 
+      efp_len = strlen(efp_buf);
+
+      if(efp_len >= 4 && !strcmp(efp_buf + efp_len - 4, ".m3u"))
       {
-         std::string efp(efp_buf);
-
-         if(efp.size() >= 4 && efp.substr(efp.size() - 4) == ".m3u")
+         if(!strcmp(efp_buf, path))
          {
-            if(efp == path)
-            {
-               log_cb(RETRO_LOG_ERROR, "M3U at \"%s\" references self.\n", efp.c_str());
-               goto end;
-            }
-
-            /* Pre-increment so the depth limit actually trips. */
-            ReadM3U(file_list, efp, depth + 1);
+            log_cb(RETRO_LOG_ERROR, "M3U at \"%s\" references self.\n", efp_buf);
+            goto end;
          }
-         else
-            file_list.push_back(efp);
+
+         /* Pre-increment so the depth limit actually trips. */
+         ReadM3U(file_list, efp_buf, depth + 1);
       }
+      else
+         sv_push(file_list, efp_buf);
    }
 
 end:
@@ -4289,9 +4364,9 @@ static void clear_disc_state(void)
    cdif_array_clear(&cdifs);
 
    disk_control_ext_info.initial_index = 0;
-   disk_control_ext_info.initial_path.clear();
-   disk_control_ext_info.image_paths.clear();
-   disk_control_ext_info.image_labels.clear();
+   (free(disk_control_ext_info.initial_path), disk_control_ext_info.initial_path = NULL);
+   sv_clear(&disk_control_ext_info.image_paths);
+   sv_clear(&disk_control_ext_info.image_labels);
 }
 
 static bool MDFNI_LoadCD(const char *devicename)
@@ -4308,19 +4383,19 @@ static bool MDFNI_LoadCD(const char *devicename)
 
    if (devicename_len > 4 && !strcasecmp(devicename + devicename_len - 4, ".m3u"))
    {
-      ReadM3U(disk_control_ext_info.image_paths, devicename);
+      ReadM3U(&disk_control_ext_info.image_paths, devicename, 0);
 
-      for (unsigned i = 0; i < disk_control_ext_info.image_paths.size(); i++)
+      for (unsigned i = 0; i < disk_control_ext_info.image_paths.count; i++)
       {
          char image_label[4096];
          bool success = true;
          CDIF *image  = CDIF_Open(&success,
-               disk_control_ext_info.image_paths[i].c_str(), false, cdimagecache);
+               disk_control_ext_info.image_paths.items[i], false, cdimagecache);
 
          if (!success || !image)
          {
             log_cb(RETRO_LOG_ERROR, "Error opening CD: %s\n",
-                  disk_control_ext_info.image_paths[i].c_str());
+                  disk_control_ext_info.image_paths.items[i]);
             if (image)
                CDIF_Close(image);
             load_ok = false;
@@ -4331,9 +4406,9 @@ static bool MDFNI_LoadCD(const char *devicename)
 
          image_label[0] = '\0';
          extract_basename(image_label,
-               disk_control_ext_info.image_paths[i].c_str(),
+               disk_control_ext_info.image_paths.items[i],
                sizeof(image_label));
-         disk_control_ext_info.image_labels.push_back(image_label);
+         sv_push(&disk_control_ext_info.image_labels, image_label);
       }
    }
    else if (devicename_len > 4 && !strcasecmp(devicename + devicename_len - 4, ".pbp"))
@@ -4370,12 +4445,12 @@ static bool MDFNI_LoadCD(const char *devicename)
 
             /* All 'disks' have the same path when using
              * multi-disk PBP files */
-            disk_control_ext_info.image_paths.push_back(devicename);
+            sv_push(&disk_control_ext_info.image_paths, devicename);
 
             /* Label is name+index */
             extract_basename(image_name, devicename, sizeof(image_name));
             snprintf(image_label, sizeof(image_label), "%s #%u", image_name, i + 1);
-            disk_control_ext_info.image_labels.push_back(image_label);
+            sv_push(&disk_control_ext_info.image_labels, image_label);
          }
       }
    }
@@ -4409,9 +4484,9 @@ static bool MDFNI_LoadCD(const char *devicename)
       cdif_array_push(&cdifs, image);
 
       image_label[0] = '\0';
-      disk_control_ext_info.image_paths.push_back(devicename);
+      sv_push(&disk_control_ext_info.image_paths, devicename);
       extract_basename(image_label, devicename, sizeof(image_label));
-      disk_control_ext_info.image_labels.push_back(image_label);
+      sv_push(&disk_control_ext_info.image_labels, image_label);
    }
 
    if (!load_ok)
@@ -5046,29 +5121,29 @@ void retro_run(void)
          switch (width)
          {
             case 280:
-               pix_offset += 12 - image_offset + floor(0.5 * image_crop);
+               pix_offset += 12 - image_offset + (image_crop / 2);
                width = 256 - image_crop;
                break;
 
             case 350:
-               pix_offset += 15 - image_offset + floor(0.5 * image_crop);
+               pix_offset += 15 - image_offset + (image_crop / 2);
                width = 320 - image_crop;
                break;
 
             /* 368px mode. Some games are overcropped at 364 width or undercropped at 368 width, so crop to 366.
                Adjust in future if there are issues. */
             case 400:
-               pix_offset += 17 - image_offset + floor(0.5 * image_crop);
+               pix_offset += 17 - image_offset + (image_crop / 2);
                width = 366 - image_crop;
                break;
 
             case 560:
-               pix_offset += 24 - image_offset + floor(0.5 * image_crop);
+               pix_offset += 24 - image_offset + (image_crop / 2);
                width = 512 - image_crop;
                break;
 
             case 700:
-               pix_offset += 30 - image_offset + floor(0.5 * image_crop);
+               pix_offset += 30 - image_offset + (image_crop / 2);
                width = 640 - image_crop;
                break;
 
@@ -5451,16 +5526,23 @@ void retro_cheat_set(unsigned index, bool enabled, const char * codeLine)
 {
    const CheatFormatStruct* cf = CheatFormats;
    char name[256];
-   std::vector<std::string> codeParts;
-   int matchLength=0;
-   int cursor;
-   std::string part;
+   /* PSX cheat codes are tokens of hex digits.  Each token is at
+    * most 12 chars (full code) or 8 chars (half-code; two of these
+    * concatenate to a full code).  An entire codeLine yields one
+    * token roughly per 4 chars, so a 64-token cap covers everything
+    * realistic.  Bounded buffer avoids dynamic allocation entirely. */
+   char codeParts[64][16];
+   int  numParts = 0;
+   int  matchLength = 0;
+   int  cursor;
+   char part[32];
+   MemoryPatch patch;
 
-   if (codeLine==NULL)
+   if (codeLine == NULL)
       return;
 
-   //Break the code into Parts
-   for (cursor=0;;cursor++)
+   /* Break the code into Parts */
+   for (cursor = 0; ; cursor++)
    {
       if (ISHEXDEC)
          matchLength++;
@@ -5468,31 +5550,41 @@ void retro_cheat_set(unsigned index, bool enabled, const char * codeLine)
       {
          if (matchLength)
          {
-            part=codeLine+cursor-matchLength;
-            part.erase(matchLength,std::string::npos);
-            codeParts.push_back(part);
-            matchLength=0;
+            int copy_len = matchLength;
+            if (copy_len >= (int)sizeof(codeParts[0]))
+               copy_len = (int)sizeof(codeParts[0]) - 1;
+            if (numParts < (int)(sizeof(codeParts) / sizeof(codeParts[0])))
+            {
+               memcpy(codeParts[numParts], codeLine + cursor - matchLength, copy_len);
+               codeParts[numParts][copy_len] = '\0';
+               numParts++;
+            }
+            matchLength = 0;
          }
       }
       if (!codeLine[cursor])
          break;
    }
 
-   MemoryPatch patch;
    MemoryPatch_Init(&patch);
-   for (cursor=0;cursor<(int)codeParts.size();cursor++)
+   for (cursor = 0; cursor < numParts; cursor++)
    {
-      part=codeParts[cursor];
-      if (part.length()==8)
-         part+=codeParts[++cursor];
-      if (part.length()==12)
+      size_t plen;
+      strlcpy(part, codeParts[cursor], sizeof(part));
+      plen = strlen(part);
+      if (plen == 8 && cursor + 1 < numParts)
+      {
+         strlcat(part, codeParts[++cursor], sizeof(part));
+         plen = strlen(part);
+      }
+      if (plen == 12)
       {
          /* Decode the cheat. DecodeCheat returns false on bad codes;
           * MDFNI_AddCheat does not throw. */
-         if(!cf->DecodeCheat(part.c_str(), &patch))
+         if (!cf->DecodeCheat(part, &patch))
          {
             /* Generate a name */
-            snprintf(name, sizeof(name), "cheat_%i_%i",index,cursor);
+            snprintf(name, sizeof(name), "cheat_%i_%i", index, cursor);
 
             /* Set parameters */
             strlcpy(patch.name, name, sizeof(patch.name));
@@ -5505,7 +5597,7 @@ void retro_cheat_set(unsigned index, bool enabled, const char * codeLine)
    }
 }
 
-extern "C" void MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1,
+void MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1,
       char *out, size_t outlen)
 {
    int r;
