@@ -4,10 +4,6 @@
 #include <stdint.h>
 #include <boolean.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 enum
 {
  IRQ_VBLANK     = 0,
@@ -29,9 +25,5 @@ void IRQ_Write(uint32_t A, uint32_t V);
 uint32_t IRQ_Read(uint32_t A);
 
 int IRQ_StateAction(void *data, int load, int data_only);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

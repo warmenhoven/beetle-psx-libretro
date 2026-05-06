@@ -318,7 +318,7 @@ void CPU_Power(PS_CPU *self)
 
    BIU = 0;
 
-   memset(ScratchRAM_data8(), 0, 1024);
+   memset(ScratchRAM->data8, 0, 1024);
 
    PGXP_Init();
 
@@ -373,7 +373,7 @@ int CPU_StateAction(PS_CPU *self, StateMem *sm, const unsigned load, const bool 
       SFVAR(ReadAbsorbWhich),
       SFVAR(ReadFudge),
 
-      SFARRAYN(ScratchRAM_data8(), 1024, "ScratchRAM.data8"),
+      SFARRAYN(ScratchRAM->data8, 1024, "ScratchRAM.data8"),
 
       SFEND
    };
@@ -470,7 +470,7 @@ static INLINE uint8_t ReadMemory_u8(pscpu_timestamp_t *timestamp, uint32_t addre
    if (address >= 0x1F800000 && address <= 0x1F8003FF)
    {
       LDAbsorb = 0;
-      return ScratchRAM_ReadU8(address & 0x3FF);
+      return MASMEM_ReadU8(ScratchRAM, address & 0x3FF);
    }
 
    *timestamp += (ReadFudge >> 4) & 2;
@@ -498,7 +498,7 @@ static INLINE uint16_t ReadMemory_u16(pscpu_timestamp_t *timestamp, uint32_t add
    if (address >= 0x1F800000 && address <= 0x1F8003FF)
    {
       LDAbsorb = 0;
-      return ScratchRAM_ReadU16(address & 0x3FF);
+      return MASMEM_ReadU16(ScratchRAM, address & 0x3FF);
    }
 
    *timestamp += (ReadFudge >> 4) & 2;
@@ -527,8 +527,8 @@ static INLINE uint32_t ReadMemory_u32(pscpu_timestamp_t *timestamp, uint32_t add
    {
       LDAbsorb = 0;
       if (DS24)
-         return ScratchRAM_ReadU24(address & 0x3FF);
-      return ScratchRAM_ReadU32(address & 0x3FF);
+         return MASMEM_ReadU24(ScratchRAM, address & 0x3FF);
+      return MASMEM_ReadU32(ScratchRAM, address & 0x3FF);
    }
 
    *timestamp += (ReadFudge >> 4) & 2;
@@ -588,7 +588,7 @@ static INLINE void WriteMemory_u8(pscpu_timestamp_t *timestamp, uint32_t address
 
       if (address >= 0x1F800000 && address <= 0x1F8003FF)
       {
-         ScratchRAM_WriteU8(address & 0x3FF, value);
+         MASMEM_WriteU8(ScratchRAM, address & 0x3FF, value);
          return;
       }
       PSX_MemWrite8(*timestamp, address, value);
@@ -598,7 +598,7 @@ static INLINE void WriteMemory_u8(pscpu_timestamp_t *timestamp, uint32_t address
    WriteMemory_IsC_misc(address, value);
 
    if ((BIU & 0x081) == 0x080)
-      ScratchRAM_WriteU8(address & 0x3FF, value);
+      MASMEM_WriteU8(ScratchRAM, address & 0x3FF, value);
 }
 
 static INLINE void WriteMemory_u16(pscpu_timestamp_t *timestamp, uint32_t address, uint32_t value)
@@ -609,7 +609,7 @@ static INLINE void WriteMemory_u16(pscpu_timestamp_t *timestamp, uint32_t addres
 
       if (address >= 0x1F800000 && address <= 0x1F8003FF)
       {
-         ScratchRAM_WriteU16(address & 0x3FF, value);
+         MASMEM_WriteU16(ScratchRAM, address & 0x3FF, value);
          return;
       }
       PSX_MemWrite16(*timestamp, address, value);
@@ -619,7 +619,7 @@ static INLINE void WriteMemory_u16(pscpu_timestamp_t *timestamp, uint32_t addres
    WriteMemory_IsC_misc(address, value);
 
    if ((BIU & 0x081) == 0x080)
-      ScratchRAM_WriteU16(address & 0x3FF, value);
+      MASMEM_WriteU16(ScratchRAM, address & 0x3FF, value);
 }
 
 static INLINE void WriteMemory_u32(pscpu_timestamp_t *timestamp, uint32_t address, uint32_t value, bool DS24)
@@ -631,9 +631,9 @@ static INLINE void WriteMemory_u32(pscpu_timestamp_t *timestamp, uint32_t addres
       if (address >= 0x1F800000 && address <= 0x1F8003FF)
       {
          if (DS24)
-            ScratchRAM_WriteU24(address & 0x3FF, value);
+            MASMEM_WriteU24(ScratchRAM, address & 0x3FF, value);
          else
-            ScratchRAM_WriteU32(address & 0x3FF, value);
+            MASMEM_WriteU32(ScratchRAM, address & 0x3FF, value);
          return;
       }
 
@@ -649,9 +649,9 @@ static INLINE void WriteMemory_u32(pscpu_timestamp_t *timestamp, uint32_t addres
    if ((BIU & 0x081) == 0x080)
    {
       if (DS24)
-         ScratchRAM_WriteU24(address & 0x3FF, value);
+         MASMEM_WriteU24(ScratchRAM, address & 0x3FF, value);
       else
-         ScratchRAM_WriteU32(address & 0x3FF, value);
+         MASMEM_WriteU32(ScratchRAM, address & 0x3FF, value);
    }
 }
 
@@ -2846,9 +2846,9 @@ u32 hash_calculate(const void *buffer, u32 count)
 
 static void print_for_big_ass_debugger(int32_t timestamp, uint32_t PC)
 {
-	uint8_t *psxM = (uint8_t *) MainRAM_data8();
-	uint8_t *psxR = (uint8_t *) BIOSROM_data8();
-	uint8_t *psxH = (uint8_t *) ScratchRAM_data8();
+	uint8_t *psxM = (uint8_t *) MainRAM->data8;
+	uint8_t *psxR = (uint8_t *) BIOSROM->data8;
+	uint8_t *psxH = (uint8_t *) ScratchRAM->data8;
 
 	unsigned int i;
 
@@ -2928,10 +2928,10 @@ static void cop_mtc_ctc(struct lightrec_state *state,
 			break;
 		case 12: /* Status */
 			if ((CP0.SR & ~value) & (1 << 16)) {
-				memcpy(MainRAM_data8(), cache_buf, sizeof(cache_buf));
+				memcpy(MainRAM->data8, cache_buf, sizeof(cache_buf));
 				lightrec_invalidate_all(state);
 			} else if ((~CP0.SR & value) & (1 << 16)) {
-				memcpy(cache_buf, MainRAM_data8(), sizeof(cache_buf));
+				memcpy(cache_buf, MainRAM->data8, sizeof(cache_buf));
 			}
 
 			CP0.SR = value & ~( (0x3 << 26) | (0x3 << 23) | (0x3 << 6));
@@ -3492,9 +3492,9 @@ static struct lightrec_ops pgxp_ops = {
 static int lightrec_plugin_init(PS_CPU *self)
 {
    struct lightrec_ops *cop_ops;
-   uint8_t *psxM = (uint8_t *) MainRAM_data8();
-   uint8_t *psxR = (uint8_t *) BIOSROM_data8();
-   uint8_t *psxH = (uint8_t *) ScratchRAM_data8();
+   uint8_t *psxM = (uint8_t *) MainRAM->data8;
+   uint8_t *psxR = (uint8_t *) BIOSROM->data8;
+   uint8_t *psxH = (uint8_t *) ScratchRAM->data8;
    uint8_t *psxP = (uint8_t *) PSX_LoadExpansion1();
 
    (void)self;

@@ -8,10 +8,6 @@
 
 #include "../cdrom/cdromif.h"   /* Now plain C - shared header for both languages */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* CD-DA / XA audio buffer.  Filled by the disc-read pipeline (CDDA
  * sectors decoded directly, XA sectors via XA ADPCM decode), drained
  * by the SPU through CDC_GetCDAudioSample. */
@@ -189,9 +185,5 @@ void     PS_CDC_SoftReset(PS_CDC *cdc);
 
 void     PS_CDC_GetCDAudio(PS_CDC *cdc, int32_t samples[2],
                            const unsigned freq);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* __MDFN_PSX_CDC_H */

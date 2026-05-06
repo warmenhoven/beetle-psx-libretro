@@ -31,15 +31,7 @@
  * channels are zeroed.
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 uint32_t CDC_DMARead(void);
 void     CDC_GetCDAudioSample(int32_t samples[2]);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

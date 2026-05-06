@@ -34,10 +34,6 @@
 #include <lightrec.h>
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* FAST_MAP_* enums are in BYTES (8-bit), not in 32-bit units ("words"
  * in MIPS context), but the sizes will always be multiples of 4. */
 #define CPU_FAST_MAP_SHIFT 16
@@ -175,9 +171,5 @@ static INLINE pscpu_timestamp_t CPU_GetEventNT(void)
 {
    return cpu_next_event_ts;
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

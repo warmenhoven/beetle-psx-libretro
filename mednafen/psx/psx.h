@@ -10,10 +10,6 @@
 
 typedef int32_t pscpu_timestamp_t;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 bool MDFN_FASTCALL PSX_EventHandler(const int32_t timestamp);
 
 void MDFN_FASTCALL PSX_MemWrite8 (int32_t timestamp, uint32_t A, uint32_t V);
@@ -39,10 +35,6 @@ uint16_t MDFN_FASTCALL PSX_MemRead16(int32_t *timestamp, uint32_t A);
 uint32_t MDFN_FASTCALL PSX_MemRead24(int32_t *timestamp, uint32_t A);
 uint32_t MDFN_FASTCALL PSX_MemRead32(int32_t *timestamp, uint32_t A);
 
-#ifdef __cplusplus
-}
-#endif
-
 #include "psx_events.h"
 
 #include "cpu.h"
@@ -51,48 +43,21 @@ uint32_t MDFN_FASTCALL PSX_MemRead32(int32_t *timestamp, uint32_t A);
 #include "dma.h"
 #include "cdc.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 extern PS_CPU *PSX_CPU;
 
-#ifdef __cplusplus
-}
-#endif
-
-#ifdef __cplusplus
-extern MultiAccessSizeMem  *BIOSROM;
+extern MultiAccessSizeMem *BIOSROM;
 extern MultiAccessSizeMem *MainRAM;
-extern MultiAccessSizeMem        *ScratchRAM;
-#endif
+extern MultiAccessSizeMem *ScratchRAM;
 
 #ifdef HAVE_LIGHTREC
 enum DYNAREC {DYNAREC_DISABLED, DYNAREC_EXECUTE, DYNAREC_EXECUTE_ONE, DYNAREC_RUN_INTERPRETER};
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 extern enum DYNAREC psx_dynarec;
-#ifdef __cplusplus
-}
-#endif
-
-#endif
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
 extern unsigned psx_gpu_overclock_shift;
 
-#ifdef __cplusplus
-}
-#endif
-
-#ifdef __cplusplus
 extern uint8_t analog_combo[2];
 extern uint8_t analog_combo_hold;
-#endif
 
 #endif

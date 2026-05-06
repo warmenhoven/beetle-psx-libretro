@@ -16,10 +16,6 @@
  * unit that's safe for both languages.
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 enum
 {
    PSX_EVENT__SYNFIRST = 0,
@@ -66,9 +62,5 @@ static INLINE void overclock_cpu_to_device(int32_t *clock) {
       *clock = n;
    }
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

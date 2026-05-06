@@ -174,9 +174,15 @@ enum
 
 static bool firmware_is_present(unsigned region)
 {
-   static const size_t list_size = 16;
+   /* C90 requires array sizes to be integer constant expressions; a
+    * `static const size_t list_size = 16` is not one, so spell it
+    * with an enum. */
+   enum { list_size = 16 };
    const char *bios_name_list[list_size];
    const char *bios_sha1 = NULL;
+   char        obtained_sha1[41];
+   size_t      i;
+   int         r;
 
    log_cb(RETRO_LOG_INFO, "Checking if required firmware is present...\n");
 
@@ -211,13 +217,12 @@ static bool firmware_is_present(unsigned region)
         bios_sha1 = NULL;
       }
 
-      size_t i;
       for (i = 0; i < list_size; ++i)
       {
          if (!bios_name_list[i])
             break;
 
-         int r = snprintf(bios_path, sizeof(bios_path), "%s%c%s", retro_base_directory, retro_slash, bios_name_list[i]);
+         r = snprintf(bios_path, sizeof(bios_path), "%s%c%s", retro_base_directory, retro_slash, bios_name_list[i]);
          if (r >= 4096)
          {
             bios_path[4095] = '\0';
@@ -234,7 +239,6 @@ static bool firmware_is_present(unsigned region)
 
       if (firmware_found)
       {
-         char obtained_sha1[41];
          sha1_calculate(bios_path, obtained_sha1);
          if (bios_sha1 && strcmp(obtained_sha1, bios_sha1))
          {
@@ -301,13 +305,12 @@ static bool firmware_is_present(unsigned region)
       bios_sha1 = "F6BC2D1F5EB6593DE7D089C425AC681D6FFFD3F0";
    }
 
-   size_t i;
    for (i = 0; i < list_size; ++i)
    {
       if (!bios_name_list[i])
          break;
 
-      int r = snprintf(bios_path, sizeof(bios_path), "%s%c%s", retro_base_directory, retro_slash, bios_name_list[i]);
+      r = snprintf(bios_path, sizeof(bios_path), "%s%c%s", retro_base_directory, retro_slash, bios_name_list[i]);
       if (r >= 4096)
       {
          bios_path[4095] = '\0';
@@ -328,7 +331,6 @@ static bool firmware_is_present(unsigned region)
       return false;
    }
 
-   char obtained_sha1[41];
    sha1_calculate(bios_path, obtained_sha1);
    if (strcmp(obtained_sha1, bios_sha1))
    {
@@ -348,6 +350,7 @@ static bool firmware_is_present(unsigned region)
 static void extract_basename(char *buf, const char *path, size_t size)
 {
    const char *base = strrchr(path, '/');
+   char       *ext;
    if (!base)
       base = strrchr(path, '\\');
    if (!base)
@@ -359,17 +362,18 @@ static void extract_basename(char *buf, const char *path, size_t size)
    strncpy(buf, base, size - strlen(buf) - 1);
    buf[size - 1] = '\0';
 
-   char *ext = strrchr(buf, '.');
+   ext = strrchr(buf, '.');
    if (ext)
       *ext = '\0';
 }
 
 static void extract_directory(char *buf, const char *path, size_t size)
 {
+   char *base;
    strncpy(buf, path, size - 1);
    buf[size - 1] = '\0';
 
-   char *base = strrchr(buf, '/');
+   base = strrchr(buf, '/');
    if (!base)
       base = strrchr(buf, '\\');
 
@@ -749,9 +753,10 @@ static size_t   TextMem_size = 0;
 
 static void TextMem_resize(size_t new_size)
 {
+   uint8_t *new_buf;
    if (new_size == TextMem_size)
       return;
-   uint8_t *new_buf = (uint8_t *)realloc(TextMem, new_size);
+   new_buf = (uint8_t *)realloc(TextMem, new_size);
    if (!new_buf && new_size)
       return;
    if (new_size > TextMem_size)
@@ -2116,6 +2121,8 @@ static void InitCommon(const bool EmulateMemcards, const bool WantPIOMem)
    bool emulate_memcard[8];
    bool emulate_multitap[2];
    int sls, sle;
+   RFILE *BIOSFile;
+   char biospath[4096];
 
    for(i = 0; i < 8; i++)
    {
@@ -2277,8 +2284,6 @@ static void InitCommon(const bool EmulateMemcards, const bool WantPIOMem)
    MDFNMP_Init(1024, ((uint64)1 << 29) / 1024);
    MDFNMP_AddRAM(2048 * 1024, 0x00000000, MainRAM->data8);
 
-   RFILE *BIOSFile;
-
    if(firmware_is_present(region))
    {
       BIOSFile      = filestream_open(bios_path,
@@ -2306,7 +2311,6 @@ static void InitCommon(const bool EmulateMemcards, const bool WantPIOMem)
          biospath_sname = "psx.bios_na";
       }
 
-      char biospath[4096];
       MDFN_MakeFName(MDFNMKF_FIRMWARE, 0,
             MDFN_GetSettingS(biospath_sname), biospath, sizeof(biospath));
 
@@ -2382,6 +2386,8 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    uint32 SP        = MDFN_de32lsb(&data[0x30]);
    uint32 TextStart = MDFN_de32lsb(&data[0x18]);
    uint32 TextSize  = MDFN_de32lsb(&data[0x1C]);
+   uint8 *po;
+   uint32 sa;
 
    if(ignore_pcsp)
       log_cb(RETRO_LOG_DEBUG, "TextStart=0x%08x\nTextSize=0x%08x\n", TextStart, TextSize);
@@ -2434,8 +2440,6 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    // BIOS patch
    MASMEM_WriteU32(BIOSROM, 0x6990, (3 << 26) | ((0xBF001000 >> 2) & ((1 << 26) - 1)));
 
-   uint8 *po;
-
    po = &PIOMem->data8[0x0800];
 
    MDFN_en32lsb(po, (0x0 << 26) | (31 << 21) | (0x8 << 0)); // JR
@@ -2462,7 +2466,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    //
 
    // Load source address into r8
-   uint32 sa = 0x9F000000 + 65536;
+   sa = 0x9F000000 + 65536;
    MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16) | (sa >> 16));  // LUI
    po += 4;
    MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (8 << 16) | (sa & 0xFFFF));  // ORI
@@ -2873,8 +2877,11 @@ static bool DecodeGS(const char *cheat_string, MemoryPatch *patch)
    uint64 code = 0;
    unsigned nybble_count = 0;
    const size_t len = strlen(cheat_string);
+   uint8  code_type;
+   uint64 cl;
+   unsigned i;
 
-   for(unsigned i = 0; i < len; i++)
+   for(i = 0; i < len; i++)
    {
       if(cheat_string[i] == ' ' || cheat_string[i] == '-' || cheat_string[i] == ':' || cheat_string[i] == '+')
          continue;
@@ -2904,8 +2911,8 @@ static bool DecodeGS(const char *cheat_string, MemoryPatch *patch)
       return false;
    }
 
-   const uint8 code_type = code >> 40;
-   const uint64 cl = code & 0xFFFFFFFFFFULL;
+   code_type = code >> 40;
+   cl = code & 0xFFFFFFFFFFULL;
 
    patch->bigendian = false;
    patch->compare = 0;
@@ -3266,8 +3273,8 @@ static struct retro_disk_control_ext_callback disk_interface_ext =
 
 static void fallback_log(enum retro_log_level level, const char *fmt, ...)
 {
-   (void)level;
    va_list va;
+   (void)level;
    va_start(va, fmt);
    vfprintf(stderr, fmt, va);
    va_end(va);
@@ -3278,6 +3285,7 @@ void retro_init(void)
    struct retro_log_callback log;
    uint64_t serialization_quirks = RETRO_SERIALIZATION_QUIRK_CORE_VARIABLE_SIZE;
    unsigned dci_version          = 0;
+   const char *dir               = NULL;
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
       log_cb = log.log;
@@ -3291,8 +3299,6 @@ void retro_init(void)
     * is a non-zero enum value. */
    Deinterlacer_Init(&deint);
 #endif
-
-   const char *dir = NULL;
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) && dir)
    {
@@ -3490,13 +3496,13 @@ static void check_variables(bool startup)
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
       {
          unsigned val = atoi(var.value);
+         uint8_t n;
 
          // Upscale must be a power of two
          assert((val & (val - 1)) == 0);
 
          // Crappy "ffs" implementation since the standard function is not
          // widely supported by libc in the wild
-         uint8_t n;
          for (n = 0; (val & 1) == 0; ++n)
             {
                val >>= 1;
@@ -4577,6 +4583,10 @@ bool retro_load_game(const struct retro_game_info *info)
    char tocbasepath[4096];
    enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
    int r;
+   unsigned disc_region;
+   bool force_software_renderer;
+   bool ret;
+   struct retro_core_option_display option_display;
 
    if (!info || !info->path)
       return false;
@@ -4605,7 +4615,7 @@ bool retro_load_game(const struct retro_game_info *info)
    MDFNMP_InstallReadPatches();
 
    // Determine content_is_pal before calling alloc_surface()
-   unsigned disc_region = CalcDiscSCEx();
+   disc_region = CalcDiscSCEx();
    content_is_pal = (disc_region == REGION_EU);
 
    alloc_surface();
@@ -4624,8 +4634,8 @@ bool retro_load_game(const struct retro_game_info *info)
 
    // MDFNI_LoadGame() has been called and surface has been allocated,
    // we can now perform firmware check
-   bool force_software_renderer = false;
-   bool ret = rsx_intf_open(content_is_pal, force_software_renderer);
+   force_software_renderer = false;
+   ret = rsx_intf_open(content_is_pal, force_software_renderer);
 
    /* Hide irrelevant core options */
    switch (rsx_intf_is_type())
@@ -4723,7 +4733,6 @@ bool retro_load_game(const struct retro_game_info *info)
    }
 
    /* Hide irrelevant scanline core options for current content */
-   struct retro_core_option_display option_display;
    option_display.visible = false;
    if (content_is_pal)
    {
@@ -4779,6 +4788,16 @@ static bool retro_set_system_av_info(void)
 void retro_run(void)
 {
    bool updated = false;
+   static int32 rects[MEDNAFEN_CORE_GEOMETRY_MAX_H];
+   EmulateSpecStruct spec = {0};
+   EmulateSpecStruct *espec;
+   int32_t timestamp = 0;
+   const void     *fb;
+   unsigned        width;
+   unsigned        height;
+   uint8_t         upscale_shift;
+   const uint32_t *pix;
+   unsigned        pix_offset;
 
    /* Defensive: a frontend should not call retro_run before
     * retro_load_game succeeds, but if it does we'd crash on the
@@ -4926,14 +4945,16 @@ void retro_run(void)
       if (frame_count % INTERNAL_FPS_SAMPLE_PERIOD == 0)
       {
          char msg_buffer[64];
+         float fps;
+         float internal_fps;
 
          msg_buffer[0] = '\0';
 
          // Just report the "real-world" refresh rate here regardless of system av info reported to the frontend
-         float fps = (content_is_pal && !fast_pal) ?
+         fps = (content_is_pal && !fast_pal) ?
                         (currently_interlaced ? FPS_PAL_INTERLACED : FPS_PAL_NONINTERLACED) :
                         (currently_interlaced ? FPS_NTSC_INTERLACED : FPS_NTSC_NONINTERLACED);
-         float internal_fps = (internal_frame_count * fps) / INTERNAL_FPS_SAMPLE_PERIOD;
+         internal_fps = (internal_frame_count * fps) / INTERNAL_FPS_SAMPLE_PERIOD;
 
          snprintf(msg_buffer, sizeof(msg_buffer),
                "Internal FPS: %.2f", internal_fps);
@@ -4964,18 +4985,15 @@ void retro_run(void)
 
    input_update(libretro_supports_bitmasks, input_state_cb);
 
-   static int32 rects[MEDNAFEN_CORE_GEOMETRY_MAX_H];
    rects[0] = ~0;
 
-   EmulateSpecStruct spec = {0};
    spec.surface = surf;
    spec.SoundRate = 44100;
    spec.LineWidths = rects;
    spec.SoundBufSize = 0;
 
-   EmulateSpecStruct *espec = (EmulateSpecStruct*)&spec;
+   espec = (EmulateSpecStruct*)&spec;
    /* start of Emulate */
-   int32_t timestamp = 0;
 
    espec->skip = false;
 
@@ -5005,22 +5023,24 @@ void retro_run(void)
    RebaseTS(timestamp);
 
    // Save memcards if dirty.
-   unsigned players = input_get_player_count();
-   for(int i = 0; i < players; i++)
    {
-      uint64_t new_dc = FrontIO_GetMemcardDirtyCount(PSX_FIO, i);
-
-      if(new_dc > Memcard_PrevDC[i])
+      unsigned players = input_get_player_count();
+      int i;
+      for(i = 0; i < (int)players; i++)
       {
-         Memcard_PrevDC[i] = new_dc;
-         Memcard_SaveDelay[i] = 0;
-      }
+         uint64_t new_dc = FrontIO_GetMemcardDirtyCount(PSX_FIO, i);
 
-      if(Memcard_SaveDelay[i] >= 0)
-      {
-         Memcard_SaveDelay[i] += timestamp;
-         if(Memcard_SaveDelay[i] >= (33868800 * 2))   // Wait until about 2 seconds of no new writes.
+         if(new_dc > Memcard_PrevDC[i])
          {
+            Memcard_PrevDC[i] = new_dc;
+            Memcard_SaveDelay[i] = 0;
+         }
+
+         if(Memcard_SaveDelay[i] >= 0)
+         {
+            Memcard_SaveDelay[i] += timestamp;
+            if(Memcard_SaveDelay[i] >= (33868800 * 2))   // Wait until about 2 seconds of no new writes.
+            {
             char ext[64];
             char memcard[4096];
             int  index = i;
@@ -5048,6 +5068,7 @@ void retro_run(void)
          }
       }
    }
+   }
 
    /* end of Emulate */
 
@@ -5072,10 +5093,10 @@ void retro_run(void)
       // If unable to change AV info here, defer to next frame and leave interlace_setting_dirty flagged
    }
 
-   const void *fb        = NULL;
-   unsigned width        = rects[0];
-   unsigned height       = spec.DisplayRect.h;
-   uint8_t upscale_shift = GPU_get_upscale_shift();
+   fb            = NULL;
+   width         = rects[0];
+   height        = spec.DisplayRect.h;
+   upscale_shift = GPU_get_upscale_shift();
 
    if (rsx_intf_is_type() == RSX_SOFTWARE)
    {
@@ -5107,8 +5128,8 @@ void retro_run(void)
 #endif
 
       // PSX core inserts padding on left and right (overscan). Optionally crop this.
-      const uint32_t *pix = surf->pixels;
-      unsigned pix_offset = 0;
+      pix = surf->pixels;
+      pix_offset = 0;
 
       if (crop_overscan)
       {

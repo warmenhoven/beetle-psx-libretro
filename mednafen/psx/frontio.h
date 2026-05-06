@@ -7,10 +7,6 @@
 #include "../state_helpers.h"
 #include "../state.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Crosshair-cursor selector values, formerly the FrontIO::SETTING_GUN_*
  * enum.  Promoted to file scope so both the InputDevice base struct
  * and external callers (e.g. libretro.cpp) can reference them without
@@ -153,9 +149,5 @@ void     FrontIO_SaveMemcard         (FrontIO *fio, unsigned which);
 
 int      FrontIO_StateAction(FrontIO *fio, StateMem *sm,
                              int load, int data_only);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* __MDFN_PSX_FRONTIO_H */

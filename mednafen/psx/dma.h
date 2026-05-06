@@ -5,10 +5,6 @@
 
 #include "../state.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 int32_t DMA_Update(const int32_t timestamp);
 void DMA_Write(const int32_t timestamp, uint32_t A, uint32_t V);
 uint32_t DMA_Read(const int32_t timestamp, uint32_t A);
@@ -18,9 +14,5 @@ void DMA_ResetTS(void);
 void DMA_Power(void);
 
 int DMA_StateAction(StateMem *sm, int load, int data_only);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

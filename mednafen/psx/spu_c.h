@@ -26,10 +26,6 @@
  * singleton pointer is gone, no heap allocation, no leak surface.
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*
  * Audio output buffer. SPU samples are mixed into this buffer at
  * the SPU's internal 44.1 kHz rate; the libretro frontend drains
@@ -54,9 +50,5 @@ uint32_t SPU_ReadDMA(void);
 int32_t  SPU_UpdateFromCDC(int32_t clocks);
 
 int      SPU_StateAction(StateMem *sm, int load, int data_only);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

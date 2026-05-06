@@ -17,19 +17,11 @@
  * optimizer inlines them away under -O2.
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 void CPU_AssertIRQ(unsigned which, bool asserted);
 void CPU_SetHalt(bool status);
 
 #ifdef HAVE_LIGHTREC
 void CPU_LightrecClear(uint32_t addr, uint32_t size);
-#endif
-
-#ifdef __cplusplus
-}
 #endif
 
 #endif
