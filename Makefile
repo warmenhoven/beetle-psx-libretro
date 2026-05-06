@@ -1,6 +1,5 @@
 SILENT := 0
 DEBUG = 0
-FRONTEND_SUPPORTS_RGB565 = 1
 HAVE_OPENGL = 0
 GLES = 0
 GLES3 = 0 # HW renderer now supported on GLES3

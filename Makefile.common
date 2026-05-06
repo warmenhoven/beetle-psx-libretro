@@ -115,10 +115,6 @@ ifeq ($(NO_COMPUTED_GOTO), 1)
    FLAGS += -DNO_COMPUTED_GOTO
 endif
 
-ifeq ($(FRONTEND_SUPPORTS_RGB565), 1)
-   FLAGS += -DFRONTEND_SUPPORTS_RGB565
-endif
-
 ifeq ($(NEED_CD), 1)
    FLAGS += -DNEED_CD
 endif
