@@ -28,6 +28,7 @@
 #include <time.h>
 
 #include <boolean.h>
+#include <compat/strl.h>
 #include <streams/file_stream.h>
 
 #include "../mednafen.h"
