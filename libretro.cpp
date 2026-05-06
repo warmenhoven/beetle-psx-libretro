@@ -115,9 +115,11 @@ bool fast_pal = false;
 unsigned image_height = 0;
 
 #ifdef HAVE_LIGHTREC
+extern "C" {
 enum DYNAREC psx_dynarec;
-bool psx_dynarec_invalidate;
-uint8 psx_mmap = 0;
+bool         psx_dynarec_invalidate;
+uint8        psx_mmap = 0;
+}
 uint8 *psx_mem = NULL;
 uint8 *psx_bios = NULL;
 uint8 *psx_scratch = NULL;
@@ -142,7 +144,9 @@ unsigned psx_gpu_overclock_shift = 0;
 static int psx_skipbios;
 static int override_bios;
 
+extern "C" {
 bool psx_gte_overclock;
+}
 enum dither_mode psx_gpu_dither_mode;
 
 //iCB: PGXP options
@@ -580,7 +584,7 @@ static disk_control_ext_info_t disk_control_ext_info;
 static uint64_t Memcard_PrevDC[8];
 static int64_t Memcard_SaveDelay[8];
 
-PS_CPU *PSX_CPU = NULL;
+/* PSX_CPU lives at file scope in cpu.c (always points at &s_cpu). */
 PS_CDC *PSX_CDC = NULL;
 FrontIO *PSX_FIO = NULL;
 
@@ -608,6 +612,18 @@ extern "C" void MainRAM_WriteU32(uint32_t address, uint32_t value)
    MainRAM->WriteU32(address, value);
 }
 
+extern "C" uint8_t  ScratchRAM_ReadU8 (uint32_t address) { return ScratchRAM->ReadU8 (address); }
+extern "C" uint16_t ScratchRAM_ReadU16(uint32_t address) { return ScratchRAM->ReadU16(address); }
+extern "C" uint32_t ScratchRAM_ReadU24(uint32_t address) { return ScratchRAM->ReadU24(address); }
+extern "C" uint32_t ScratchRAM_ReadU32(uint32_t address) { return ScratchRAM->ReadU32(address); }
+extern "C" void     ScratchRAM_WriteU8 (uint32_t address, uint8_t  value) { ScratchRAM->WriteU8 (address, value); }
+extern "C" void     ScratchRAM_WriteU16(uint32_t address, uint16_t value) { ScratchRAM->WriteU16(address, value); }
+extern "C" void     ScratchRAM_WriteU24(uint32_t address, uint32_t value) { ScratchRAM->WriteU24(address, value); }
+extern "C" void     ScratchRAM_WriteU32(uint32_t address, uint32_t value) { ScratchRAM->WriteU32(address, value); }
+extern "C" uint8_t *ScratchRAM_data8(void) { return ScratchRAM->data8; }
+extern "C" uint8_t *MainRAM_data8   (void) { return MainRAM->data8;    }
+extern "C" uint8_t *BIOSROM_data8   (void) { return BIOSROM->data8;    }
+
 #ifdef HAVE_LIGHTREC
 /* Size of Expansion 1 (8MB) */
 #define PSX_EXPANSION1_SIZE        0x800000U
@@ -622,7 +638,7 @@ extern "C" void MainRAM_WriteU32(uint32_t address, uint32_t value)
  * and leaked on every core unload. */
 static uint8_t *psx_expansion1 = NULL;
 
-const uint8_t *PSX_LoadExpansion1(void)
+extern "C" const uint8_t *PSX_LoadExpansion1(void)
 {
    uint32_t *p;
    unsigned i;
@@ -741,7 +757,7 @@ static void RebaseTS(const int32_t timestamp)
       events[i].event_time -= timestamp;
    }
 
-   PSX_CPU->SetEventNT(events[PSX_EVENT__SYNFIRST].next->event_time);
+   CPU_SetEventNT(events[PSX_EVENT__SYNFIRST].next->event_time);
 }
 
 extern "C" void PSX_SetEventNT(const int type, const int32_t next_timestamp)
@@ -791,7 +807,7 @@ extern "C" void PSX_SetEventNT(const int type, const int32_t next_timestamp)
       e->event_time = next_timestamp;
    }
 
-   PSX_CPU->SetEventNT(events[PSX_EVENT__SYNFIRST].next->event_time & Running);
+   CPU_SetEventNT(events[PSX_EVENT__SYNFIRST].next->event_time & Running);
 }
 
 // Called from debug.cpp too.
@@ -806,7 +822,7 @@ void ForceEventUpdates(const int32_t timestamp)
 
    PSX_SetEventNT(PSX_EVENT_FIO, FrontIO_Update(PSX_FIO, timestamp));
 
-   PSX_CPU->SetEventNT(events[PSX_EVENT__SYNFIRST].next->event_time);
+   CPU_SetEventNT(events[PSX_EVENT__SYNFIRST].next->event_time);
 }
 
 bool MDFN_FASTCALL PSX_EventHandler(const int32_t timestamp)
@@ -852,7 +868,7 @@ bool MDFN_FASTCALL PSX_EventHandler(const int32_t timestamp)
 extern "C" void PSX_RequestMLExit(void)
 {
    Running = 0;
-   PSX_CPU->SetEventNT(0);
+   CPU_SetEventNT(0);
 }
 
 
@@ -1145,9 +1161,9 @@ template<typename T, bool IsWrite, bool Access24> static INLINE void MemRW(int32
    if(A == 0xFFFE0130) // Per tests on PS1, ignores the access(sort of, on reads the value is forced to 0 if not aligned) if not aligned to 4-bytes.
    {
       if(!IsWrite)
-         V = PSX_CPU->GetBIU();
+         V = CPU_GetBIU(PSX_CPU);
       else
-         PSX_CPU->SetBIU(V);
+         CPU_SetBIU(PSX_CPU, V);
 
       return;
    }
@@ -1176,40 +1192,38 @@ void MDFN_FASTCALL PSX_MemWrite32(int32_t timestamp, uint32_t A, uint32_t V)
    MemRW<uint32, true, false>(timestamp, A, V);
 }
 
-uint8_t MDFN_FASTCALL PSX_MemRead8(int32_t &timestamp, uint32_t A)
+/* PSX_MemRead{8,16,24,32}: the original C++ signature took
+ * `int32_t &timestamp` so the dispatcher could update the cycle
+ * count for memory-access timing.  cpu.c (now C) calls these from
+ * its ReadMemory_uN helpers, so the signatures are C-linkage with
+ * `int32_t *timestamp`; the body dereferences and passes through
+ * to MemRW which still uses a C++ reference internally. */
+extern "C" uint8_t MDFN_FASTCALL PSX_MemRead8(int32_t *timestamp, uint32_t A)
 {
    uint32_t V;
-
-   MemRW<uint8, false, false>(timestamp, A, V);
-
-   return(V);
+   MemRW<uint8, false, false>(*timestamp, A, V);
+   return V;
 }
 
-uint16_t MDFN_FASTCALL PSX_MemRead16(int32_t &timestamp, uint32_t A)
+extern "C" uint16_t MDFN_FASTCALL PSX_MemRead16(int32_t *timestamp, uint32_t A)
 {
    uint32_t V;
-
-   MemRW<uint16, false, false>(timestamp, A, V);
-
-   return(V);
+   MemRW<uint16, false, false>(*timestamp, A, V);
+   return V;
 }
 
-uint32_t MDFN_FASTCALL PSX_MemRead24(int32_t &timestamp, uint32_t A)
+extern "C" uint32_t MDFN_FASTCALL PSX_MemRead24(int32_t *timestamp, uint32_t A)
 {
    uint32_t V;
-
-   MemRW<uint32, false, true>(timestamp, A, V);
-
-   return(V);
+   MemRW<uint32, false, true>(*timestamp, A, V);
+   return V;
 }
 
-uint32_t MDFN_FASTCALL PSX_MemRead32(int32_t &timestamp, uint32_t A)
+extern "C" uint32_t MDFN_FASTCALL PSX_MemRead32(int32_t *timestamp, uint32_t A)
 {
    uint32_t V;
-
-   MemRW<uint32, false, false>(timestamp, A, V);
-
-   return(V);
+   MemRW<uint32, false, false>(*timestamp, A, V);
+   return V;
 }
 
 template<typename T, bool Access24> static INLINE uint32_t MemPeek(int32_t timestamp, uint32_t A)
@@ -1324,7 +1338,7 @@ template<typename T, bool Access24> static INLINE uint32_t MemPeek(int32_t times
    }
 
    if(A == 0xFFFE0130)
-      return PSX_CPU->GetBIU();
+      return CPU_GetBIU(PSX_CPU);
 
    return(0);
 }
@@ -1362,7 +1376,7 @@ static void PSX_Power(void)
    for(i = 0; i < 9; i++)
       SysControl.Regs[i] = 0;
 
-   PSX_CPU->Power();
+   CPU_Power(PSX_CPU);
 
    EventReset();
 
@@ -1417,7 +1431,7 @@ template<typename T, bool Access24> static INLINE void MemPoke(pscpu_timestamp_t
 
    if(A == 0xFFFE0130)
    {
-      PSX_CPU->SetBIU(V);
+      CPU_SetBIU(PSX_CPU, V);
       return;
    }
 }
@@ -2048,7 +2062,7 @@ static void InitCommon(const bool EmulateMemcards = true, const bool WantPIOMem 
       sle = tmp;
    }
 
-   PSX_CPU = new PS_CPU();
+   PSX_CPU = CPU_New();
    SPU_Init();
 
    /* GPU_Init returns false on VRAM allocation failure. There is no
@@ -2151,20 +2165,20 @@ static void InitCommon(const bool EmulateMemcards = true, const bool WantPIOMem 
 
    for(uint32_t ma = 0x00000000; ma < 0x00800000; ma += 2048 * 1024)
    {
-      PSX_CPU->SetFastMap(MainRAM->data32, 0x00000000 + ma, 2048 * 1024);
-      PSX_CPU->SetFastMap(MainRAM->data32, 0x80000000 + ma, 2048 * 1024);
-      PSX_CPU->SetFastMap(MainRAM->data32, 0xA0000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MainRAM->data32, 0x00000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MainRAM->data32, 0x80000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MainRAM->data32, 0xA0000000 + ma, 2048 * 1024);
    }
 
-   PSX_CPU->SetFastMap(BIOSROM->data32, 0x1FC00000, 512 * 1024);
-   PSX_CPU->SetFastMap(BIOSROM->data32, 0x9FC00000, 512 * 1024);
-   PSX_CPU->SetFastMap(BIOSROM->data32, 0xBFC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, BIOSROM->data32, 0x1FC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, BIOSROM->data32, 0x9FC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, BIOSROM->data32, 0xBFC00000, 512 * 1024);
 
    if(PIOMem)
    {
-      PSX_CPU->SetFastMap(PIOMem->data32, 0x1F000000, 65536);
-      PSX_CPU->SetFastMap(PIOMem->data32, 0x9F000000, 65536);
-      PSX_CPU->SetFastMap(PIOMem->data32, 0xBF000000, 65536);
+      CPU_SetFastMap(PSX_CPU, PIOMem->data32, 0x1F000000, 65536);
+      CPU_SetFastMap(PSX_CPU, PIOMem->data32, 0x9F000000, 65536);
+      CPU_SetFastMap(PSX_CPU, PIOMem->data32, 0xBF000000, 65536);
    }
 
 
@@ -2522,9 +2536,11 @@ static void Cleanup(void)
 
    GPU_Destroy();
 
-   if(PSX_CPU)
-      delete PSX_CPU;
-   PSX_CPU = NULL;
+   if (PSX_CPU)
+   {
+      CPU_Destroy(PSX_CPU);
+      PSX_CPU = NULL;
+   }
 
    if(PSX_FIO)
    {
@@ -2701,7 +2717,7 @@ extern "C" int StateAction(StateMem *sm, int load, int data_only)
 
    // TODO: Remember to increment dirty count in memory card state loading routine.
 
-   ret &= PSX_CPU->StateAction(sm, load, data_only);
+   ret &= CPU_StateAction(PSX_CPU, sm, load, data_only);
    ret &= DMA_StateAction(sm, load, data_only);
    ret &= TIMER_StateAction(sm, load, data_only);
    ret &= SIO_StateAction(sm, load, data_only);
@@ -4882,7 +4898,7 @@ void retro_run(void)
    GPU_StartFrame(espec);
 
    Running = -1;
-   timestamp = PSX_CPU->Run(timestamp);
+   timestamp = CPU_Run(PSX_CPU, timestamp);
 
    assert(timestamp);
 

@@ -1,7 +1,7 @@
 /******************************************************************************/
 /* Mednafen Sony PS1 Emulation Module                                         */
 /******************************************************************************/
-/* cpu.cpp:
+/* cpu.c:
 **  Copyright (C) 2011-2016 Mednafen Team
 **
 ** This program is free software; you can redistribute it and/or
@@ -21,8 +21,14 @@
 
 #pragma GCC optimize ("unroll-loops")
 
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <assert.h>
+
 #include "psx.h"
 #include "cpu.h"
+#include "psx_mem.h"
 
 #include "../state_helpers.h"
 #include "../math_ops.h"
@@ -30,11 +36,11 @@
 #include "../../osd_message.h"
 #include "../mednafen-endian.h"
 
-// iCB: PGXP STUFF
+/* PGXP */
 #include "../pgxp/pgxp_cpu.h"
 #include "../pgxp/pgxp_gte.h"
 #include "../pgxp/pgxp_main.h"
-int pgxpMode = PGXP_GetModes();
+int pgxpMode;
 
 #ifdef HAVE_LIGHTREC
 #include <lightrec.h>
@@ -42,31 +48,147 @@ int pgxpMode = PGXP_GetModes();
 #include <signal.h>
 
 enum DYNAREC prev_dynarec;
-bool prev_invalidate;
-extern bool psx_dynarec_invalidate;
+bool         prev_invalidate;
+extern bool  psx_dynarec_invalidate;
 extern uint8 psx_mmap;
 static struct lightrec_state *lightrec_state;
 uint8 next_interpreter;
 #endif
 
 extern bool psx_gte_overclock;
-pscpu_timestamp_t PS_CPU::next_event_ts;
-uint32 PS_CPU::IPCache;
-uint32 PS_CPU::BIU;
-bool PS_CPU::Halted;
-struct PS_CPU::CP0 PS_CPU::CP0;
-char PS_CPU::cache_buf[64 * 1024];
 
-#define BIU_ENABLE_ICACHE_S1	0x00000800	// Enable I-cache, set 1
-#define BIU_ICACHE_FSIZE_MASK	0x00000300      // I-cache fill size mask; 0x000 = 2 words, 0x100 = 4 words, 0x200 = 8 words, 0x300 = 16 words
-#define BIU_ENABLE_DCACHE	0x00000080	// Enable D-cache
-#define BIU_DCACHE_SCRATCHPAD	0x00000008	// Enable scratchpad RAM mode of D-cache
-#define BIU_TAG_TEST_MODE	0x00000004	// Enable TAG test mode(IsC must be set to 1 as well presumably?)
-#define BIU_INVALIDATE_MODE	0x00000002	// Enable Invalidate mode(IsC must be set to 1 as well presumably?)
-#define BIU_LOCK_MODE		0x00000001	// Enable Lock mode(IsC must be set to 1 as well presumably?)
-
-PS_CPU::PS_CPU()
+/* CP0 named-register indices.  Used inside the per-instruction switch
+ * in lightrec's MTC0/CTC0 path; kept TU-local since nothing outside
+ * cpu.c speaks of them by name. */
+enum
 {
+   CP0REG_BPC   = 3,        /* PC breakpoint address. */
+   CP0REG_BDA   = 5,        /* Data load/store breakpoint address. */
+   CP0REG_TAR   = 6,        /* Target address(???) */
+   CP0REG_DCIC  = 7,        /* Cache control */
+   CP0REG_BADA  = 8,
+   CP0REG_BDAM  = 9,        /* Data load/store address mask. */
+   CP0REG_BPCM  = 11,       /* PC breakpoint address mask. */
+   CP0REG_SR    = 12,
+   CP0REG_CAUSE = 13,
+   CP0REG_EPC   = 14,
+   CP0REG_PRID  = 15        /* Product ID */
+};
+
+enum
+{
+   EXCEPTION_INT     = 0,
+   EXCEPTION_MOD     = 1,
+   EXCEPTION_TLBL    = 2,
+   EXCEPTION_TLBS    = 3,
+   EXCEPTION_ADEL    = 4,   /* Address error on load */
+   EXCEPTION_ADES    = 5,   /* Address error on store */
+   EXCEPTION_IBE     = 6,   /* Instruction bus error */
+   EXCEPTION_DBE     = 7,   /* Data bus error */
+   EXCEPTION_SYSCALL = 8,   /* System call */
+   EXCEPTION_BP      = 9,   /* Breakpoint */
+   EXCEPTION_RI      = 10,  /* Reserved instruction */
+   EXCEPTION_COPU    = 11,  /* Coprocessor unusable */
+   EXCEPTION_OV      = 12   /* Arithmetic overflow */
+};
+
+/* The class-static members of PS_CPU live at file scope here; the
+ * per-instance members live in s_cpu (BSS).  libretro.cpp still
+ * expresses ownership through PSX_CPU, which always points at
+ * &s_cpu.  Heap allocation is gone - the storage is BSS, init runs
+ * in CPU_New. */
+static PS_CPU            s_cpu;
+PS_CPU                  *PSX_CPU = &s_cpu;
+pscpu_timestamp_t        cpu_next_event_ts;
+static uint32_t          cpu_IPCache;
+static uint32_t          cpu_BIU;
+static bool              cpu_Halted;
+static CPU_CP0           cpu_CP0;
+static char              cpu_cache_buf[64 * 1024];
+
+/* Aliases for every PS_CPU instance field used inside this file.
+ * Lets the body of methods reference fields by their original bare
+ * names (GPR, BACKED_PC, ICache, FastMap, ...) without sprinkling
+ * self-> through 3000+ lines of dispatch.  s_cpu is the singleton
+ * PSX_CPU points at, so resolution is identical to the original
+ * implicit `this` access. */
+#define GPR             s_cpu.GPR_full
+#define LO              s_cpu.GPR_full[32]
+#define HI              s_cpu.GPR_full[33]
+#define BACKED_PC       s_cpu.BACKED_PC
+#define BACKED_new_PC   s_cpu.BACKED_new_PC
+#define BDBT            s_cpu.BDBT
+#define ReadAbsorb      s_cpu.ReadAbsorb
+#define ReadAbsorbWhich s_cpu.ReadAbsorbWhich
+#define ReadFudge       s_cpu.ReadFudge
+#define BACKED_LDWhich  s_cpu.BACKED_LDWhich
+#define BACKED_LDValue  s_cpu.BACKED_LDValue
+#define LDAbsorb        s_cpu.LDAbsorb
+#define gte_ts_done     s_cpu.gte_ts_done
+#define muldiv_ts_done  s_cpu.muldiv_ts_done
+#define addr_mask       s_cpu.addr_mask
+#define ICache          s_cpu.ic.ICache
+#define ICache_Bulk     s_cpu.ic.ICache_Bulk
+#define FastMap         s_cpu.FastMap
+#define DummyPage       s_cpu.DummyPage
+
+/* Aliases for the file-scope statics (former class-static members)
+ * so the body's bare-name references continue to work. */
+#define Halted          cpu_Halted
+#define CP0             cpu_CP0.n
+#define BIU             cpu_BIU
+#define next_event_ts   cpu_next_event_ts
+#define IPCache         cpu_IPCache
+#define cache_buf       cpu_cache_buf
+#define MULT_Tab24      cpu_MULT_Tab24
+
+/* FAST_MAP_SHIFT / FAST_MAP_PSIZE survived from the old class enum;
+ * they're now plain macros in cpu.h.  Local aliases for the
+ * unprefixed names used in this TU. */
+#define FAST_MAP_SHIFT  CPU_FAST_MAP_SHIFT
+#define FAST_MAP_PSIZE  CPU_FAST_MAP_PSIZE
+
+/* MULT_Tab24: per-instance precomputed table in the original
+ * constructor; the loop computed `v = 7 + (i<12 ? 4 : 0) + (i<21 ? 3 : 0)`,
+ * which is a function of the index alone and constant across
+ * runs.  Baked at compile time, dropped from the struct. */
+static const uint8_t cpu_MULT_Tab24[24] =
+{
+   /* i = 0..11: v = 7 + 4 + 3 = 14 */
+   14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14,
+   /* i = 12..20: v = 7 + 0 + 3 = 10 */
+   10, 10, 10, 10, 10, 10, 10, 10, 10,
+   /* i = 21..23: v = 7 + 0 + 0 = 7 */
+   7,  7,  7
+};
+
+#define BIU_ENABLE_ICACHE_S1   0x00000800  /* Enable I-cache, set 1 */
+#define BIU_ICACHE_FSIZE_MASK  0x00000300  /* I-cache fill size mask */
+#define BIU_ENABLE_DCACHE      0x00000080  /* Enable D-cache */
+#define BIU_DCACHE_SCRATCHPAD  0x00000008  /* Enable scratchpad RAM mode of D-cache */
+#define BIU_TAG_TEST_MODE      0x00000004  /* Enable TAG test mode */
+#define BIU_INVALIDATE_MODE    0x00000002  /* Enable Invalidate mode */
+#define BIU_LOCK_MODE          0x00000001  /* Enable Lock mode */
+
+/* Forward decls for methods called before they're defined. */
+static uint32_t CPU_Exception(uint32_t code, uint32_t PC, const uint32_t NP, const uint32_t instr);
+static pscpu_timestamp_t CPU_RunReal(PS_CPU *self, pscpu_timestamp_t timestamp_in);
+#ifdef HAVE_LIGHTREC
+static int     lightrec_plugin_init(PS_CPU *self);
+static int32_t lightrec_plugin_execute(PS_CPU *self, int32_t timestamp);
+static void    lightrec_plugin_shutdown(void);
+#endif
+
+/* Local typedef so the body matches the pre-conversion code. */
+typedef CPU_ICache __ICache;
+
+PS_CPU *CPU_New(void)
+{
+   PS_CPU  *self = &s_cpu;
+   uint64_t a;
+
+   memset(self, 0, sizeof(*self));
+
    addr_mask[0] = 0xFFFFFFFF;
    addr_mask[1] = 0xFFFFFFFF;
    addr_mask[2] = 0xFFFFFFFF;
@@ -76,410 +198,461 @@ PS_CPU::PS_CPU()
    addr_mask[6] = 0xFFFFFFFF;
    addr_mask[7] = 0xFFFFFFFF;
 
- Halted = false;
+   Halted = false;
 
- memset(FastMap, 0, sizeof(FastMap));
- memset(DummyPage, 0xFF, sizeof(DummyPage));	// 0xFF to trigger an illegal instruction exception, so we'll know what's up when debugging.
+   /* FastMap zeroed by the memset above. */
+   memset(DummyPage, 0xFF, sizeof(DummyPage));
 
- for(uint64 a = 0x00000000; a < (1ULL << 32); a += FAST_MAP_PSIZE)
-  SetFastMap(DummyPage, a, FAST_MAP_PSIZE);
+   for (a = 0x00000000; a < (1ULL << 32); a += CPU_FAST_MAP_PSIZE)
+      CPU_SetFastMap(self, DummyPage, (uint32_t)a, CPU_FAST_MAP_PSIZE);
 
- GTE_Init();
+   GTE_Init();
 
- for(unsigned i = 0; i < 24; i++)
- {
-  uint8 v = 7;
+   pgxpMode = PGXP_GetModes();
 
-  if(i < 12)
-   v += 4;
-
-  if(i < 21)
-   v += 3;
-
-  MULT_Tab24[i] = v;
- }
+   return self;
 }
 
-PS_CPU::~PS_CPU()
+void CPU_Destroy(PS_CPU *self)
 {
+   (void)self;
 #ifdef HAVE_LIGHTREC
- if (lightrec_state)
-  lightrec_plugin_shutdown();
+   if (lightrec_state)
+      lightrec_plugin_shutdown();
 #endif
-
 }
 
-void PS_CPU::SetFastMap(void *region_mem, uint32 region_address, uint32 region_size)
+void CPU_SetFastMap(PS_CPU *self, void *region_mem, uint32_t region_address, uint32_t region_size)
 {
- // FAST_MAP_SHIFT
- // FAST_MAP_PSIZE
-
- for(uint64 A = region_address; A < (uint64)region_address + region_size; A += FAST_MAP_PSIZE)
- {
-  FastMap[A >> FAST_MAP_SHIFT] = ((uintptr_t)region_mem - region_address);
- }
+   uint64_t A;
+   (void)self;
+   for (A = region_address; A < (uint64_t)region_address + region_size; A += CPU_FAST_MAP_PSIZE)
+      FastMap[A >> CPU_FAST_MAP_SHIFT] = ((uintptr_t)region_mem - region_address);
 }
 
-INLINE void PS_CPU::RecalcIPCache(void)
+static INLINE void CPU_RecalcIPCache(void)
 {
- IPCache = 0;
+   IPCache = 0;
 
- if((CP0.SR & CP0.CAUSE & 0xFF00) && (CP0.SR & 1))
-  IPCache = 0x80;
+   if ((CP0.SR & CP0.CAUSE & 0xFF00) && (CP0.SR & 1))
+      IPCache = 0x80;
 
- if(Halted)
-  IPCache = 0x80;
+   if (Halted)
+      IPCache = 0x80;
 }
 
-void PS_CPU::SetHalt(bool status)
+void CPU_SetHalt_method(PS_CPU *self, bool status)
 {
- Halted = status;
- RecalcIPCache();
+   (void)self;
+   Halted = status;
+   CPU_RecalcIPCache();
 }
 
-/*
- * C-linkage shim declared in cpu_c.h. Forwards to PS_CPU::AssertIRQ
- * through the file-scope PSX_CPU pointer. The targeted method only
- * modifies static class state (CP0.CAUSE) and calls a static helper
- * (RecalcIPCache), so calling it through an instance pointer is
- * purely a syntax mechanism; the optimizer inlines the forwarder
- * away under -O2.
- */
-extern "C" void CPU_AssertIRQ(unsigned which, bool asserted)
+void CPU_AssertIRQ_method(PS_CPU *self, unsigned which, bool asserted)
 {
- PSX_CPU->AssertIRQ(which, asserted);
+   (void)self;
+   assert(which <= 5);
+
+   CP0.CAUSE &= ~(1 << (10 + which));
+
+   if (asserted)
+      CP0.CAUSE |= 1 << (10 + which);
+
+   CPU_RecalcIPCache();
 }
 
-extern "C" void CPU_SetHalt(bool status)
+/* C-linkage shims declared in cpu_c.h.  These exist so non-cpu.c
+ * TUs (irq.c, gpu.c, mdec.c, ...) can drive the CPU without
+ * depending on the full struct layout in cpu.h. */
+void CPU_AssertIRQ(unsigned which, bool asserted)
 {
- PSX_CPU->SetHalt(status);
+   CPU_AssertIRQ_method(PSX_CPU, which, asserted);
+}
+
+void CPU_SetHalt(bool status)
+{
+   CPU_SetHalt_method(PSX_CPU, status);
 }
 
 #ifdef HAVE_LIGHTREC
-extern "C" void CPU_LightrecClear(uint32_t addr, uint32_t size)
+void CPU_LightrecClear(uint32_t addr, uint32_t size)
 {
- PSX_CPU->lightrec_plugin_clear(addr, size);
+   CPU_LightrecClear_method(PSX_CPU, addr, size);
 }
 #endif
 
 const uint8_t *PSX_LoadExpansion1(void);
 
-void PS_CPU::Power(void)
+void CPU_Power(PS_CPU *self)
 {
- assert(sizeof(ICache) == sizeof(ICache_Bulk));
+   unsigned i;
 
- memset(GPR, 0, sizeof(GPR));
- memset(&CP0, 0, sizeof(CP0));
- LO = 0;
- HI = 0;
+   (void)self;
+   assert(sizeof(s_cpu.ic.ICache) == sizeof(s_cpu.ic.ICache_Bulk));
 
- gte_ts_done = 0;
- muldiv_ts_done = 0;
+   memset(GPR, 0, 32 * sizeof(uint32_t));
+   memset(&cpu_CP0, 0, sizeof(cpu_CP0));
+   LO = 0;
+   HI = 0;
 
- BACKED_PC = 0xBFC00000;
- BACKED_new_PC = BACKED_PC + 4;
- BDBT = 0;
+   gte_ts_done    = 0;
+   muldiv_ts_done = 0;
 
- BACKED_LDWhich = 0x22;
- BACKED_LDValue = 0;
- LDAbsorb = 0;
- memset(ReadAbsorb, 0, sizeof(ReadAbsorb));
- ReadAbsorbWhich = 0;
- ReadFudge = 0;
+   BACKED_PC      = 0xBFC00000;
+   BACKED_new_PC  = BACKED_PC + 4;
+   BDBT           = 0;
 
- CP0.SR |= (1 << 22);	// BEV
- CP0.SR |= (1 << 21);	// TS
-
- CP0.PRID = 0x2;
-
- RecalcIPCache();
-
-
- BIU = 0;
-
- memset(ScratchRAM->data8, 0, 1024);
-
- PGXP_Init();
-
-#ifdef HAVE_LIGHTREC
- next_interpreter = 0;
- prev_dynarec = psx_dynarec;
- prev_invalidate = psx_dynarec_invalidate;
- pgxpMode = PGXP_GetModes();
- if(psx_dynarec != DYNAREC_DISABLED)
-  lightrec_plugin_init();
-#endif
-
- // Not quite sure about these poweron/reset values:
- for(unsigned i = 0; i < 1024; i++)
- {
-  ICache[i].TV = 0x2 | ((BIU & 0x800) ? 0x0 : 0x1);
-  ICache[i].Data = 0;
- }
-
- GTE_Power();
-}
-
-int PS_CPU::StateAction(StateMem *sm, const unsigned load, const bool data_only)
-{
- SFORMAT StateRegs[] =
- {
-  SFARRAY32(GPR, 32),
-  SFVAR(LO),
-  SFVAR(HI),
-  SFVAR(BACKED_PC),
-  SFVAR(BACKED_new_PC),
-  SFVAR(BDBT),
-
-  SFVAR(IPCache),
-  SFVAR(Halted),
-
-  SFVAR(BACKED_LDWhich),
-  SFVAR(BACKED_LDValue),
-  SFVAR(LDAbsorb),
-
-  SFVAR(next_event_ts),
-  SFVAR(gte_ts_done),
-  SFVAR(muldiv_ts_done),
-
-  SFVAR(BIU),
-  SFVAR(ICache_Bulk),
-
-  SFVAR(CP0.Regs),
-
-  SFARRAY(ReadAbsorb, 0x20),
-  SFVARN(ReadAbsorb[0x20], "ReadAbsorbDummy"),
-  SFVAR(ReadAbsorbWhich),
-  SFVAR(ReadFudge),
-
-  SFARRAYN(ScratchRAM->data8, 1024, "ScratchRAM.data8"),
-
-  SFEND
- };
- int ret = MDFNSS_StateAction(sm, load, data_only, StateRegs, "CPU");
-
- ret &= GTE_StateAction(sm, load, data_only);
-
- if(load)
- {
-#ifdef HAVE_LIGHTREC
-  if(psx_dynarec != DYNAREC_DISABLED) {
-   if(lightrec_state) {
-    /* Hack to prevent Dynarec + Runahead from causing a crash by
-     * switching to lightrec interpreter after load state in bios */
-    if(psx_dynarec != DYNAREC_RUN_INTERPRETER &&
-       BACKED_PC >= 0xBFC00000 && BACKED_PC <= 0xBFC80000) {
-     if(next_interpreter == 0) {
-      log_cb(RETRO_LOG_INFO, "PC 0x%08x Dynarec using interpreter for a few "
-                             "frames, avoid crash due to Runahead\n",BACKED_PC);
-      lightrec_plugin_init();
-     }
-     /* run lightrec's interpreter for a few frames
-      * 76 for NTSC, 93 for PAL seems to prevent crash at max runahead */
-     next_interpreter = 93;
-    } else
-     lightrec_invalidate_all(lightrec_state);
-   }else
-    lightrec_plugin_init();
-  }
-#endif
-  ReadAbsorbWhich &= 0x1F;
-  /* BACKED_LDWhich must be a valid GPR index (0..31) or the dummy
-   * slot (0x22). Any other value (including 0x20, the dummy slot
-   * from previous save-state versions) is sanitized to the new
-   * dummy index. */
-  if (BACKED_LDWhich > 31)
    BACKED_LDWhich = 0x22;
- }
- return ret;
-}
+   BACKED_LDValue = 0;
+   LDAbsorb       = 0;
+   memset(ReadAbsorb, 0, sizeof(ReadAbsorb));
+   ReadAbsorbWhich = 0;
+   ReadFudge       = 0;
 
-void PS_CPU::AssertIRQ(unsigned which, bool asserted)
-{
- assert(which <= 5);
+   CP0.SR |= (1 << 22); /* BEV */
+   CP0.SR |= (1 << 21); /* TS  */
 
- CP0.CAUSE &= ~(1 << (10 + which));
+   CP0.PRID = 0x2;
 
- if(asserted)
-  CP0.CAUSE |= 1 << (10 + which);
+   CPU_RecalcIPCache();
 
- RecalcIPCache();
-}
+   BIU = 0;
 
-void PS_CPU::SetBIU(uint32 val)
-{
- const uint32 old_BIU = BIU;
+   memset(ScratchRAM_data8(), 0, 1024);
 
- BIU = val & ~(0x440);
+   PGXP_Init();
 
- if((BIU ^ old_BIU) & 0x800)
- {
-  if(BIU & 0x800)	// ICache enabled
-  {
-   for(unsigned i = 0; i < 1024; i++)
-    ICache[i].TV &= ~0x1;
-  }
-  else			// ICache disabled
-  {
-   for(unsigned i = 0; i < 1024; i++)
-    ICache[i].TV |= 0x1;
-  }
- }
-}
-
-uint32 PS_CPU::GetBIU(void)
-{
- return BIU;
-}
-
-template<typename T>
-INLINE T PS_CPU::ReadMemory(pscpu_timestamp_t &timestamp, uint32 address, bool DS24, bool LWC_timing)
-{
- T ret;
-
- ReadAbsorb[ReadAbsorbWhich] = 0;
- ReadAbsorbWhich = 0;
-
-#if 0
- if(MDFN_UNLIKELY(CP0.SR & 0x10000))
- {
-  uint32 tmp = 0;	// TODO(someday): = open bus
-
-  LDAbsorb = 0;
-
-  if(BIU & (BIU_TAG_TEST_MODE | BIU_INVALIDATE_MODE | BIU_LOCK_MODE))
-  {
-   if(BIU & BIU_TAG_TEST_MODE)
-   {
-    const __ICache* const ICI = &ICache[((address & 0xFF0) >> 2)];
-
-    tmp &= ~0x3F;	// bits 0-3 validity, bit 4 tag compare match, bit 5 forced to 0(lock bit apparently unimplemented in the PS1).
-
-    //
-    // Get validity bits.
-    //
-    for(unsigned i = 0; i < 4; i++)
-     tmp |= (!(ICI[i].TV & 0x02)) << i;
-
-    //
-    // Tag compare.
-    //
-    if(!((address ^ ICI[0].TV) & 0xFFFFF000))
-     tmp |= 0x10;
-   }
-  }
-  else
-  {
-   tmp = ICache[(address & 0xFFC) >> 2].Data;
-  }
-
-  return tmp >> ((address & 0x3) * 8);
- }
+#ifdef HAVE_LIGHTREC
+   next_interpreter = 0;
+   prev_dynarec     = psx_dynarec;
+   prev_invalidate  = psx_dynarec_invalidate;
+   pgxpMode         = PGXP_GetModes();
+   if (psx_dynarec != DYNAREC_DISABLED)
+      lightrec_plugin_init(self);
 #endif
- //
- //
- //
 
- address &= addr_mask[address >> 29];
+   /* Not quite sure about these poweron/reset values: */
+   for (i = 0; i < 1024; i++)
+   {
+      ICache[i].TV   = 0x2 | ((BIU & 0x800) ? 0x0 : 0x1);
+      ICache[i].Data = 0;
+   }
 
- if(address >= 0x1F800000 && address <= 0x1F8003FF)
- {
-  LDAbsorb = 0;
-
-  if(DS24)
-   return ScratchRAM->ReadU24(address & 0x3FF);
-  else
-   return ScratchRAM->Read<T>(address & 0x3FF);
- }
-
- timestamp += (ReadFudge >> 4) & 2;
-
- //assert(!(CP0.SR & 0x10000));
-
- pscpu_timestamp_t lts = timestamp;
-
- if(sizeof(T) == 1)
-  ret = PSX_MemRead8(lts, address);
- else if(sizeof(T) == 2)
-  ret = PSX_MemRead16(lts, address);
- else
- {
-  if(DS24)
-   ret = PSX_MemRead24(lts, address) & 0xFFFFFF;
-  else
-   ret = PSX_MemRead32(lts, address);
- }
-
- if(LWC_timing)
-  lts += 1;
- else
-  lts += 2;
-
- LDAbsorb = (lts - timestamp);
- timestamp = lts;
-
- return(ret);
+   GTE_Power();
 }
 
-template<typename T>
-INLINE void PS_CPU::WriteMemory(pscpu_timestamp_t &timestamp, uint32 address, uint32 value, bool DS24)
+int CPU_StateAction(PS_CPU *self, StateMem *sm, const unsigned load, const bool data_only)
 {
- if(MDFN_LIKELY(!(CP0.SR & 0x10000)))
- {
-  address &= addr_mask[address >> 29];
-
-  if(address >= 0x1F800000 && address <= 0x1F8003FF)
-  {
-   if(DS24)
-    ScratchRAM->WriteU24(address & 0x3FF, value);
-   else
-    ScratchRAM->Write<T>(address & 0x3FF, value);
-
-   return;
-  }
-
-  if(sizeof(T) == 1)
-   PSX_MemWrite8(timestamp, address, value);
-  else if(sizeof(T) == 2)
-   PSX_MemWrite16(timestamp, address, value);
-  else
-  {
-   if(DS24)
-    PSX_MemWrite24(timestamp, address, value);
-   else
-    PSX_MemWrite32(timestamp, address, value);
-  }
- }
- else
- {
-  if(BIU & BIU_ENABLE_ICACHE_S1)	// Instruction cache is enabled/active
-  {
-   if(BIU & (BIU_TAG_TEST_MODE | BIU_INVALIDATE_MODE | BIU_LOCK_MODE))
+   SFORMAT StateRegs[] =
    {
-    const uint8 valid_bits = (BIU & BIU_TAG_TEST_MODE) ? ((value << ((address & 0x3) * 8)) & 0x0F) : 0x00;
-    __ICache* const ICI = &ICache[((address & 0xFF0) >> 2)];
+      SFARRAY32(GPR, 32),
+      SFVAR(LO),
+      SFVAR(HI),
+      SFVAR(BACKED_PC),
+      SFVAR(BACKED_new_PC),
+      SFVAR(BDBT),
 
-    //
-    // Set validity bits and tag.
-    //
-    for(unsigned i = 0; i < 4; i++)
-     ICI[i].TV = ((valid_bits & (1U << i)) ? 0x00 : 0x02) | (address & 0xFFFFFFF0) | (i << 2);
-   }
-   else
+      SFVAR(IPCache),
+      SFVAR(Halted),
+
+      SFVAR(BACKED_LDWhich),
+      SFVAR(BACKED_LDValue),
+      SFVAR(LDAbsorb),
+
+      SFVAR(next_event_ts),
+      SFVAR(gte_ts_done),
+      SFVAR(muldiv_ts_done),
+
+      SFVAR(BIU),
+      SFVAR(ICache_Bulk),
+
+      SFVAR(cpu_CP0.Regs),
+
+      SFARRAY(ReadAbsorb, 0x20),
+      SFVARN(ReadAbsorb[0x20], "ReadAbsorbDummy"),
+      SFVAR(ReadAbsorbWhich),
+      SFVAR(ReadFudge),
+
+      SFARRAYN(ScratchRAM_data8(), 1024, "ScratchRAM.data8"),
+
+      SFEND
+   };
+   int ret = MDFNSS_StateAction(sm, load, data_only, StateRegs, "CPU");
+
+   ret &= GTE_StateAction(sm, load, data_only);
+
+   if (load)
    {
-    ICache[(address & 0xFFC) >> 2].Data = value << ((address & 0x3) * 8);
+#ifdef HAVE_LIGHTREC
+      if (psx_dynarec != DYNAREC_DISABLED)
+      {
+         if (lightrec_state)
+         {
+            /* Hack to prevent Dynarec + Runahead from causing a crash by
+             * switching to lightrec interpreter after load state in bios */
+            if (psx_dynarec != DYNAREC_RUN_INTERPRETER &&
+                BACKED_PC >= 0xBFC00000 && BACKED_PC <= 0xBFC80000)
+            {
+               if (next_interpreter == 0)
+               {
+                  log_cb(RETRO_LOG_INFO, "PC 0x%08x Dynarec using interpreter for a few "
+                                         "frames, avoid crash due to Runahead\n", BACKED_PC);
+                  lightrec_plugin_init(self);
+               }
+               /* run lightrec's interpreter for a few frames
+                * 76 for NTSC, 93 for PAL seems to prevent crash at max runahead */
+               next_interpreter = 93;
+            }
+            else
+               lightrec_invalidate_all(lightrec_state);
+         }
+         else
+            lightrec_plugin_init(self);
+      }
+#endif
+      ReadAbsorbWhich &= 0x1F;
+      /* BACKED_LDWhich must be a valid GPR index (0..31) or the dummy
+       * slot (0x22). Any other value (including 0x20, the dummy slot
+       * from previous save-state versions) is sanitized to the new
+       * dummy index. */
+      if (BACKED_LDWhich > 31)
+         BACKED_LDWhich = 0x22;
    }
-  }
+   return ret;
+}
 
-  if((BIU & 0x081) == 0x080)	// Writes to the scratchpad(TODO test)
-  {
-   if(DS24)
-    ScratchRAM->WriteU24(address & 0x3FF, value);
+void CPU_SetBIU(PS_CPU *self, uint32_t val)
+{
+   const uint32_t old_BIU = BIU;
+   (void)self;
+
+   BIU = val & ~(0x440);
+
+   if ((BIU ^ old_BIU) & 0x800)
+   {
+      unsigned i;
+      if (BIU & 0x800) /* ICache enabled */
+      {
+         for (i = 0; i < 1024; i++)
+            ICache[i].TV &= ~0x1;
+      }
+      else             /* ICache disabled */
+      {
+         for (i = 0; i < 1024; i++)
+            ICache[i].TV |= 0x1;
+      }
+   }
+}
+
+uint32_t CPU_GetBIU(PS_CPU *self)
+{
+   (void)self;
+   return BIU;
+}
+
+/* ReadMemory_u{8,16,32} - the templated PS_CPU::ReadMemory<T> body
+ * collapsed into three explicit functions.  The original branched
+ * on sizeof(T); now the size is implicit in the function name and
+ * the dead branches are removed.  DS24 and LWC_timing only ever
+ * apply to the 32-bit path - the 8 and 16 variants drop those
+ * arguments. */
+
+static INLINE uint8_t ReadMemory_u8(pscpu_timestamp_t *timestamp, uint32_t address)
+{
+   uint8_t           ret;
+   pscpu_timestamp_t lts;
+
+   ReadAbsorb[ReadAbsorbWhich] = 0;
+   ReadAbsorbWhich             = 0;
+
+   address &= addr_mask[address >> 29];
+
+   if (address >= 0x1F800000 && address <= 0x1F8003FF)
+   {
+      LDAbsorb = 0;
+      return ScratchRAM_ReadU8(address & 0x3FF);
+   }
+
+   *timestamp += (ReadFudge >> 4) & 2;
+
+   lts        = *timestamp;
+   ret        = PSX_MemRead8(&lts, address);
+   lts       += 2;
+
+   LDAbsorb   = (lts - *timestamp);
+   *timestamp = lts;
+
+   return ret;
+}
+
+static INLINE uint16_t ReadMemory_u16(pscpu_timestamp_t *timestamp, uint32_t address)
+{
+   uint16_t          ret;
+   pscpu_timestamp_t lts;
+
+   ReadAbsorb[ReadAbsorbWhich] = 0;
+   ReadAbsorbWhich             = 0;
+
+   address &= addr_mask[address >> 29];
+
+   if (address >= 0x1F800000 && address <= 0x1F8003FF)
+   {
+      LDAbsorb = 0;
+      return ScratchRAM_ReadU16(address & 0x3FF);
+   }
+
+   *timestamp += (ReadFudge >> 4) & 2;
+
+   lts        = *timestamp;
+   ret        = PSX_MemRead16(&lts, address);
+   lts       += 2;
+
+   LDAbsorb   = (lts - *timestamp);
+   *timestamp = lts;
+
+   return ret;
+}
+
+static INLINE uint32_t ReadMemory_u32(pscpu_timestamp_t *timestamp, uint32_t address, bool DS24, bool LWC_timing)
+{
+   uint32_t          ret;
+   pscpu_timestamp_t lts;
+
+   ReadAbsorb[ReadAbsorbWhich] = 0;
+   ReadAbsorbWhich             = 0;
+
+   address &= addr_mask[address >> 29];
+
+   if (address >= 0x1F800000 && address <= 0x1F8003FF)
+   {
+      LDAbsorb = 0;
+      if (DS24)
+         return ScratchRAM_ReadU24(address & 0x3FF);
+      return ScratchRAM_ReadU32(address & 0x3FF);
+   }
+
+   *timestamp += (ReadFudge >> 4) & 2;
+
+   lts = *timestamp;
+   if (DS24)
+      ret = PSX_MemRead24(&lts, address) & 0xFFFFFF;
    else
-    ScratchRAM->Write<T>(address & 0x3FF, value);
-  }
-  //printf("IsC WRITE%d 0x%08x 0x%08x -- CP0.SR=0x%08x\n", (int)sizeof(T), address, value, CP0.SR);
- }
+      ret = PSX_MemRead32(&lts, address);
+
+   if (LWC_timing)
+      lts += 1;
+   else
+      lts += 2;
+
+   LDAbsorb   = (lts - *timestamp);
+   *timestamp = lts;
+
+   return ret;
+}
+
+/* WriteMemory_u{8,16,32} - mirror of ReadMemory_u{8,16,32}.  The
+ * IsC (CP0.SR & 0x10000) "isolate cache" path is shared since it's
+ * width-agnostic except for the scratchpad write at the end.
+ *
+ * Performance note: the original function was a single template
+ * with size-branching scattered through both the normal and IsC
+ * paths.  Splitting by width strips dead branches at compile time
+ * - the u8 and u16 paths drop the DS24 flag entirely, since
+ * 24-bit writes only happen on the 32-bit path. */
+
+static INLINE void WriteMemory_IsC_misc(uint32_t address, uint32_t value)
+{
+   if (BIU & BIU_ENABLE_ICACHE_S1)
+   {
+      if (BIU & (BIU_TAG_TEST_MODE | BIU_INVALIDATE_MODE | BIU_LOCK_MODE))
+      {
+         const uint8_t valid_bits = (BIU & BIU_TAG_TEST_MODE)
+            ? ((value << ((address & 0x3) * 8)) & 0x0F) : 0x00;
+         __ICache *ICI = &ICache[((address & 0xFF0) >> 2)];
+         unsigned i;
+
+         for (i = 0; i < 4; i++)
+            ICI[i].TV = ((valid_bits & (1U << i)) ? 0x00 : 0x02)
+                      | (address & 0xFFFFFFF0) | (i << 2);
+      }
+      else
+         ICache[(address & 0xFFC) >> 2].Data = value << ((address & 0x3) * 8);
+   }
+}
+
+static INLINE void WriteMemory_u8(pscpu_timestamp_t *timestamp, uint32_t address, uint32_t value)
+{
+   if (MDFN_LIKELY(!(CP0.SR & 0x10000)))
+   {
+      address &= addr_mask[address >> 29];
+
+      if (address >= 0x1F800000 && address <= 0x1F8003FF)
+      {
+         ScratchRAM_WriteU8(address & 0x3FF, value);
+         return;
+      }
+      PSX_MemWrite8(*timestamp, address, value);
+      return;
+   }
+
+   WriteMemory_IsC_misc(address, value);
+
+   if ((BIU & 0x081) == 0x080)
+      ScratchRAM_WriteU8(address & 0x3FF, value);
+}
+
+static INLINE void WriteMemory_u16(pscpu_timestamp_t *timestamp, uint32_t address, uint32_t value)
+{
+   if (MDFN_LIKELY(!(CP0.SR & 0x10000)))
+   {
+      address &= addr_mask[address >> 29];
+
+      if (address >= 0x1F800000 && address <= 0x1F8003FF)
+      {
+         ScratchRAM_WriteU16(address & 0x3FF, value);
+         return;
+      }
+      PSX_MemWrite16(*timestamp, address, value);
+      return;
+   }
+
+   WriteMemory_IsC_misc(address, value);
+
+   if ((BIU & 0x081) == 0x080)
+      ScratchRAM_WriteU16(address & 0x3FF, value);
+}
+
+static INLINE void WriteMemory_u32(pscpu_timestamp_t *timestamp, uint32_t address, uint32_t value, bool DS24)
+{
+   if (MDFN_LIKELY(!(CP0.SR & 0x10000)))
+   {
+      address &= addr_mask[address >> 29];
+
+      if (address >= 0x1F800000 && address <= 0x1F8003FF)
+      {
+         if (DS24)
+            ScratchRAM_WriteU24(address & 0x3FF, value);
+         else
+            ScratchRAM_WriteU32(address & 0x3FF, value);
+         return;
+      }
+
+      if (DS24)
+         PSX_MemWrite24(*timestamp, address, value);
+      else
+         PSX_MemWrite32(*timestamp, address, value);
+      return;
+   }
+
+   WriteMemory_IsC_misc(address, value);
+
+   if ((BIU & 0x081) == 0x080)
+   {
+      if (DS24)
+         ScratchRAM_WriteU24(address & 0x3FF, value);
+      else
+         ScratchRAM_WriteU32(address & 0x3FF, value);
+   }
 }
 
 //
@@ -502,109 +675,100 @@ INLINE void PS_CPU::WriteMemory(pscpu_timestamp_t &timestamp, uint32 address, ui
 // Fill size of 2-words seems to work on a PS1, and even behaves as if the line size is 2 words in regards to clearing
 // the valid bits(when the tag matches, of course), but is obviously not very efficient unless running code that's just endless branching.
 //
-INLINE uint32 PS_CPU::ReadInstruction(pscpu_timestamp_t &timestamp, uint32 address)
+static INLINE uint32_t ReadInstruction(pscpu_timestamp_t *timestamp, uint32_t address)
 {
- uint32 instr;
+   uint32_t instr;
 
- instr = ICache[(address & 0xFFC) >> 2].Data;
-
- if(ICache[(address & 0xFFC) >> 2].TV != address)
- {
-  ReadAbsorb[ReadAbsorbWhich] = 0;
-  ReadAbsorbWhich = 0;
-
-  if(address >= 0xA0000000 || !(BIU & 0x800))
-  {
-   instr = MDFN_de32lsb_aligned((uint8*)(FastMap[address >> FAST_MAP_SHIFT] + address));
-
-   if (!psx_gte_overclock) {
-      timestamp += 4;	// Approximate best-case cache-disabled time, per PS1 tests(executing out of 0xA0000000+); it can be 5 in *some* sequences of code(like a lot of sequential "nop"s, probably other simple instructions too).
-   }
-  }
-  else
-  {
-   __ICache *ICI = &ICache[((address & 0xFF0) >> 2)];
-   const uint8 *FMP = (uint8*)(FastMap[(address & 0xFFFFFFF0) >> FAST_MAP_SHIFT] + (address & 0xFFFFFFF0));
-
-   // | 0x2 to simulate (in)validity bits.
-   ICI[0x00].TV = (address & 0xFFFFFFF0) | 0x0 | 0x2;
-   ICI[0x01].TV = (address & 0xFFFFFFF0) | 0x4 | 0x2;
-   ICI[0x02].TV = (address & 0xFFFFFFF0) | 0x8 | 0x2;
-   ICI[0x03].TV = (address & 0xFFFFFFF0) | 0xC | 0x2;
-
-   if (!psx_gte_overclock) {
-      timestamp += 3;
-   }
-
-   switch(address & 0xC)
-   {
-    case 0x0:
-        if (!psx_gte_overclock) {
-           timestamp++;
-        }
-        ICI[0x00].TV &= ~0x2;
-	ICI[0x00].Data = MDFN_de32lsb_aligned(&FMP[0x0]);
-    case 0x4:
-        if (!psx_gte_overclock) {
-           timestamp++;
-        }
-        ICI[0x01].TV &= ~0x2;
-	ICI[0x01].Data = MDFN_de32lsb_aligned(&FMP[0x4]);
-    case 0x8:
-        if (!psx_gte_overclock) {
-           timestamp++;
-        }
-        ICI[0x02].TV &= ~0x2;
-	ICI[0x02].Data = MDFN_de32lsb_aligned(&FMP[0x8]);
-    case 0xC:
-        if (!psx_gte_overclock) {
-           timestamp++;
-        }
-        ICI[0x03].TV &= ~0x2;
-	ICI[0x03].Data = MDFN_de32lsb_aligned(&FMP[0xC]);
-	break;
-   }
    instr = ICache[(address & 0xFFC) >> 2].Data;
-  }
- }
 
- return instr;
+   if (ICache[(address & 0xFFC) >> 2].TV != address)
+   {
+      ReadAbsorb[ReadAbsorbWhich] = 0;
+      ReadAbsorbWhich             = 0;
+
+      if (address >= 0xA0000000 || !(BIU & 0x800))
+      {
+         instr = MDFN_de32lsb_aligned((uint8 *)(FastMap[address >> FAST_MAP_SHIFT] + address));
+
+         if (!psx_gte_overclock)
+            *timestamp += 4; /* Approximate best-case cache-disabled time. */
+      }
+      else
+      {
+         __ICache    *ICI = &ICache[((address & 0xFF0) >> 2)];
+         const uint8 *FMP = (uint8 *)(FastMap[(address & 0xFFFFFFF0) >> FAST_MAP_SHIFT] + (address & 0xFFFFFFF0));
+
+         /* | 0x2 to simulate (in)validity bits. */
+         ICI[0x00].TV = (address & 0xFFFFFFF0) | 0x0 | 0x2;
+         ICI[0x01].TV = (address & 0xFFFFFFF0) | 0x4 | 0x2;
+         ICI[0x02].TV = (address & 0xFFFFFFF0) | 0x8 | 0x2;
+         ICI[0x03].TV = (address & 0xFFFFFFF0) | 0xC | 0x2;
+
+         if (!psx_gte_overclock)
+            *timestamp += 3;
+
+         switch (address & 0xC)
+         {
+            case 0x0:
+               if (!psx_gte_overclock)
+                  (*timestamp)++;
+               ICI[0x00].TV  &= ~0x2;
+               ICI[0x00].Data = MDFN_de32lsb_aligned(&FMP[0x0]);
+            case 0x4:
+               if (!psx_gte_overclock)
+                  (*timestamp)++;
+               ICI[0x01].TV  &= ~0x2;
+               ICI[0x01].Data = MDFN_de32lsb_aligned(&FMP[0x4]);
+            case 0x8:
+               if (!psx_gte_overclock)
+                  (*timestamp)++;
+               ICI[0x02].TV  &= ~0x2;
+               ICI[0x02].Data = MDFN_de32lsb_aligned(&FMP[0x8]);
+            case 0xC:
+               if (!psx_gte_overclock)
+                  (*timestamp)++;
+               ICI[0x03].TV  &= ~0x2;
+               ICI[0x03].Data = MDFN_de32lsb_aligned(&FMP[0xC]);
+               break;
+         }
+         instr = ICache[(address & 0xFFC) >> 2].Data;
+      }
+   }
+
+   return instr;
 }
 
-uint32 NO_INLINE PS_CPU::Exception(uint32 code, uint32 PC, const uint32 NP, const uint32 instr)
+static uint32_t NO_INLINE CPU_Exception(uint32_t code, uint32_t PC, const uint32_t NP, const uint32_t instr)
 {
- uint32 handler = 0x80000080;
+   uint32_t handler = 0x80000080;
 
- assert(code < 16);
+   assert(code < 16);
 
- if(CP0.SR & (1 << 22))	// BEV
-  handler = 0xBFC00180;
+   if (CP0.SR & (1 << 22)) /* BEV */
+      handler = 0xBFC00180;
 
- CP0.EPC = PC;
- if(BDBT & 2)
- {
-  CP0.EPC -= 4;
-  CP0.TAR = NP;
- }
+   CP0.EPC = PC;
+   if (BDBT & 2)
+   {
+      CP0.EPC -= 4;
+      CP0.TAR  = NP;
+   }
 
- // "Push" IEc and KUc(so that the new IEc and KUc are 0)
- CP0.SR = (CP0.SR & ~0x3F) | ((CP0.SR << 2) & 0x3F);
+   /* "Push" IEc and KUc (so that the new IEc and KUc are 0) */
+   CP0.SR = (CP0.SR & ~0x3F) | ((CP0.SR << 2) & 0x3F);
 
- // Setup cause register
- CP0.CAUSE &= 0x0000FF00;
- CP0.CAUSE |= code << 2;
+   /* Setup cause register */
+   CP0.CAUSE &= 0x0000FF00;
+   CP0.CAUSE |= code << 2;
 
- CP0.CAUSE |= BDBT << 30;
- CP0.CAUSE |= (instr << 2) & (0x3 << 28);	// CE
+   CP0.CAUSE |= BDBT << 30;
+   CP0.CAUSE |= (instr << 2) & (0x3 << 28); /* CE */
 
- //
- //
- //
- RecalcIPCache();
+   CPU_RecalcIPCache();
 
- BDBT = 0;
+   BDBT = 0;
 
- return(handler);
+   return handler;
 }
 
 #define BACKING_TO_ACTIVE			\
@@ -626,15 +790,16 @@ uint32 NO_INLINE PS_CPU::Exception(uint32 code, uint32 PC, const uint32 NP, cons
 #define GPR_RES(n) { unsigned tn = (n); ReadAbsorb[tn] = 0; }
 #define GPR_DEPRES_END ReadAbsorb[0] = back; }
 
-pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
+static pscpu_timestamp_t CPU_RunReal(PS_CPU *self, pscpu_timestamp_t timestamp_in)
 {
- pscpu_timestamp_t timestamp = timestamp_in;
+   pscpu_timestamp_t timestamp = timestamp_in;
 
- uint32 PC;
- uint32 new_PC;
- uint32 LDWhich;
- uint32 LDValue;
- 
+   uint32_t PC;
+   uint32_t new_PC;
+   uint32_t LDWhich;
+   uint32_t LDValue;
+
+   (void)self;
  //printf("%d %d\n", gte_ts_done, muldiv_ts_done);
 
  gte_ts_done += timestamp;
@@ -666,11 +831,11 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
     // This will block interrupt processing, but since we're going more for keeping broken homebrew/hacks from working
     // than super-duper-accurate pipeline emulation, it shouldn't be a problem.
     CP0.BADA = PC;
-    new_PC = Exception(EXCEPTION_ADEL, PC, new_PC, 0);
+    new_PC = CPU_Exception(EXCEPTION_ADEL, PC, new_PC, 0);
     goto OpDone;
    }
 
-   instr = ReadInstruction(timestamp, PC);
+   instr = ReadInstruction(&timestamp, PC);
 
 
    // 
@@ -688,7 +853,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
    else
     timestamp++;
 
-   #define DO_LDS() { GPR_full[LDWhich] = LDValue; ReadAbsorb[LDWhich] = LDAbsorb; ReadFudge = LDWhich; ReadAbsorbWhich |= LDWhich & 0x1F; LDWhich = 0x22; }
+   #define DO_LDS() { s_cpu.GPR_full[LDWhich] = LDValue; ReadAbsorb[LDWhich] = LDAbsorb; ReadFudge = LDWhich; ReadAbsorbWhich |= LDWhich & 0x1F; LDWhich = 0x22; }
    #define BEGIN_OPF(name) { op_##name:
    #define END_OPF goto OpDone; }
 
@@ -784,7 +949,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
    {
     BEGIN_OPF(ILL);
 	     DO_LDS();
-	     new_PC = Exception(EXCEPTION_RI, PC, new_PC, instr);
+	     new_PC = CPU_Exception(EXCEPTION_RI, PC, new_PC, instr);
     END_OPF;
 
     //
@@ -809,7 +974,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 	if(MDFN_UNLIKELY(ep))
 	{
-	 new_PC = Exception(EXCEPTION_OV, PC, new_PC, instr);
+	 new_PC = CPU_Exception(EXCEPTION_OV, PC, new_PC, instr);
 	}
 	else
 	 GPR[rd] = result;
@@ -837,7 +1002,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
         if(MDFN_UNLIKELY(ep))
 	{
-	 new_PC = Exception(EXCEPTION_OV, PC, new_PC, instr);
+	 new_PC = CPU_Exception(EXCEPTION_OV, PC, new_PC, instr);
 	}
         else
          GPR[rt] = result;
@@ -1029,7 +1194,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
     //
     BEGIN_OPF(BREAK);
 	DO_LDS();
-	new_PC = Exception(EXCEPTION_BP, PC, new_PC, instr);
+	new_PC = CPU_Exception(EXCEPTION_BP, PC, new_PC, instr);
     END_OPF;
 
     // Cop "instructions":	CFCz(no CP0), COPz, CTCz(no CP0), LWCz(no CP0), MFCz, MTCz, SWCz(no CP0)
@@ -1051,7 +1216,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	 case 0x02:
 	 case 0x06:
 		DO_LDS();
-		new_PC = Exception(EXCEPTION_RI, PC, new_PC, instr);
+		new_PC = CPU_Exception(EXCEPTION_RI, PC, new_PC, instr);
 		break;
 
 	 case 0x00:		// MFC0	- Move from Coprocessor
@@ -1063,7 +1228,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 		 case 0x04:
 		 case 0x0A:
 			DO_LDS();
-		  	new_PC = Exception(EXCEPTION_RI, PC, new_PC, instr);
+		  	new_PC = CPU_Exception(EXCEPTION_RI, PC, new_PC, instr);
 			break;
 
 		 case 0x03:
@@ -1084,7 +1249,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 			LDAbsorb = 0;
 			LDWhich = rt;
-			LDValue = CP0.Regs[rd];
+			LDValue = cpu_CP0.Regs[rd];
 			break;
 
 		 default:
@@ -1103,7 +1268,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 		 case 0x02:
 		 case 0x04:
 		 case 0x0A:
-			new_PC = Exception(EXCEPTION_RI, PC, new_PC, instr);
+			new_PC = CPU_Exception(EXCEPTION_RI, PC, new_PC, instr);
 			break;
 
 		 case CP0REG_BPC:
@@ -1129,12 +1294,12 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 		 case CP0REG_CAUSE:
 			CP0.CAUSE &= ~(0x3 << 8);
 			CP0.CAUSE |= val & (0x3 << 8);
-			RecalcIPCache();
+			CPU_RecalcIPCache();
 			break;
 
 		 case CP0REG_SR:
 			CP0.SR = val & ~( (0x3 << 26) | (0x3 << 23) | (0x3 << 6));
-			RecalcIPCache();
+			CPU_RecalcIPCache();
 			break;
 		}
 		break;
@@ -1159,11 +1324,11 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 		 {
 		  // "Pop"
 		  CP0.SR = (CP0.SR & ~0x0F) | ((CP0.SR >> 2) & 0x0F);
-		  RecalcIPCache();
+		  CPU_RecalcIPCache();
 		 }
 		 else if(cp0_op == 0x01 || cp0_op == 0x02 || cp0_op == 0x06 || cp0_op == 0x08)	// TLBR, TLBWI, TLBWR, TLBP
 		 {
-		  new_PC = Exception(EXCEPTION_RI, PC, new_PC, instr);
+		  new_PC = CPU_Exception(EXCEPTION_RI, PC, new_PC, instr);
 		 }
 		}
 		break;
@@ -1182,7 +1347,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	if(MDFN_UNLIKELY(!(CP0.SR & (1U << (28 + 2)))))
 	{
 	 DO_LDS();
-         new_PC = Exception(EXCEPTION_COPU, PC, new_PC, instr);
+         new_PC = CPU_Exception(EXCEPTION_COPU, PC, new_PC, instr);
 	}
 	else switch(sub_op)
 	{
@@ -1289,7 +1454,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 	if(!(CP0.SR & (1U << (28 + ((instr >> 26) & 0x3)))))
 	{
-         new_PC = Exception(EXCEPTION_COPU, PC, new_PC, instr);
+         new_PC = CPU_Exception(EXCEPTION_COPU, PC, new_PC, instr);
 	}
 	else
 	{
@@ -1315,17 +1480,17 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 	if(!(CP0.SR & (1U << (28 + ((instr >> 26) & 0x3)))))
 	{
-         new_PC = Exception(EXCEPTION_COPU, PC, new_PC, instr);
+         new_PC = CPU_Exception(EXCEPTION_COPU, PC, new_PC, instr);
 	}
 	else
 	{
 	 if(MDFN_UNLIKELY(address & 3))
 	 {
 	  CP0.BADA = address;
-          new_PC = Exception(EXCEPTION_ADEL, PC, new_PC, instr);
+          new_PC = CPU_Exception(EXCEPTION_ADEL, PC, new_PC, instr);
 	 }
          else
-          ReadMemory<uint32>(timestamp, address, false, true);
+          ReadMemory_u32(&timestamp, address, false, true);
 	}
     END_OPF;
 
@@ -1341,14 +1506,14 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
         if(MDFN_UNLIKELY(address & 3))
 	{
 	 CP0.BADA = address;
-         new_PC = Exception(EXCEPTION_ADEL, PC, new_PC, instr);
+         new_PC = CPU_Exception(EXCEPTION_ADEL, PC, new_PC, instr);
 	}
         else
 	{
          if(timestamp < gte_ts_done)
           timestamp = gte_ts_done;
 
-         uint32_t value = ReadMemory<uint32>(timestamp, address, false, true);
+         uint32_t value = ReadMemory_u32(&timestamp, address, false, true);
          GTE_WriteDR(rt, value);
 
          if (PGXP_GetModes() & PGXP_MODE_GTE)
@@ -1369,14 +1534,14 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 	if(!(CP0.SR & (1U << (28 + ((instr >> 26) & 0x3)))))
 	{
-         new_PC = Exception(EXCEPTION_COPU, PC, new_PC, instr);
+         new_PC = CPU_Exception(EXCEPTION_COPU, PC, new_PC, instr);
 	}
 	else
 	{
 	 if(MDFN_UNLIKELY(address & 0x3))
 	 {
 	  CP0.BADA = address;
-	  new_PC = Exception(EXCEPTION_ADES, PC, new_PC, instr);
+	  new_PC = CPU_Exception(EXCEPTION_ADES, PC, new_PC, instr);
 	 }
 	}
     END_OPF;
@@ -1391,14 +1556,14 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	if(MDFN_UNLIKELY(address & 0x3))
 	{
 	 CP0.BADA = address;
-	 new_PC = Exception(EXCEPTION_ADES, PC, new_PC, instr);
+	 new_PC = CPU_Exception(EXCEPTION_ADES, PC, new_PC, instr);
 	}
 	else
 	{
          if(timestamp < gte_ts_done)
           timestamp = gte_ts_done;
 
-	 WriteMemory<uint32>(timestamp, address, GTE_ReadDR(rt));
+	 WriteMemory_u32(&timestamp, address, GTE_ReadDR(rt), false);
 
 	 if (PGXP_GetModes() & PGXP_MODE_GTE)
             PGXP_GTE_SWC2(instr, GTE_ReadDR(rt), address);
@@ -2040,7 +2205,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 	if(MDFN_UNLIKELY(ep))
 	{
-	 new_PC = Exception(EXCEPTION_OV, PC, new_PC, instr);
+	 new_PC = CPU_Exception(EXCEPTION_OV, PC, new_PC, instr);
 	}
 	else
 	 GPR[rd] = result;
@@ -2078,7 +2243,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
     BEGIN_OPF(SYSCALL);
 	DO_LDS();
 
-	new_PC = Exception(EXCEPTION_SYSCALL, PC, new_PC, instr);
+	new_PC = CPU_Exception(EXCEPTION_SYSCALL, PC, new_PC, instr);
     END_OPF;
 
 
@@ -2148,7 +2313,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	DO_LDS();
 
 	LDWhich = rt;
-	LDValue = (int32)ReadMemory<int8>(timestamp, address);
+	LDValue = (int32)(int8)ReadMemory_u8(&timestamp, address);
 
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
 		PGXP_CPU_LB(instr, LDValue, address);
@@ -2172,7 +2337,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	DO_LDS();
 
         LDWhich = rt;
-	LDValue = ReadMemory<uint8>(timestamp, address);
+	LDValue = ReadMemory_u8(&timestamp, address);
 
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
 		PGXP_CPU_LBU(instr, LDValue, address);
@@ -2195,7 +2360,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	 DO_LDS();
 
 	 CP0.BADA = address;
-	 new_PC = Exception(EXCEPTION_ADEL, PC, new_PC, instr);
+	 new_PC = CPU_Exception(EXCEPTION_ADEL, PC, new_PC, instr);
 	}
 	else
 	{
@@ -2205,7 +2370,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	 DO_LDS();
 
 	 LDWhich = rt;
-         LDValue = (int32)ReadMemory<int16>(timestamp, address);
+         LDValue = (int32)(int16)ReadMemory_u16(&timestamp, address);
 	}
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
 		PGXP_CPU_LH(instr, LDValue, address);
@@ -2228,7 +2393,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	 DO_LDS();
 
 	 CP0.BADA = address;
-         new_PC = Exception(EXCEPTION_ADEL, PC, new_PC, instr);
+         new_PC = CPU_Exception(EXCEPTION_ADEL, PC, new_PC, instr);
 	}
 	else
 	{
@@ -2238,7 +2403,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	 DO_LDS();
 
 	 LDWhich = rt;
-         LDValue = ReadMemory<uint16>(timestamp, address);
+         LDValue = ReadMemory_u16(&timestamp, address);
 	}
 
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
@@ -2263,7 +2428,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	 DO_LDS();
 
 	 CP0.BADA = address;
-         new_PC = Exception(EXCEPTION_ADEL, PC, new_PC, instr);
+         new_PC = CPU_Exception(EXCEPTION_ADEL, PC, new_PC, instr);
 	}
         else
 	{
@@ -2273,7 +2438,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	 DO_LDS();
 
 	 LDWhich = rt;
-         LDValue = ReadMemory<uint32>(timestamp, address);
+         LDValue = ReadMemory_u32(&timestamp, address, false, false);
 	}
 
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
@@ -2293,7 +2458,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 	uint32 address = GPR[rs] + immediate;
 
-	WriteMemory<uint8>(timestamp, address, GPR[rt]);
+	WriteMemory_u8(&timestamp, address, GPR[rt]);
 
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
 		PGXP_CPU_SB(instr, GPR[rt], address);
@@ -2317,10 +2482,10 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	if(MDFN_UNLIKELY(address & 0x1))
 	{
 	 CP0.BADA = address;
-	 new_PC = Exception(EXCEPTION_ADES, PC, new_PC, instr);
+	 new_PC = CPU_Exception(EXCEPTION_ADES, PC, new_PC, instr);
 	}
 	else
-	 WriteMemory<uint16>(timestamp, address, GPR[rt]);
+	 WriteMemory_u16(&timestamp, address, GPR[rt]);
 
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
 		PGXP_CPU_SH(instr, GPR[rt], address);
@@ -2344,10 +2509,10 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	if(MDFN_UNLIKELY(address & 0x3))
 	{
 	 CP0.BADA = address;
-	 new_PC = Exception(EXCEPTION_ADES, PC, new_PC, instr);
+	 new_PC = CPU_Exception(EXCEPTION_ADES, PC, new_PC, instr);
 	}
 	else
-	 WriteMemory<uint32>(timestamp, address, GPR[rt]);
+	 WriteMemory_u32(&timestamp, address, GPR[rt], false);
 
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
 		PGXP_CPU_SW(instr, GPR[rt], address);
@@ -2384,16 +2549,16 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	LDWhich = rt;
 	switch(address & 0x3)
 	{
-	 case 0: LDValue = (v & ~(0xFF << 24)) | (ReadMemory<uint8>(timestamp, address & ~3) << 24);
+	 case 0: LDValue = (v & ~(0xFF << 24)) | (ReadMemory_u8(&timestamp, address & ~3) << 24);
 		 break;
 
-	 case 1: LDValue = (v & ~(0xFFFF << 16)) | (ReadMemory<uint16>(timestamp, address & ~3) << 16);
+	 case 1: LDValue = (v & ~(0xFFFF << 16)) | (ReadMemory_u16(&timestamp, address & ~3) << 16);
 	         break;
 
-	 case 2: LDValue = (v & ~(0xFFFFFF << 8)) | (ReadMemory<uint32>(timestamp, address & ~3, true) << 8);
+	 case 2: LDValue = (v & ~(0xFFFFFF << 8)) | (ReadMemory_u32(&timestamp, address & ~3, true, false) << 8);
 		 break;
 
-	 case 3: LDValue = (v & ~(0xFFFFFFFF << 0)) | (ReadMemory<uint32>(timestamp, address & ~3) << 0);
+	 case 3: LDValue = (v & ~(0xFFFFFFFF << 0)) | (ReadMemory_u32(&timestamp, address & ~3, false, false) << 0);
 		 break;
 	}
 
@@ -2417,16 +2582,16 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 	switch(address & 0x3)
 	{
-	 case 0: WriteMemory<uint8>(timestamp, address & ~3, GPR[rt] >> 24);
+	 case 0: WriteMemory_u8(&timestamp, address & ~3, GPR[rt] >> 24);
 		 break;
 
-	 case 1: WriteMemory<uint16>(timestamp, address & ~3, GPR[rt] >> 16);
+	 case 1: WriteMemory_u16(&timestamp, address & ~3, GPR[rt] >> 16);
 	         break;
 
-	 case 2: WriteMemory<uint32>(timestamp, address & ~3, GPR[rt] >> 8, true);
+	 case 2: WriteMemory_u32(&timestamp, address & ~3, GPR[rt] >> 8, true);
 		 break;
 
-	 case 3: WriteMemory<uint32>(timestamp, address & ~3, GPR[rt] >> 0);
+	 case 3: WriteMemory_u32(&timestamp, address & ~3, GPR[rt] >> 0, false);
 		 break;
 	}
         if (PGXP_GetModes() & PGXP_MODE_MEMORY)
@@ -2463,16 +2628,16 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	LDWhich = rt;
 	switch(address & 0x3)
 	{
-	 case 0: LDValue = (v & ~(0xFFFFFFFF)) | ReadMemory<uint32>(timestamp, address);
+	 case 0: LDValue = (v & ~(0xFFFFFFFF)) | ReadMemory_u32(&timestamp, address, false, false);
 		 break;
 
-	 case 1: LDValue = (v & ~(0xFFFFFF)) | ReadMemory<uint32>(timestamp, address, true);
+	 case 1: LDValue = (v & ~(0xFFFFFF)) | ReadMemory_u32(&timestamp, address, true, false);
 		 break;
 
-	 case 2: LDValue = (v & ~(0xFFFF)) | ReadMemory<uint16>(timestamp, address);
+	 case 2: LDValue = (v & ~(0xFFFF)) | ReadMemory_u16(&timestamp, address);
 	         break;
 
-	 case 3: LDValue = (v & ~(0xFF)) | ReadMemory<uint8>(timestamp, address);
+	 case 3: LDValue = (v & ~(0xFF)) | ReadMemory_u8(&timestamp, address);
 		 break;
 	}
 
@@ -2496,16 +2661,16 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 
 	switch(address & 0x3)
 	{
-	 case 0: WriteMemory<uint32>(timestamp, address, GPR[rt]);
+	 case 0: WriteMemory_u32(&timestamp, address, GPR[rt], false);
 		 break;
 
-	 case 1: WriteMemory<uint32>(timestamp, address, GPR[rt], true);
+	 case 1: WriteMemory_u32(&timestamp, address, GPR[rt], true);
 		 break;
 
-	 case 2: WriteMemory<uint16>(timestamp, address, GPR[rt]);
+	 case 2: WriteMemory_u16(&timestamp, address, GPR[rt]);
 	         break;
 
-	 case 3: WriteMemory<uint8>(timestamp, address, GPR[rt]);
+	 case 3: WriteMemory_u8(&timestamp, address, GPR[rt]);
 		 break;
 	}
 
@@ -2529,7 +2694,7 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
 	{
  	 DO_LDS();
 
-	 new_PC = Exception(EXCEPTION_INT, PC, new_PC, instr);
+	 new_PC = CPU_Exception(EXCEPTION_INT, PC, new_PC, instr);
 	}
     END_OPF;
    }
@@ -2560,30 +2725,29 @@ pscpu_timestamp_t PS_CPU::RunReal(pscpu_timestamp_t timestamp_in)
  return(timestamp);
 }
 
-pscpu_timestamp_t PS_CPU::Run(pscpu_timestamp_t timestamp_in)
+pscpu_timestamp_t CPU_Run(PS_CPU *self, pscpu_timestamp_t timestamp_in)
 {
 #ifdef HAVE_LIGHTREC
-//track options changing
- if(MDFN_UNLIKELY(psx_dynarec != prev_dynarec || pgxpMode != PGXP_GetModes()) ||
-    prev_invalidate != psx_dynarec_invalidate)
- {
-  //init lightrec when changing dynarec, invalidate, or PGXP option, cleans entire state if already running
-  if(psx_dynarec != DYNAREC_DISABLED)
-  {
-   lightrec_plugin_init();
-  }
-  prev_dynarec = psx_dynarec;
-  pgxpMode = PGXP_GetModes();
-  prev_invalidate = psx_dynarec_invalidate;
- }
+   /* Track options changing. */
+   if (MDFN_UNLIKELY(psx_dynarec != prev_dynarec || pgxpMode != PGXP_GetModes()) ||
+       prev_invalidate != psx_dynarec_invalidate)
+   {
+      /* Init lightrec when changing dynarec, invalidate, or PGXP option;
+       * cleans entire state if already running. */
+      if (psx_dynarec != DYNAREC_DISABLED)
+         lightrec_plugin_init(self);
+      prev_dynarec    = psx_dynarec;
+      pgxpMode        = PGXP_GetModes();
+      prev_invalidate = psx_dynarec_invalidate;
+   }
 
- if(next_interpreter > 0)
-  next_interpreter--;
+   if (next_interpreter > 0)
+      next_interpreter--;
 
- if(psx_dynarec != DYNAREC_DISABLED)
-  return(lightrec_plugin_execute(timestamp_in));
+   if (psx_dynarec != DYNAREC_DISABLED)
+      return lightrec_plugin_execute(self, timestamp_in);
 #endif
- return(RunReal(timestamp_in));
+   return CPU_RunReal(self, timestamp_in);
 }
 
 #undef BEGIN_OPF
@@ -2652,7 +2816,11 @@ enum opcodes {
         OP_SWC2                 = 0x3a,
 };
 
-static char *name = (char*) "beetle_psx_libretro";
+/* R3: was `static char *name = (char*) "beetle_psx_libretro"`,
+ * a const-cast lie (the literal lives in .rodata).  Switching to a
+ * writable char array mirrors what lightrec_init's `char *` arg
+ * expects without the const cast. */
+static char name[] = "beetle_psx_libretro";
 
 #ifdef LIGHTREC_DEBUG
 u32 lightrec_begin_cycles = 0;
@@ -2676,11 +2844,11 @@ u32 hash_calculate(const void *buffer, u32 count)
 	return hash;
 }
 
-void PS_CPU::print_for_big_ass_debugger(int32_t timestamp, uint32_t PC)
+static void print_for_big_ass_debugger(int32_t timestamp, uint32_t PC)
 {
-	uint8_t *psxM = (uint8_t *) MainRAM->data8;
-	uint8_t *psxR = (uint8_t *) BIOSROM->data8;
-	uint8_t *psxH = (uint8_t *) ScratchRAM->data8;
+	uint8_t *psxM = (uint8_t *) MainRAM_data8();
+	uint8_t *psxR = (uint8_t *) BIOSROM_data8();
+	uint8_t *psxH = (uint8_t *) ScratchRAM_data8();
 
 	unsigned int i;
 
@@ -2693,8 +2861,8 @@ void PS_CPU::print_for_big_ass_debugger(int32_t timestamp, uint32_t PC)
 #endif
 
 	printf(" CP0 0x%08x",
-		hash_calculate(&CP0.Regs,
-			sizeof(CP0.Regs)));
+		hash_calculate(&cpu_CP0.Regs,
+			sizeof(cpu_CP0.Regs)));
 
 #ifdef LIGHTREC_VERY_DEBUG
 	for (i = 0; i < 32; i++)
@@ -2708,22 +2876,22 @@ void PS_CPU::print_for_big_ass_debugger(int32_t timestamp, uint32_t PC)
 }
 #endif /* LIGHTREC_DEBUG */
 
-u32 PS_CPU::cop_mfc(struct lightrec_state *state, u32 op, u8 reg)
+static u32 cop_mfc(struct lightrec_state *state, u32 op, u8 reg)
 {
-	return CP0.Regs[reg];
+	return cpu_CP0.Regs[reg];
 }
 
-u32 PS_CPU::cop_cfc(struct lightrec_state *state, u32 op, u8 reg)
+static u32 cop_cfc(struct lightrec_state *state, u32 op, u8 reg)
 {
-	return CP0.Regs[reg];
+	return cpu_CP0.Regs[reg];
 }
 
-u32 PS_CPU::cop2_mfc(struct lightrec_state *state, u32 op, u8 reg)
+static u32 cop2_mfc(struct lightrec_state *state, u32 op, u8 reg)
 {
 	return GTE_ReadDR(reg);
 }
 
-u32 PS_CPU::pgxp_cop2_mfc(struct lightrec_state *state, u32 op, u8 reg)
+static u32 pgxp_cop2_mfc(struct lightrec_state *state, u32 op, u8 reg)
 {
 	u32 r = GTE_ReadDR(reg);
 
@@ -2733,12 +2901,12 @@ u32 PS_CPU::pgxp_cop2_mfc(struct lightrec_state *state, u32 op, u8 reg)
 	return r;
 }
 
-u32 PS_CPU::cop2_cfc(struct lightrec_state *state, u32 op, u8 reg)
+static u32 cop2_cfc(struct lightrec_state *state, u32 op, u8 reg)
 {
 	return GTE_ReadCR(reg);
 }
 
-u32 PS_CPU::pgxp_cop2_cfc(struct lightrec_state *state, u32 op, u8 reg)
+static u32 pgxp_cop2_cfc(struct lightrec_state *state, u32 op, u8 reg)
 {
 	u32 r = GTE_ReadCR(reg);
 
@@ -2747,7 +2915,7 @@ u32 PS_CPU::pgxp_cop2_cfc(struct lightrec_state *state, u32 op, u8 reg)
 	return r;
 }
 
-void PS_CPU::cop_mtc_ctc(struct lightrec_state *state,
+static void cop_mtc_ctc(struct lightrec_state *state,
 		u8 reg, u32 value)
 {
 	switch (reg) {
@@ -2760,58 +2928,58 @@ void PS_CPU::cop_mtc_ctc(struct lightrec_state *state,
 			break;
 		case 12: /* Status */
 			if ((CP0.SR & ~value) & (1 << 16)) {
-				memcpy(MainRAM->data8, cache_buf, sizeof(cache_buf));
+				memcpy(MainRAM_data8(), cache_buf, sizeof(cache_buf));
 				lightrec_invalidate_all(state);
 			} else if ((~CP0.SR & value) & (1 << 16)) {
-				memcpy(cache_buf, MainRAM->data8, sizeof(cache_buf));
+				memcpy(cache_buf, MainRAM_data8(), sizeof(cache_buf));
 			}
 
 			CP0.SR = value & ~( (0x3 << 26) | (0x3 << 23) | (0x3 << 6));
-			RecalcIPCache();
+			CPU_RecalcIPCache();
 			lightrec_set_exit_flags(state,
 					LIGHTREC_EXIT_CHECK_INTERRUPT);
 			break;
 		case 13: /* Cause */
 			CP0.CAUSE &= ~0x0300;
 			CP0.CAUSE |= value & 0x0300;
-			RecalcIPCache();
+			CPU_RecalcIPCache();
 			lightrec_set_exit_flags(state,
 					LIGHTREC_EXIT_CHECK_INTERRUPT);
 			break;
 		default:
-			CP0.Regs[reg] = value;
+			cpu_CP0.Regs[reg] = value;
 			break;
 	}
 }
 
-void PS_CPU::cop_mtc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
+static void cop_mtc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	cop_mtc_ctc(state, reg, value);
 }
 
-void PS_CPU::cop_ctc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
+static void cop_ctc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	cop_mtc_ctc(state, reg, value);
 }
 
-void PS_CPU::cop2_mtc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
+static void cop2_mtc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	GTE_WriteDR(reg, value);
 }
 
-void PS_CPU::pgxp_cop2_mtc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
+static void pgxp_cop2_mtc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	GTE_WriteDR(reg, value);
 	if((op >> 26) == OP_CP2)
 		PGXP_GTE_MTC2(op, value, value);
 }
 
-void PS_CPU::cop2_ctc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
+static void cop2_ctc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	GTE_WriteCR(reg, value);
 }
 
-void PS_CPU::pgxp_cop2_ctc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
+static void pgxp_cop2_ctc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	GTE_WriteCR(reg, value);
 	PGXP_GTE_CTC2(op, value, value);
@@ -2841,12 +3009,12 @@ static void cop2_op(struct lightrec_state *state, u32 func)
       GTE_Instruction(func);
 }
 
-void PS_CPU::reset_target_cycle_count(struct lightrec_state *state, pscpu_timestamp_t timestamp){
+static void reset_target_cycle_count(struct lightrec_state *state, pscpu_timestamp_t timestamp){
 	if (timestamp >= next_event_ts)
 		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
 }
 
-void PS_CPU::hw_write_byte(struct lightrec_state *state,
+static void hw_write_byte(struct lightrec_state *state,
 		u32 opcode, void *host,	u32 mem, u8 val)
 {
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
@@ -2856,7 +3024,7 @@ void PS_CPU::hw_write_byte(struct lightrec_state *state,
 	reset_target_cycle_count(state, timestamp);
 }
 
-void PS_CPU::pgxp_nonhw_write_byte(struct lightrec_state *state,
+static void pgxp_nonhw_write_byte(struct lightrec_state *state,
 		u32 opcode, void *host,	u32 mem, u8 val)
 {
 	*(u8 *)host = val;
@@ -2866,7 +3034,7 @@ void PS_CPU::pgxp_nonhw_write_byte(struct lightrec_state *state,
 		lightrec_invalidate(state, mem, 1);
 }
 
-void PS_CPU::pgxp_hw_write_byte(struct lightrec_state *state,
+static void pgxp_hw_write_byte(struct lightrec_state *state,
 		u32 opcode, void *host,	u32 mem, u8 val)
 {
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
@@ -2880,7 +3048,7 @@ void PS_CPU::pgxp_hw_write_byte(struct lightrec_state *state,
 	reset_target_cycle_count(state, timestamp);
 }
 
-void PS_CPU::hw_write_half(struct lightrec_state *state,
+static void hw_write_half(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem, u16 val)
 {
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
@@ -2890,7 +3058,7 @@ void PS_CPU::hw_write_half(struct lightrec_state *state,
 	reset_target_cycle_count(state, timestamp);
 }
 
-void PS_CPU::pgxp_nonhw_write_half(struct lightrec_state *state,
+static void pgxp_nonhw_write_half(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem, u16 val)
 {
 	*(u16 *)host = HTOLE16(val);
@@ -2900,7 +3068,7 @@ void PS_CPU::pgxp_nonhw_write_half(struct lightrec_state *state,
 		lightrec_invalidate(state, mem, 2);
 }
 
-void PS_CPU::pgxp_hw_write_half(struct lightrec_state *state,
+static void pgxp_hw_write_half(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem, u16 val)
 {
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
@@ -2914,7 +3082,7 @@ void PS_CPU::pgxp_hw_write_half(struct lightrec_state *state,
 	reset_target_cycle_count(state, timestamp);
 }
 
-void PS_CPU::hw_write_word(struct lightrec_state *state,
+static void hw_write_word(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem, u32 val)
 {
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
@@ -2924,7 +3092,7 @@ void PS_CPU::hw_write_word(struct lightrec_state *state,
 	reset_target_cycle_count(state, timestamp);
 }
 
-void PS_CPU::pgxp_nonhw_write_word(struct lightrec_state *state,
+static void pgxp_nonhw_write_word(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem, u32 val)
 {
 	*(u32 *)host = HTOLE32(val);
@@ -2950,7 +3118,7 @@ void PS_CPU::pgxp_nonhw_write_word(struct lightrec_state *state,
 		lightrec_invalidate(state, mem, 4);
 }
 
-void PS_CPU::pgxp_hw_write_word(struct lightrec_state *state,
+static void pgxp_hw_write_word(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem, u32 val)
 {
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
@@ -2979,14 +3147,14 @@ void PS_CPU::pgxp_hw_write_word(struct lightrec_state *state,
 	reset_target_cycle_count(state, timestamp);
 }
 
-u8 PS_CPU::hw_read_byte(struct lightrec_state *state,
+static u8 hw_read_byte(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u8 val;
 
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
 
-	val = PSX_MemRead8(timestamp, mem);
+	val = PSX_MemRead8(&timestamp, mem);
 
 	/* Calling PSX_MemRead* might update timestamp - Make sure
 	 * here that state->current_cycle stays in sync. */
@@ -2997,7 +3165,7 @@ u8 PS_CPU::hw_read_byte(struct lightrec_state *state,
 	return val;
 }
 
-u8 PS_CPU::pgxp_nonhw_read_byte(struct lightrec_state *state,
+static u8 pgxp_nonhw_read_byte(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u8 val = *(u8 *)host;
@@ -3010,7 +3178,7 @@ u8 PS_CPU::pgxp_nonhw_read_byte(struct lightrec_state *state,
 	return val;
 }
 
-u8 PS_CPU::pgxp_hw_read_byte(struct lightrec_state *state,
+static u8 pgxp_hw_read_byte(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u8 val;
@@ -3019,7 +3187,7 @@ u8 PS_CPU::pgxp_hw_read_byte(struct lightrec_state *state,
 
 	u32 kmem = kunseg(mem);
 
-	val = PSX_MemRead8(timestamp, kmem);
+	val = PSX_MemRead8(&timestamp, kmem);
 
 	if((opcode >> 26) == OP_LB)
 		PGXP_CPU_LB(opcode, val, mem);
@@ -3035,14 +3203,14 @@ u8 PS_CPU::pgxp_hw_read_byte(struct lightrec_state *state,
 	return val;
 }
 
-u16 PS_CPU::hw_read_half(struct lightrec_state *state,
+static u16 hw_read_half(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u16 val;
 
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
 
-	val = PSX_MemRead16(timestamp, mem);
+	val = PSX_MemRead16(&timestamp, mem);
 
 	/* Calling PSX_MemRead* might update timestamp - Make sure
 	 * here that state->current_cycle stays in sync. */
@@ -3053,7 +3221,7 @@ u16 PS_CPU::hw_read_half(struct lightrec_state *state,
 	return val;
 }
 
-u16 PS_CPU::pgxp_nonhw_read_half(struct lightrec_state *state,
+static u16 pgxp_nonhw_read_half(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u16 val = LE16TOH(*(u16 *)host);
@@ -3066,7 +3234,7 @@ u16 PS_CPU::pgxp_nonhw_read_half(struct lightrec_state *state,
 	return val;
 }
 
-u16 PS_CPU::pgxp_hw_read_half(struct lightrec_state *state,
+static u16 pgxp_hw_read_half(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u16 val;
@@ -3075,7 +3243,7 @@ u16 PS_CPU::pgxp_hw_read_half(struct lightrec_state *state,
 
 	u32 kmem = kunseg(mem);
 
-	val = PSX_MemRead16(timestamp, kmem);
+	val = PSX_MemRead16(&timestamp, kmem);
 
 	if((opcode >> 26) == OP_LH)
 		PGXP_CPU_LH(opcode, val, mem);
@@ -3091,14 +3259,14 @@ u16 PS_CPU::pgxp_hw_read_half(struct lightrec_state *state,
 	return val;
 }
 
-u32 PS_CPU::hw_read_word(struct lightrec_state *state,
+static u32 hw_read_word(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u32 val;
 
 	pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
 
-	val = PSX_MemRead32(timestamp, mem);
+	val = PSX_MemRead32(&timestamp, mem);
 
 	/* Calling PSX_MemRead* might update timestamp - Make sure
 	 * here that state->current_cycle stays in sync. */
@@ -3109,7 +3277,7 @@ u32 PS_CPU::hw_read_word(struct lightrec_state *state,
 	return val;
 }
 
-u32 PS_CPU::pgxp_nonhw_read_word(struct lightrec_state *state,
+static u32 pgxp_nonhw_read_word(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u32 val = LE32TOH(*(u32 *)host);
@@ -3136,7 +3304,7 @@ u32 PS_CPU::pgxp_nonhw_read_word(struct lightrec_state *state,
 	return val;
 }
 
-u32 PS_CPU::pgxp_hw_read_word(struct lightrec_state *state,
+static u32 pgxp_hw_read_word(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	u32 val;
@@ -3145,7 +3313,7 @@ u32 PS_CPU::pgxp_hw_read_word(struct lightrec_state *state,
 
 	u32 kmem = kunseg(mem);
 
-	val = PSX_MemRead32(timestamp, kmem);
+	val = PSX_MemRead32(&timestamp, kmem);
 
 	switch (opcode >> 26){
 		case OP_LWL:
@@ -3175,7 +3343,7 @@ u32 PS_CPU::pgxp_hw_read_word(struct lightrec_state *state,
 	return val;
 }
 
-struct lightrec_mem_map_ops PS_CPU::pgxp_nonhw_regs_ops = {
+static struct lightrec_mem_map_ops pgxp_nonhw_regs_ops = {
 	.sb = pgxp_nonhw_write_byte,
 	.sh = pgxp_nonhw_write_half,
 	.sw = pgxp_nonhw_write_word,
@@ -3184,7 +3352,7 @@ struct lightrec_mem_map_ops PS_CPU::pgxp_nonhw_regs_ops = {
 	.lw = pgxp_nonhw_read_word,
 };
 
-struct lightrec_mem_map_ops PS_CPU::pgxp_hw_regs_ops = {
+static struct lightrec_mem_map_ops pgxp_hw_regs_ops = {
 	.sb = pgxp_hw_write_byte,
 	.sh = pgxp_hw_write_half,
 	.sw = pgxp_hw_write_word,
@@ -3193,7 +3361,7 @@ struct lightrec_mem_map_ops PS_CPU::pgxp_hw_regs_ops = {
 	.lw = pgxp_hw_read_word,
 };
 
-struct lightrec_mem_map_ops PS_CPU::hw_regs_ops = {
+static struct lightrec_mem_map_ops hw_regs_ops = {
 	.sb = hw_write_byte,
 	.sh = hw_write_half,
 	.sw = hw_write_word,
@@ -3202,7 +3370,7 @@ struct lightrec_mem_map_ops PS_CPU::hw_regs_ops = {
 	.lw = hw_read_word,
 };
 
-u32 PS_CPU::cache_ctrl_read_word(struct lightrec_state *state,
+static u32 cache_ctrl_read_word(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem)
 {
 	if (PGXP_GetModes() & PGXP_MODE_MEMORY)
@@ -3211,7 +3379,7 @@ u32 PS_CPU::cache_ctrl_read_word(struct lightrec_state *state,
 	return BIU;
 }
 
-void PS_CPU::cache_ctrl_write_word(struct lightrec_state *state,
+static void cache_ctrl_write_word(struct lightrec_state *state,
 		u32 opcode, void *host, u32 mem, u32 val)
 {
 	BIU = val;
@@ -3220,7 +3388,7 @@ void PS_CPU::cache_ctrl_write_word(struct lightrec_state *state,
 		PGXP_CPU_SW(opcode, BIU, mem);
 }
 
-struct lightrec_mem_map_ops PS_CPU::cache_ctrl_ops = {
+static struct lightrec_mem_map_ops cache_ctrl_ops = {
 	.sb = NULL,
 	.sh = NULL,
 	.sw = cache_ctrl_write_word,
@@ -3229,7 +3397,7 @@ struct lightrec_mem_map_ops PS_CPU::cache_ctrl_ops = {
 	.lw = cache_ctrl_read_word,
 };
 
-struct lightrec_mem_map PS_CPU::lightrec_map[] = {
+static struct lightrec_mem_map lightrec_map[] = {
 	[PSX_MAP_KERNEL_USER_RAM] = {
 		/* Kernel and user memory */
 		.pc = 0x00000000,
@@ -3287,7 +3455,7 @@ struct lightrec_mem_map PS_CPU::lightrec_map[] = {
 	},
 };
 
-struct lightrec_ops PS_CPU::ops = {
+static struct lightrec_ops ops = {
 	.cop0_ops = {
 		.mfc = cop_mfc,
 		.cfc = cop_cfc,
@@ -3304,7 +3472,7 @@ struct lightrec_ops PS_CPU::ops = {
 	},
 };
 
-struct lightrec_ops PS_CPU::pgxp_ops = {
+static struct lightrec_ops pgxp_ops = {
 	.cop0_ops = {
 		.mfc = cop_mfc,
 		.cfc = cop_cfc,
@@ -3321,134 +3489,144 @@ struct lightrec_ops PS_CPU::pgxp_ops = {
 	},
 };
 
-int PS_CPU::lightrec_plugin_init()
+static int lightrec_plugin_init(PS_CPU *self)
 {
-	struct lightrec_ops *cop_ops;
-	uint8_t *psxM = (uint8_t *) MainRAM->data8;
-	uint8_t *psxR = (uint8_t *) BIOSROM->data8;
-	uint8_t *psxH = (uint8_t *) ScratchRAM->data8;
-	uint8_t *psxP = (uint8_t *) PSX_LoadExpansion1();
+   struct lightrec_ops *cop_ops;
+   uint8_t *psxM = (uint8_t *) MainRAM_data8();
+   uint8_t *psxR = (uint8_t *) BIOSROM_data8();
+   uint8_t *psxH = (uint8_t *) ScratchRAM_data8();
+   uint8_t *psxP = (uint8_t *) PSX_LoadExpansion1();
 
-	if(lightrec_state)
-		lightrec_destroy(lightrec_state);
-	else{
-		log_cb(RETRO_LOG_INFO, "Lightrec map addresses: M=0x%lx, P=0x%lx, R=0x%lx, H=0x%lx\n",
-			(uintptr_t) psxM,
-			(uintptr_t) psxP,
-			(uintptr_t) psxR,
-			(uintptr_t) psxH);
-	}
+   (void)self;
 
-	lightrec_map[PSX_MAP_KERNEL_USER_RAM].address = psxM;
+   if (lightrec_state)
+      lightrec_destroy(lightrec_state);
+   else
+   {
+      log_cb(RETRO_LOG_INFO, "Lightrec map addresses: M=0x%lx, P=0x%lx, R=0x%lx, H=0x%lx\n",
+            (uintptr_t) psxM,
+            (uintptr_t) psxP,
+            (uintptr_t) psxR,
+            (uintptr_t) psxH);
+   }
 
-	if(psx_mmap == 4){
-		lightrec_map[PSX_MAP_MIRROR1].address = psxM + 0x200000;
-		lightrec_map[PSX_MAP_MIRROR2].address = psxM + 0x400000;
-		lightrec_map[PSX_MAP_MIRROR3].address = psxM + 0x600000;
-	}
+   lightrec_map[PSX_MAP_KERNEL_USER_RAM].address = psxM;
 
-	lightrec_map[PSX_MAP_BIOS].address = psxR;
-	lightrec_map[PSX_MAP_SCRATCH_PAD].address = psxH;
-	lightrec_map[PSX_MAP_PARALLEL_PORT].address = psxP;
+   if (psx_mmap == 4)
+   {
+      lightrec_map[PSX_MAP_MIRROR1].address = psxM + 0x200000;
+      lightrec_map[PSX_MAP_MIRROR2].address = psxM + 0x400000;
+      lightrec_map[PSX_MAP_MIRROR3].address = psxM + 0x600000;
+   }
 
-	if (PGXP_GetModes() & (PGXP_MODE_MEMORY | PGXP_MODE_GTE)){
-		lightrec_map[PSX_MAP_HW_REGISTERS].ops = &pgxp_hw_regs_ops;
-		lightrec_map[PSX_MAP_KERNEL_USER_RAM].ops = &pgxp_nonhw_regs_ops;
-		lightrec_map[PSX_MAP_BIOS].ops = &pgxp_nonhw_regs_ops;
-		lightrec_map[PSX_MAP_SCRATCH_PAD].ops = &pgxp_nonhw_regs_ops;
+   lightrec_map[PSX_MAP_BIOS].address          = psxR;
+   lightrec_map[PSX_MAP_SCRATCH_PAD].address   = psxH;
+   lightrec_map[PSX_MAP_PARALLEL_PORT].address = psxP;
 
-		cop_ops = &pgxp_ops;
-	} else {
-		lightrec_map[PSX_MAP_HW_REGISTERS].ops = &hw_regs_ops;
-		lightrec_map[PSX_MAP_KERNEL_USER_RAM].ops = NULL;
-		lightrec_map[PSX_MAP_BIOS].ops = NULL;
-		lightrec_map[PSX_MAP_SCRATCH_PAD].ops = NULL;
+   if (PGXP_GetModes() & (PGXP_MODE_MEMORY | PGXP_MODE_GTE))
+   {
+      lightrec_map[PSX_MAP_HW_REGISTERS].ops    = &pgxp_hw_regs_ops;
+      lightrec_map[PSX_MAP_KERNEL_USER_RAM].ops = &pgxp_nonhw_regs_ops;
+      lightrec_map[PSX_MAP_BIOS].ops            = &pgxp_nonhw_regs_ops;
+      lightrec_map[PSX_MAP_SCRATCH_PAD].ops     = &pgxp_nonhw_regs_ops;
 
-		cop_ops = &ops;
-	}
+      cop_ops = &pgxp_ops;
+   }
+   else
+   {
+      lightrec_map[PSX_MAP_HW_REGISTERS].ops    = &hw_regs_ops;
+      lightrec_map[PSX_MAP_KERNEL_USER_RAM].ops = NULL;
+      lightrec_map[PSX_MAP_BIOS].ops            = NULL;
+      lightrec_map[PSX_MAP_SCRATCH_PAD].ops     = NULL;
 
-	lightrec_state = lightrec_init(name,
-			lightrec_map, ARRAY_SIZE(lightrec_map), cop_ops);
+      cop_ops = &ops;
+   }
 
-	lightrec_set_invalidate_mode(lightrec_state, psx_dynarec_invalidate);
+   lightrec_state = lightrec_init(name,
+         lightrec_map, ARRAY_SIZE(lightrec_map), cop_ops);
 
-	return 0;
+   lightrec_set_invalidate_mode(lightrec_state, psx_dynarec_invalidate);
+
+   return 0;
 }
 
-int32_t PS_CPU::lightrec_plugin_execute(int32_t timestamp)
+static int32_t lightrec_plugin_execute(PS_CPU *self, int32_t timestamp)
 {
-	uint32_t PC;
-	uint32_t new_PC;
-	uint32_t new_PC_mask;
-	uint32_t LDWhich;
-	uint32_t LDValue;
+   uint32_t PC;
+   uint32_t new_PC;
+   uint32_t new_PC_mask;
+   uint32_t LDWhich;
+   uint32_t LDValue;
+   u32      flags;
 
-	BACKING_TO_ACTIVE;
+   (void)self;
+   (void)new_PC_mask;
 
-	u32 flags;
+   BACKING_TO_ACTIVE;
 
-	do {
+   do
+   {
 #ifdef LIGHTREC_DEBUG
-		u32 oldpc = PC;
+      u32 oldpc = PC;
 #endif
-		/* GPR_full is laid out as [GPR[0..31], LO, HI, LD_Dummy].
-		 * lightrec's u32 regs[34] expects [r0..r31, LO, HI] in that
-		 * exact order, so the first 34 entries of GPR_full are a
-		 * direct match - no scratch buffer or memcpy required. The
-		 * LD_Dummy slot at [34] is past lightrec's view and stays
-		 * intact across the call. Saves 256 bytes of memcpy traffic
-		 * per iteration of this hot loop. */
-		lightrec_restore_registers(lightrec_state, GPR_full);
-		lightrec_reset_cycle_count(lightrec_state, timestamp);
+      /* GPR_full is laid out as [GPR[0..31], LO, HI, LD_Dummy].
+       * lightrec's u32 regs[34] expects [r0..r31, LO, HI] in that
+       * exact order, so the first 34 entries of GPR_full are a
+       * direct match - no scratch buffer or memcpy required. The
+       * LD_Dummy slot at [34] is past lightrec's view and stays
+       * intact across the call. Saves 256 bytes of memcpy traffic
+       * per iteration of this hot loop. */
+      lightrec_restore_registers(lightrec_state, s_cpu.GPR_full);
+      lightrec_reset_cycle_count(lightrec_state, timestamp);
 
-		if (next_interpreter > 0 || psx_dynarec == DYNAREC_RUN_INTERPRETER)
-			PC = lightrec_run_interpreter(lightrec_state,PC);
-		else if (psx_dynarec == DYNAREC_EXECUTE)
-			PC = lightrec_execute(lightrec_state, PC, next_event_ts);
-		else if (psx_dynarec == DYNAREC_EXECUTE_ONE)
-			PC = lightrec_execute_one(lightrec_state,PC);
+      if (next_interpreter > 0 || psx_dynarec == DYNAREC_RUN_INTERPRETER)
+         PC = lightrec_run_interpreter(lightrec_state, PC);
+      else if (psx_dynarec == DYNAREC_EXECUTE)
+         PC = lightrec_execute(lightrec_state, PC, next_event_ts);
+      else if (psx_dynarec == DYNAREC_EXECUTE_ONE)
+         PC = lightrec_execute_one(lightrec_state, PC);
 
-		timestamp = lightrec_current_cycle_count(
-				lightrec_state);
+      timestamp = lightrec_current_cycle_count(lightrec_state);
 
-		lightrec_dump_registers(lightrec_state, GPR_full);
+      lightrec_dump_registers(lightrec_state, s_cpu.GPR_full);
 
-		flags = lightrec_exit_flags(lightrec_state);
+      flags = lightrec_exit_flags(lightrec_state);
 
-		if (flags & LIGHTREC_EXIT_SEGFAULT) {
-			log_cb(RETRO_LOG_ERROR, "Exiting at cycle 0x%08x\n",
-					timestamp);
-			exit(1);
-		}
+      if (flags & LIGHTREC_EXIT_SEGFAULT)
+      {
+         log_cb(RETRO_LOG_ERROR, "Exiting at cycle 0x%08x\n", timestamp);
+         exit(1);
+      }
 
-		if (flags & LIGHTREC_EXIT_SYSCALL)
-			PC = Exception(EXCEPTION_SYSCALL, PC, PC, 0);
+      if (flags & LIGHTREC_EXIT_SYSCALL)
+         PC = CPU_Exception(EXCEPTION_SYSCALL, PC, PC, 0);
 
 #ifdef LIGHTREC_DEBUG
-		if (timestamp >= lightrec_begin_cycles && PC != oldpc){
-			print_for_big_ass_debugger(timestamp, PC);
-		}
+      if (timestamp >= lightrec_begin_cycles && PC != oldpc)
+         print_for_big_ass_debugger(timestamp, PC);
 #endif
-		if ((CP0.SR & CP0.CAUSE & 0xFF00) && (CP0.SR & 1)) {
-			/* Handle software interrupts */
-			PC = Exception(EXCEPTION_INT, PC, PC, 0);
-		}
-	} while(MDFN_LIKELY(PSX_EventHandler(timestamp)));
+      if ((CP0.SR & CP0.CAUSE & 0xFF00) && (CP0.SR & 1))
+      {
+         /* Handle software interrupts */
+         PC = CPU_Exception(EXCEPTION_INT, PC, PC, 0);
+      }
+   } while (MDFN_LIKELY(PSX_EventHandler(timestamp)));
 
-	ACTIVE_TO_BACKING;
+   ACTIVE_TO_BACKING;
 
-	return timestamp;
+   return timestamp;
 }
 
-void PS_CPU::lightrec_plugin_clear(u32 addr, u32 size)
+void CPU_LightrecClear_method(PS_CPU *self, uint32_t addr, uint32_t size)
 {
-	if (lightrec_state)	/* size * 4: uses DMA units */
-		lightrec_invalidate(lightrec_state, addr, size * 4);
+   (void)self;
+   if (lightrec_state)  /* size * 4: uses DMA units */
+      lightrec_invalidate(lightrec_state, addr, size * 4);
 }
 
-void PS_CPU::lightrec_plugin_shutdown(void)
+static void lightrec_plugin_shutdown(void)
 {
-	lightrec_destroy(lightrec_state);
+   lightrec_destroy(lightrec_state);
 }
 
 #endif
