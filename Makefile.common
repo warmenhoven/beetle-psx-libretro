@@ -207,6 +207,7 @@ endif
                   $(CDROM_DIR)/misc.cpp
 
    SOURCES_C +=   $(CDROM_DIR)/cdromif.c \
+                  $(CDROM_DIR)/cdaccess_track.c \
                   $(CDROM_DIR)/CDUtility.c \
                   $(CDROM_DIR)/galois.c \
                   $(CDROM_DIR)/l-ec.c \
@@ -328,7 +329,7 @@ ifeq ($(HAVE_CHD), 1)
       SOURCES_C += $(LIBCHDR_SOURCES_C)
    endif
 
-   SOURCES_CXX += $(CDROM_DIR)/CDAccess_CHD.cpp
+   SOURCES_C += $(CDROM_DIR)/CDAccess_CHD.c
 endif ## ifeq ($(HAVE_CHD), 1)
 
 ifeq ($(HAVE_LIGHTREC), 1)

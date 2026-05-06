@@ -15,39 +15,43 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <new>
-#include <map>
-#include <string>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <boolean.h>
 
-#include <mednafen/mednafen.h>
-#include <mednafen/general.h>
-#include <mednafen/mednafen-endian.h>
-#include <mednafen/error.h>
-#include <mednafen/FileStream.h>
+#include <streams/file_stream.h>
+#include <libretro.h>
+
+#include "../mednafen.h"
+#include "../mednafen-endian.h"
+#include "../error.h"
+#include "../general_c.h"
+#include "../FileStream.h"
 
 #include "CDAccess.h"
 #include "CDAccess_CHD.h"
 #include "cdaccess_track.h"
+#include "CDUtility.h"
 
 #include <libchdr/chd.h>
 
 extern retro_log_printf_t log_cb;
 
+#define CHD_PATH_BUF 4096
+
 /* ------------------------------------------------------------------
- * Concrete struct - embeds CDAccess as the first member so that a
- * `CDAccess *` returned from the factory can be safely down-cast to
- * `CDAccess_CHD *` inside the vtable bodies.
- *
- * This file remains a .cpp because it still uses std::string and
- * std::map for SBI-path resolution and the SubQ replacement table;
- * those will move to plain C in a follow-up stage.
+ * Concrete struct.  std::string sbi_path is gone (replaced with a
+ * fixed char buffer); std::map<uint32, 12-byte> SubQReplaceMap is
+ * replaced with a sorted-array subq_map (cdaccess_track.h).
  * ------------------------------------------------------------------ */
 
 struct CDAccess_CHD
 {
    CDAccess     base;
 
-   FileStream   file_stream;
+   struct FileStream   file_stream;
    chd_file    *chd;
    uint8_t     *hunkmem;        /* hunk-data cache */
    int          oldhunk;        /* last hunknum read, -1 sentinel */
@@ -58,11 +62,11 @@ struct CDAccess_CHD
    int32_t      total_sectors;
    TOC         *ptoc;
 
-   std::string  sbi_path;
+   char         sbi_path[CHD_PATH_BUF];
 
    CDRFILE_TRACK_INFO Tracks[100];   /* Tracks #0 (HMM?) through 99 */
 
-   std::map<uint32, cpp11_array_doodad> SubQReplaceMap;
+   subq_map     SubQReplaceMap;
 };
 
 /* Disk-image (rip) track/sector formats - kept file-static. */
@@ -78,22 +82,22 @@ enum
    _DI_FORMAT_COUNT
 };
 
-/* libchdr file-IO callbacks - operate on a FileStream pointer. */
+/* libchdr file-IO callbacks - operate on a struct FileStream pointer. */
 
 static uint64_t Callback_fsize(void *user_data)
 {
-   FileStream *file_stream = (FileStream *)user_data;
+   struct FileStream *file_stream = (struct FileStream *)user_data;
    return stream_size(&file_stream->base);
 }
 
 static size_t Callback_fread(void *buffer, size_t size, size_t count,
       void *user_data)
 {
-   FileStream *file_stream;
+   struct FileStream *file_stream;
    if (size == 0 || count == 0)
       return 0;
 
-   file_stream = (FileStream *)user_data;
+   file_stream = (struct FileStream *)user_data;
    return stream_read(&file_stream->base, buffer, count * size) / size;
 }
 
@@ -105,12 +109,12 @@ static int Callback_fclose(void *user_data)
 
 static int Callback_fseek(void *user_data, int64_t offset, int whence)
 {
-   FileStream *file_stream = (FileStream *)user_data;
+   struct FileStream *file_stream = (struct FileStream *)user_data;
    stream_seek(&file_stream->base, offset, whence);
    return 0;
 }
 
-static const chd_core_file_callbacks chd_callbacks =
+static const core_file_callbacks chd_callbacks =
 {
    Callback_fsize,
    Callback_fread,
@@ -118,15 +122,37 @@ static const chd_core_file_callbacks chd_callbacks =
    Callback_fseek
 };
 
+/* Forward declaration - LoadSBI is called from Read_TOC. */
+static int CDAccess_CHD_LoadSBI(struct CDAccess_CHD *self,
+      const char *sbi_path);
+
 /* ------------------------------------------------------------------
- * Body methods - take an explicit `CDAccess_CHD *self` first arg.
+ * Body methods.
  * ------------------------------------------------------------------ */
 
-static bool CDAccess_CHD_ImageOpen(CDAccess_CHD *self, const char *path,
-      bool image_memcache)
+static bool CDAccess_CHD_ImageOpen(struct CDAccess_CHD *self,
+      const char *path, bool image_memcache)
 {
-   chd_error err = chd_open_core_file_callbacks(&chd_callbacks,
-         &self->file_stream, CHD_OPEN_READ, NULL, &self->chd);
+   const chd_header *head;
+   chd_error         err;
+   int               plba       = -150;
+   uint32_t          fileOffset = 0;
+   char              type[64];
+   char              subtype[32];
+   char              pgtype[32];
+   char              pgsub[32];
+   char              meta_entry[256];
+   uint32_t          meta_entry_size = 0;
+   char              base_dir[CHD_PATH_BUF];
+   char              file_base[CHD_PATH_BUF];
+   char              file_ext[CHD_PATH_BUF];
+   char              sbi_ext[4];
+   size_t            ext_len;
+   int               i;
+   char              sbi_basename[CHD_PATH_BUF];
+
+   err = chd_open_core_file_callbacks(&chd_callbacks, &self->file_stream,
+         CHD_OPEN_READ, NULL, &self->chd);
    if (err != CHDERR_NONE)
       return false;
 
@@ -137,25 +163,20 @@ static bool CDAccess_CHD_ImageOpen(CDAccess_CHD *self, const char *path,
          return false;
    }
 
-   /* allocate storage for sector reads */
-   const chd_header *head = chd_get_header(self->chd);
+   head = chd_get_header(self->chd);
    self->hunkmem = (uint8_t *)malloc(head->hunkbytes);
    self->oldhunk = -1;
 
    log_cb(RETRO_LOG_INFO, "chd_load '%s' hunkbytes=%d\n", path,
          head->hunkbytes);
 
-   int plba           = -150;
-   uint32_t fileOffset = 0;
-
-   char type[64], subtype[32], pgtype[32], pgsub[32];
-
-   char meta_entry[256];
-   uint32_t meta_entry_size = 0;
-
-   while (1)
+   for (;;)
    {
-      int tkid = 0, frames = 0, pad = 0, pregap = 0, postgap = 0;
+      int tkid    = 0;
+      int frames  = 0;
+      int pad     = 0;
+      int pregap  = 0;
+      int postgap = 0;
 
       err = chd_get_metadata(self->chd, CDROM_TRACK_METADATA2_TAG,
             self->NumTracks, meta_entry, sizeof(meta_entry),
@@ -194,7 +215,6 @@ static bool CDAccess_CHD_ImageOpen(CDAccess_CHD *self, const char *path,
          return false;
       }
 
-      /* add track */
       self->NumTracks++;
 
       if (self->NumTracks != tkid)
@@ -241,31 +261,46 @@ static bool CDAccess_CHD_ImageOpen(CDAccess_CHD *self, const char *path,
          self->FirstTrack = tkid;
       if (tkid > self->LastTrack)
          self->LastTrack = tkid;
+
+      (void)pad;
+      (void)pgsub;
    }
 
-   /* prepare sbi file path */
+   /* Build sbi file path: <dir>/<base>.<sbi_ext> where sbi_ext
+    * matches the original disc-image extension's case. */
+   sbi_ext[0] = 's';
+   sbi_ext[1] = 'b';
+   sbi_ext[2] = 'i';
+   sbi_ext[3] = 0;
+
+   MDFN_GetFilePathComponents_c(path,
+         base_dir,  sizeof(base_dir),
+         file_base, sizeof(file_base),
+         file_ext,  sizeof(file_ext));
+
+   ext_len = strlen(file_ext);
+   if (ext_len == 4 && file_ext[0] == '.')
    {
-      std::string base_dir, file_base, file_ext;
-      char sbi_ext[4] = { 's', 'b', 'i', 0 };
-
-      MDFN_GetFilePathComponents(path, &base_dir, &file_base, &file_ext);
-
-      if (file_ext.length() == 4 && file_ext[0] == '.')
+      for (i = 0; i < 3; i++)
       {
-         for (int i = 0; i < 3; i++)
-         {
-            if (file_ext[1 + i] >= 'A' && file_ext[1 + i] <= 'Z')
-               sbi_ext[i] += 'A' - 'a';
-         }
+         if (file_ext[1 + i] >= 'A' && file_ext[1 + i] <= 'Z')
+            sbi_ext[i] += 'A' - 'a';
       }
-      self->sbi_path = MDFN_EvalFIP(base_dir,
-            file_base + std::string(".") + std::string(sbi_ext));
    }
+
+   /* sbi_basename = file_base + "." + sbi_ext */
+   {
+      size_t n = snprintf(sbi_basename, sizeof(sbi_basename),
+            "%s.%s", file_base, sbi_ext);
+      (void)n;
+   }
+   MDFN_EvalFIP_c(base_dir, sbi_basename,
+         self->sbi_path, sizeof(self->sbi_path));
 
    return true;
 }
 
-static void CDAccess_CHD_Cleanup(CDAccess_CHD *self)
+static void CDAccess_CHD_Cleanup(struct CDAccess_CHD *self)
 {
    if (self->chd)
       chd_close(self->chd);
@@ -273,23 +308,25 @@ static void CDAccess_CHD_Cleanup(CDAccess_CHD *self)
    if (self->hunkmem)
       free(self->hunkmem);
 
-   /* file_stream is an in-place FileStream - close it (NOT destroy). */
+   /* file_stream is an in-place struct FileStream - close it (NOT destroy). */
    stream_close(&self->file_stream.base);
 }
 
 /* MakeSubPQ ORs the simulated P and Q subchannel data into SubPWBuf. */
-static int32_t CDAccess_CHD_MakeSubPQ(CDAccess_CHD *self, int32_t lba,
-      uint8_t *SubPWBuf)
+static int32_t CDAccess_CHD_MakeSubPQ(struct CDAccess_CHD *self,
+      int32_t lba, uint8_t *SubPWBuf)
 {
-   unsigned i;
-   uint8_t  buf[0xC];
-   uint8_t  adr, control;
-   int32_t  track;
-   uint32_t lba_relative;
-   uint32_t ma, sa, fa;
-   uint32_t m, s, f;
-   uint8_t  pause_or = 0x00;
-   bool     track_found = false;
+   unsigned        i;
+   uint8_t         buf[0xC];
+   uint8_t         adr;
+   uint8_t         control;
+   int32_t         track;
+   uint32_t        lba_relative;
+   uint32_t        ma, sa, fa;
+   uint32_t        m, s, f;
+   uint8_t         pause_or = 0x00;
+   bool            track_found = false;
+   const uint8_t  *sbi_replacement;
 
    for (track = self->FirstTrack;
          track < (self->FirstTrack + self->NumTracks); track++)
@@ -328,7 +365,6 @@ static int32_t CDAccess_CHD_MakeSubPQ(CDAccess_CHD *self, int32_t lba,
    /* Pregap between audio->data track. */
    {
       int32_t pg_offset = (int32_t)lba - self->Tracks[track].LBA;
-
       if (pg_offset < -150)
       {
          if ((self->Tracks[track].subq_control & SUBQ_CTRLF_DATA)
@@ -359,14 +395,9 @@ static int32_t CDAccess_CHD_MakeSubPQ(CDAccess_CHD *self, int32_t lba,
 
    subq_generate_checksum(buf);
 
-   if (!self->SubQReplaceMap.empty())
-   {
-      std::map<uint32, cpp11_array_doodad>::const_iterator it
-         = self->SubQReplaceMap.find(LBA_to_ABA(lba));
-
-      if (it != self->SubQReplaceMap.end())
-         memcpy(buf, it->second.data, 12);
-   }
+   sbi_replacement = subq_map_find(&self->SubQReplaceMap, LBA_to_ABA(lba));
+   if (sbi_replacement)
+      memcpy(buf, sbi_replacement, 12);
 
    for (i = 0; i < 96; i++)
       SubPWBuf[i] |= (((buf[i >> 3] >> (7 - (i & 0x7))) & 1) ? 0x40 : 0x00)
@@ -378,10 +409,10 @@ static int32_t CDAccess_CHD_MakeSubPQ(CDAccess_CHD *self, int32_t lba,
 static bool CDAccess_CHD_Read_Raw_Sector(CDAccess *base_self, uint8_t *buf,
       int32_t lba)
 {
-   CDAccess_CHD *self = (CDAccess_CHD *)base_self;
-   uint8_t  SimuQ[0xC];
-   int32_t  track;
-   CDRFILE_TRACK_INFO *ct;
+   struct CDAccess_CHD *self = (struct CDAccess_CHD *)base_self;
+   uint8_t              SimuQ[0xC];
+   int32_t              track;
+   CDRFILE_TRACK_INFO  *ct;
 
    /* Leadout synthesis */
    if (lba >= self->total_sectors)
@@ -414,8 +445,8 @@ static bool CDAccess_CHD_Read_Raw_Sector(CDAccess *base_self, uint8_t *buf,
    /* Pregap and postgap synthesis */
    if (lba < (ct->LBA - ct->pregap_dv) || lba >= (ct->LBA + ct->sectors))
    {
-      int32_t pg_offset = lba - ct->LBA;
-      CDRFILE_TRACK_INFO *et = ct;
+      int32_t              pg_offset = lba - ct->LBA;
+      CDRFILE_TRACK_INFO  *et         = ct;
 
       if (pg_offset < -150)
       {
@@ -446,12 +477,12 @@ static bool CDAccess_CHD_Read_Raw_Sector(CDAccess *base_self, uint8_t *buf,
    }
    else
    {
-      const chd_header *head = chd_get_header(self->chd);
-      int cad     = lba - ct->LBA + ct->FileOffset;
-      int sph     = head->hunkbytes / (2352 + 96);
-      int hunknum = cad / sph;
-      int hunkofs = cad % sph;
-      int err     = CHDERR_NONE;
+      const chd_header *head    = chd_get_header(self->chd);
+      int               cad     = lba - ct->LBA + ct->FileOffset;
+      int               sph     = head->hunkbytes / (2352 + 96);
+      int               hunknum = cad / sph;
+      int               hunkofs = cad % sph;
+      int               err     = CHDERR_NONE;
 
       /* Each hunk holds ~8 sectors; cache the most-recently-read one. */
       if (hunknum != self->oldhunk)
@@ -475,18 +506,16 @@ static bool CDAccess_CHD_Read_Raw_Sector(CDAccess *base_self, uint8_t *buf,
 static bool CDAccess_CHD_Read_Raw_PW(CDAccess *base_self, uint8_t *buf,
       int32_t lba)
 {
-   CDAccess_CHD *self = (CDAccess_CHD *)base_self;
+   struct CDAccess_CHD *self = (struct CDAccess_CHD *)base_self;
    memset(buf, 0, 96);
    CDAccess_CHD_MakeSubPQ(self, lba, buf);
    return true;
 }
 
-static int CDAccess_CHD_LoadSBI(CDAccess_CHD *self, const char *sbi_path);
-
 static bool CDAccess_CHD_Read_TOC(CDAccess *base_self, TOC *toc)
 {
-   CDAccess_CHD *self = (CDAccess_CHD *)base_self;
-   int i;
+   struct CDAccess_CHD *self = (struct CDAccess_CHD *)base_self;
+   int                  i;
 
    TOC_Clear(toc);
 
@@ -509,27 +538,27 @@ static bool CDAccess_CHD_Read_TOC(CDAccess *base_self, TOC *toc)
    if (toc->last_track < 99)
       toc->tracks[toc->last_track + 1] = toc->tracks[100];
 
-   if (!self->SubQReplaceMap.empty())
-      self->SubQReplaceMap.clear();
+   subq_map_clear(&self->SubQReplaceMap);
 
    /* Load SBI file, if present. */
-   if (filestream_exists(self->sbi_path.c_str()))
-      CDAccess_CHD_LoadSBI(self, self->sbi_path.c_str());
+   if (filestream_exists(self->sbi_path))
+      CDAccess_CHD_LoadSBI(self, self->sbi_path);
 
    self->ptoc = toc;
    log_cb(RETRO_LOG_INFO, "chd_read_toc: finished\n");
    return true;
 }
 
-static int CDAccess_CHD_LoadSBI(CDAccess_CHD *self, const char *sbi_path)
+static int CDAccess_CHD_LoadSBI(struct CDAccess_CHD *self,
+      const char *sbi_path)
 {
    /* All return paths past mdfn_filestream_init pass through cleanup:
-    * which closes the in-place FileStream. */
-   uint8_t header[4];
-   uint8_t ed[4 + 10];
-   uint8_t tmpq[12];
-   FileStream sbis;
-   int ret = 0;
+    * which closes the in-place struct FileStream. */
+   uint8_t    header[4];
+   uint8_t    ed[4 + 10];
+   uint8_t    tmpq[12];
+   struct FileStream sbis;
+   int        ret = 0;
 
    mdfn_filestream_init(&sbis, sbi_path);
 
@@ -543,6 +572,8 @@ static int CDAccess_CHD_LoadSBI(CDAccess_CHD *self, const char *sbi_path)
 
    while (stream_read(&sbis.base, ed, sizeof(ed)) == sizeof(ed))
    {
+      uint32_t aba;
+
       if (!BCD_is_valid(ed[0]) || !BCD_is_valid(ed[1])
             || !BCD_is_valid(ed[2]))
       {
@@ -562,12 +593,12 @@ static int CDAccess_CHD_LoadSBI(CDAccess_CHD *self, const char *sbi_path)
       tmpq[10] ^= 0xFF;
       tmpq[11] ^= 0xFF;
 
-      {
-         uint32_t aba = AMSF_to_ABA(BCD_to_U8(ed[0]),
-               BCD_to_U8(ed[1]), BCD_to_U8(ed[2]));
-         memcpy(self->SubQReplaceMap[aba].data, tmpq, 12);
-      }
+      aba = AMSF_to_ABA(BCD_to_U8(ed[0]),
+            BCD_to_U8(ed[1]), BCD_to_U8(ed[2]));
+      subq_map_insert(&self->SubQReplaceMap, aba, tmpq);
    }
+
+   subq_map_finalize(&self->SubQReplaceMap);
 
    log_cb(RETRO_LOG_INFO, "[CHD] Loaded SBI file %s\n", sbi_path);
 cleanup:
@@ -583,13 +614,8 @@ static void CDAccess_CHD_Eject(CDAccess *base_self, bool eject_status)
 
 static void CDAccess_CHD_destroy(CDAccess *base_self)
 {
-   CDAccess_CHD *self = (CDAccess_CHD *)base_self;
+   struct CDAccess_CHD *self = (struct CDAccess_CHD *)base_self;
    CDAccess_CHD_Cleanup(self);
-   /* Manually call destructors for the C++ members embedded in self
-    * (std::string, std::map) - these were created by `new` in the
-    * factory below.  free() the memory afterwards. */
-   self->sbi_path.~basic_string();
-   self->SubQReplaceMap.~map();
    free(self);
 }
 
@@ -597,21 +623,16 @@ static void CDAccess_CHD_destroy(CDAccess *base_self)
  * Factory.
  * ------------------------------------------------------------------ */
 
-extern "C" CDAccess *CDAccess_CHD_New(bool *success, const char *path,
+CDAccess *CDAccess_CHD_New(bool *success, const char *path,
       bool image_memcache)
 {
-   /* Allocate raw and use placement-new to construct the C++ members. */
-   CDAccess_CHD *self = (CDAccess_CHD *)calloc(1, sizeof(*self));
+   struct CDAccess_CHD *self =
+      (struct CDAccess_CHD *)calloc(1, sizeof(*self));
    if (!self)
    {
       *success = false;
       return NULL;
    }
-
-   /* Placement-new on the std::string and std::map members.  The
-    * destroy() vtable entry will invoke their destructors. */
-   new (&self->sbi_path) std::string();
-   new (&self->SubQReplaceMap) std::map<uint32, cpp11_array_doodad>();
 
    /* Vtable */
    self->base.Read_Raw_Sector = CDAccess_CHD_Read_Raw_Sector;
@@ -626,7 +647,7 @@ extern "C" CDAccess *CDAccess_CHD_New(bool *success, const char *path,
    self->FirstTrack    = 99;   /* opposites for min/max init */
    self->LastTrack     = 0;
 
-   /* file_stream is in-place FileStream; init in place. */
+   /* file_stream is in-place struct FileStream; init in place. */
    mdfn_filestream_init(&self->file_stream, path);
 
    if (!mdfn_filestream_is_open(&self->file_stream))
