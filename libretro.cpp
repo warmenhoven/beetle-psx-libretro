@@ -453,9 +453,105 @@ uint32_t PSX_GetRandU32(uint32_t mina, uint32_t maxa)
    return(mina + tmp);
 }
 
-static std::vector<CDIF *> CDInterfaces;  // FIXME: Cleanup on error out.
-static std::vector<CDIF*> *cdifs = NULL;
-static std::vector<const char *> cdifs_scex_ids;
+/* CDIF storage.
+ *
+ * Used to be three globals:
+ *   static std::vector<CDIF *> CDInterfaces;     // owner
+ *   static std::vector<CDIF *> *cdifs = NULL;    // alias set by InitCommon
+ *   static std::vector<const char *> cdifs_scex_ids; // parallel SCEx ids
+ *
+ * They're folded into one struct that owns the CDIF and SCEx id
+ * pairs and a flag to indicate whether the emulator side has the
+ * array "live" (post-InitCommon, pre-CloseGame).  The old
+ * "if (cdifs)" test for liveness becomes "if (cdifs_loaded)".
+ *
+ * The FIXME on the original CDInterfaces ("Cleanup on error out") is
+ * addressed by routing every error path through cdif_array_clear,
+ * which calls CDIF_Close on each entry rather than the previous
+ * "delete" (which silently skipped CDIF's thread/mutex teardown,
+ * leaking the read-thread on every failed multi-disc M3U load).
+ */
+struct cdif_array
+{
+   CDIF        **items;
+   const char  **scex_ids;
+   size_t        count;
+   size_t        cap;
+};
+
+static struct cdif_array cdifs;
+static int               cdifs_loaded;
+
+static int cdif_array_reserve(struct cdif_array *a, size_t need)
+{
+   size_t       new_cap;
+   CDIF        **new_items;
+   const char  **new_ids;
+
+   if (a->cap >= need)
+      return 0;
+
+   new_cap = a->cap ? a->cap * 2 : 8;
+   while (new_cap < need)
+      new_cap *= 2;
+
+   new_items = (CDIF **)      realloc(a->items,    new_cap * sizeof(*new_items));
+   if (!new_items)
+      return -1;
+   a->items = new_items;
+
+   new_ids   = (const char **)realloc(a->scex_ids, new_cap * sizeof(*new_ids));
+   if (!new_ids)
+      return -1;
+   a->scex_ids = new_ids;
+
+   a->cap = new_cap;
+   return 0;
+}
+
+static int cdif_array_push(struct cdif_array *a, CDIF *cdif)
+{
+   if (cdif_array_reserve(a, a->count + 1) < 0)
+      return -1;
+   a->items   [a->count] = cdif;
+   a->scex_ids[a->count] = NULL;
+   a->count++;
+   return 0;
+}
+
+static void cdif_array_remove_at(struct cdif_array *a, size_t idx)
+{
+   size_t i;
+   if (idx >= a->count)
+      return;
+   for (i = idx + 1; i < a->count; i++)
+   {
+      a->items   [i - 1] = a->items   [i];
+      a->scex_ids[i - 1] = a->scex_ids[i];
+   }
+   a->count--;
+}
+
+/* Close every CDIF, free the backing arrays, reset to empty.
+ *
+ * Uses CDIF_Close - which does thread/mutex/cond teardown - rather
+ * than `delete`, which on the post-cdromif-C struct CDIF would just
+ * free the bytes and leak the read thread + sync primitives. */
+static void cdif_array_clear(struct cdif_array *a)
+{
+   size_t i;
+   for (i = 0; i < a->count; i++)
+   {
+      if (a->items[i])
+         CDIF_Close(a->items[i]);
+   }
+   free(a->items);
+   free(a->scex_ids);
+   a->items    = NULL;
+   a->scex_ids = NULL;
+   a->count    = 0;
+   a->cap      = 0;
+}
 
 static bool eject_state;
 
@@ -1331,21 +1427,6 @@ void PSX_MemPoke8(uint32 A, uint8 V)
    MemPoke<uint8, false>(0, A, V);
 }
 
-void PSX_MemPoke16(uint32 A, uint16 V)
-{
-   MemPoke<uint16, false>(0, A, V);
-}
-
-void PSX_MemPoke32(uint32 A, uint32 V)
-{
-   MemPoke<uint32, false>(0, A, V);
-}
-
-extern "C" void PSX_GPULineHook(const int32_t timestamp, const int32_t line_timestamp, bool vsync, uint32_t *pixels, const unsigned width, const unsigned pix_clock_offset, const unsigned pix_clock, const unsigned pix_clock_divider, const unsigned surf_pitchinpix, const unsigned upscale_factor)
-{
-   FrontIO_GPULineHook(PSX_FIO, timestamp, line_timestamp, vsync, pixels, width, pix_clock_offset, pix_clock, pix_clock_divider, surf_pitchinpix, upscale_factor);
-}
-
 /* Test whether the supplied file looks like a PS-X EXE. The original
  * code returned true unconditionally because both branches returned
  * true - the magic check had no effect. Now we actually require the
@@ -1363,30 +1444,6 @@ static bool TestMagic(const char *name, RFILE *fp, int64_t size)
    return (header[0] == 'P') && (header[1] == 'S') && (header[2] == '-') &&
           (header[3] == 'X') && (header[4] == ' ') && (header[5] == 'E') &&
           (header[6] == 'X') && (header[7] == 'E');
-}
-
-static bool TestMagicCD(std::vector<CDIF *> *_CDInterfaces)
-{
-   uint8_t buf[2048];
-   TOC toc;
-   int dt;
-
-   TOC_Clear(&toc);
-
-   CDIF_ReadTOC((*_CDInterfaces)[0], &toc);
-
-   dt = TOC_FindTrackByLBA(&toc, 4);
-
-   if(dt > 0 && !(toc.tracks[dt].control & 0x4))
-      return(false);
-
-   if(CDIF_ReadSector((*_CDInterfaces)[0], buf, 4, 1) != 0x2)
-      return(false);
-
-   if(strncmp((char *)buf + 10, "Licensed  by", strlen("Licensed  by")))
-      return(false);
-
-   return(true);
 }
 
 static const char *CalcDiscSCEx_BySYSTEMCNF(CDIF *c, unsigned *rr)
@@ -1545,18 +1602,18 @@ static unsigned CalcDiscSCEx(void)
    const char *prev_valid_id = NULL;
    unsigned ret_region       = MDFN_GetSettingI("psx.region_default");
 
-   cdifs_scex_ids.clear();
-
-   if(cdifs)
-      for(unsigned i = 0; i < cdifs->size(); i++)
+   if (cdifs_loaded)
+   {
+      unsigned i;
+      for (i = 0; i < cdifs.count; i++)
       {
          uint8_t buf[2048];
          uint8_t fbuf[2048 + 1];
-         const char *id = CalcDiscSCEx_BySYSTEMCNF((*cdifs)[i], (i == 0) ? &ret_region : NULL);
+         const char *id = CalcDiscSCEx_BySYSTEMCNF(cdifs.items[i], (i == 0) ? &ret_region : NULL);
 
          memset(fbuf, 0, sizeof(fbuf));
 
-         if(id == NULL && CDIF_ReadSector((*cdifs)[i], buf, 4, 1) == 0x2)
+         if(id == NULL && CDIF_ReadSector(cdifs.items[i], buf, 4, 1) == 0x2)
          {
             unsigned ipos, opos;
             for(ipos = 0, opos = 0; ipos < 0x48; ipos++)
@@ -1623,8 +1680,9 @@ static unsigned CalcDiscSCEx(void)
          if(id != NULL)
             prev_valid_id = id;
 
-         cdifs_scex_ids.push_back(id);
+         cdifs.scex_ids[i] = id;
       }
+   }
 
    return ret_region;
 }
@@ -1633,19 +1691,21 @@ static void SetDiscWrapper(const bool CD_TrayOpen) {
    CDIF *cdif = NULL;
    const char *disc_id = NULL;
 
-   if (cdifs && CD_SelectedDisc >= 0 && !CD_TrayOpen) {
+   if (cdifs_loaded && CD_SelectedDisc >= 0 && !CD_TrayOpen) {
       /* Only allow one pbp file to be loaded (at index 0). */
       if (CD_IsPBP) {
-         if (!cdifs->empty())
-            cdif = (*cdifs)[0];
-         if (!cdifs_scex_ids.empty())
-            disc_id = cdifs_scex_ids[0];
+         if (cdifs.count > 0)
+         {
+            cdif    = cdifs.items   [0];
+            disc_id = cdifs.scex_ids[0];
+         }
       } else {
          size_t idx = (size_t)CD_SelectedDisc;
-         if (idx < cdifs->size())
-            cdif = (*cdifs)[idx];
-         if (idx < cdifs_scex_ids.size())
-            disc_id = cdifs_scex_ids[idx];
+         if (idx < cdifs.count)
+         {
+            cdif    = cdifs.items   [idx];
+            disc_id = cdifs.scex_ids[idx];
+         }
       }
    }
 
@@ -1951,7 +2011,7 @@ static void CDInsertEject(void);
 static void CDEject(void);
 static void Cleanup(void);
 
-static void InitCommon(std::vector<CDIF *> *_CDInterfaces, const bool EmulateMemcards = true, const bool WantPIOMem = false)
+static void InitCommon(const bool EmulateMemcards = true, const bool WantPIOMem = false)
 {
    unsigned region, i;
    bool emulate_memcard[8];
@@ -1972,8 +2032,8 @@ static void InitCommon(std::vector<CDIF *> *_CDInterfaces, const bool EmulateMem
    emulate_multitap[0] = setting_psx_multitap_port_1;
    emulate_multitap[1] = setting_psx_multitap_port_2;
 
-   cdifs  = _CDInterfaces;
-   region = CalcDiscSCEx();
+   cdifs_loaded = 1;
+   region       = CalcDiscSCEx();
 
    if(!MDFN_GetSettingB("psx.region_autodetect"))
       region = MDFN_GetSettingI("psx.region_default");
@@ -2039,7 +2099,7 @@ static void InitCommon(std::vector<CDIF *> *_CDInterfaces, const bool EmulateMem
    CD_TrayOpen        = true;
    CD_SelectedDisc    = -1;
 
-   if(cdifs)
+   if(cdifs_loaded)
    {
       CD_TrayOpen     = false;
       CD_SelectedDisc = 0;
@@ -2405,7 +2465,7 @@ static int Load(const char *name, RFILE *fp)
       return -1;
    }
 
-   InitCommon(NULL, true, true);
+   InitCommon(true, true);
 
    TextMem.resize(0);
 
@@ -2437,9 +2497,9 @@ static int Load(const char *name, RFILE *fp)
    return 1;
 }
 
-static int LoadCD(std::vector<CDIF *> *_CDInterfaces)
+static int LoadCD(void)
 {
-   InitCommon(_CDInterfaces);
+   InitCommon();
 
    if (psx_skipbios == 1 && BIOSROM)
       BIOSROM->WriteU32(0x6990, 0);
@@ -2520,15 +2580,15 @@ static void Cleanup(void)
    PSX_FreeExpansion1();
 #endif
 
-   cdifs = NULL;
+   cdifs_loaded = 0;
 }
 
 static void CloseGame(void)
 {
    int i;
 
-   /* If load failed partway through, PSX_FIO may be NULL while
-    * CDInterfaces and other state still exist. Skip memcard saves in
+   /* If load failed partway through, PSX_FIO may be NULL while the
+    * cdifs array and other state still exist. Skip memcard saves in
     * that case rather than segfaulting. */
    if (PSX_FIO)
    {
@@ -2564,14 +2624,15 @@ static void CDInsertEject(void)
 {
    CD_TrayOpen = !CD_TrayOpen;
 
-   /* cdifs may be NULL when no game is loaded; entries may be NULL
-    * after disk_add_image_index() reserves a slot but before
-    * disk_replace_image_index() fills it. */
-   if (cdifs)
+   /* cdifs_loaded is 0 when no game is loaded; individual entries may
+    * still be NULL after disk_add_image_index() reserves a slot but
+    * before disk_replace_image_index() fills it. */
+   if (cdifs_loaded)
    {
-      for (unsigned disc = 0; disc < cdifs->size(); disc++)
+      size_t disc;
+      for (disc = 0; disc < cdifs.count; disc++)
       {
-         CDIF *cdif = (*cdifs)[disc];
+         CDIF *cdif = cdifs.items[disc];
          if (!cdif)
             continue;
          if (!CDIF_Eject(cdif, CD_TrayOpen))
@@ -2590,9 +2651,9 @@ static void CDEject(void)
 
 static void CDSelect(void)
 {
-   if(cdifs && CD_TrayOpen)
+   if(cdifs_loaded && CD_TrayOpen)
    {
-      int disc_count = (CD_IsPBP ? PBP_PhysicalDiscCount : (int)cdifs->size());
+      int disc_count = (CD_IsPBP ? PBP_PhysicalDiscCount : (int)cdifs.count);
 
       CD_SelectedDisc = (CD_SelectedDisc + 1) % (disc_count + 1);
 
@@ -2625,13 +2686,13 @@ extern "C" int StateAction(StateMem *sm, int load, int data_only)
    {
       if(CD_IsPBP)
       {
-         if(!cdifs || CD_SelectedDisc >= PBP_PhysicalDiscCount)
+         if(!cdifs_loaded || CD_SelectedDisc >= PBP_PhysicalDiscCount)
             CD_SelectedDisc = -1;
 
          CDEject();
          CDInsertEject();
       } else {
-         if(!cdifs || CD_SelectedDisc >= (int)cdifs->size())
+         if(!cdifs_loaded || CD_SelectedDisc >= (int)cdifs.count)
             CD_SelectedDisc = -1;
 
          SetDiscWrapper(CD_TrayOpen);
@@ -2911,8 +2972,8 @@ static void check_system_specs(void)
 
 static unsigned disk_get_num_images(void)
 {
-   if(cdifs)
-      return CD_IsPBP ? PBP_PhysicalDiscCount : cdifs->size();
+   if(cdifs_loaded)
+      return CD_IsPBP ? PBP_PhysicalDiscCount : (unsigned)cdifs.count;
    return 0;
 }
 
@@ -2964,13 +3025,13 @@ static bool disk_set_image_index(unsigned index)
 // Untested ...
 static bool disk_replace_image_index(unsigned index, const struct retro_game_info *info)
 {
-   if (!cdifs || index >= disk_get_num_images() || !eject_state || CD_IsPBP)
+   if (!cdifs_loaded || index >= disk_get_num_images() || !eject_state || CD_IsPBP)
       return false;
 
    if (!info)
    {
-      CDIF_Close(cdifs->at(index));
-      cdifs->erase(cdifs->begin() + index);
+      CDIF_Close(cdifs.items[index]);
+      cdif_array_remove_at(&cdifs, index);
       /* CD_SelectedDisc is signed; explicit cast to silence the
        * mixed-sign comparison and to make the intent clear. */
       if ((int)index < CD_SelectedDisc)
@@ -2999,8 +3060,8 @@ static bool disk_replace_image_index(unsigned index, const struct retro_game_inf
          return false;
       }
 
-      CDIF_Close(cdifs->at(index));
-      cdifs->at(index) = iface;
+      CDIF_Close(cdifs.items[index]);
+      cdifs.items[index] = iface;
       CalcDiscSCEx();
 
       /* If we replace, we want the "swap disk manually effect". */
@@ -3016,10 +3077,11 @@ static bool disk_replace_image_index(unsigned index, const struct retro_game_inf
 
 static bool disk_add_image_index(void)
 {
-   if (CD_IsPBP || !cdifs)
+   if (CD_IsPBP || !cdifs_loaded)
       return false;
 
-   cdifs->push_back(NULL);
+   if (cdif_array_push(&cdifs, NULL) < 0)
+      return false;
    disk_control_ext_info.image_paths.push_back("");
    disk_control_ext_info.image_labels.push_back("");
    return true;
@@ -4187,6 +4249,21 @@ end:
 
 // TODO: LoadCommon()
 
+/* Tear down the per-game disc state (CDIF array + the image
+ * path/label vectors + the initial-index hint).  Call this from
+ * every error path in MDFNI_LoadCD and from retro_unload_game so
+ * three previously-duplicated cleanup blocks - which all also got
+ * the broken `delete` wrong - share one correct implementation. */
+static void clear_disc_state(void)
+{
+   cdif_array_clear(&cdifs);
+
+   disk_control_ext_info.initial_index = 0;
+   disk_control_ext_info.initial_path.clear();
+   disk_control_ext_info.image_paths.clear();
+   disk_control_ext_info.image_labels.clear();
+}
+
 static bool MDFNI_LoadCD(const char *devicename)
 {
    size_t devicename_len;
@@ -4220,7 +4297,7 @@ static bool MDFNI_LoadCD(const char *devicename)
             break;
          }
 
-         CDInterfaces.push_back(image);
+         cdif_array_push(&cdifs, image);
 
          image_label[0] = '\0';
          extract_basename(image_label,
@@ -4244,7 +4321,7 @@ static bool MDFNI_LoadCD(const char *devicename)
       else
       {
          CD_IsPBP = true;
-         CDInterfaces.push_back(image);
+         cdif_array_push(&cdifs, image);
 
          /* CDIF_Open() sets PBP_DiscCount, so we can populate
           * image_paths/image_labels here */
@@ -4292,10 +4369,14 @@ static bool MDFNI_LoadCD(const char *devicename)
          log_cb(RETRO_LOG_ERROR, "Error opening CD: %s\n", devicename);
          if (image)
             CDIF_Close(image);
+         /* No partial state has been pushed, so a bare return is
+          * still safe here.  Routing through clear_disc_state would
+          * be a no-op but stays consistent with the other branches. */
+         clear_disc_state();
          return false;
       }
 
-      CDInterfaces.push_back(image);
+      cdif_array_push(&cdifs, image);
 
       image_label[0] = '\0';
       disk_control_ext_info.image_paths.push_back(devicename);
@@ -4305,27 +4386,18 @@ static bool MDFNI_LoadCD(const char *devicename)
 
    if (!load_ok)
    {
-      /* Cleanup any partially-loaded CDIFs and metadata. */
-      for (unsigned i = 0; i < CDInterfaces.size(); i++)
-         delete CDInterfaces[i];
-      CDInterfaces.clear();
-
-      disk_control_ext_info.initial_index = 0;
-      disk_control_ext_info.initial_path.clear();
-      disk_control_ext_info.image_paths.clear();
-      disk_control_ext_info.image_labels.clear();
-
+      clear_disc_state();
       return false;
    }
 
 #ifdef DEBUG
    // Print out a track list for all discs.
-   for(unsigned i = 0; i < CDInterfaces.size(); i++)
+   for(unsigned i = 0; i < cdifs.count; i++)
    {
       TOC toc;
       TOC_Clear(&toc);
 
-      CDIF_ReadTOC(CDInterfaces[i], &toc);
+      CDIF_ReadTOC(cdifs.items[i], &toc);
 
       log_cb(RETRO_LOG_DEBUG, "CD %d Layout:\n", i + 1);
 
@@ -4338,17 +4410,9 @@ static bool MDFNI_LoadCD(const char *devicename)
    }
 #endif
 
-   if(!(LoadCD(&CDInterfaces)))
+   if(!LoadCD())
    {
-      for(unsigned i = 0; i < CDInterfaces.size(); i++)
-         delete CDInterfaces[i];
-      CDInterfaces.clear();
-
-      disk_control_ext_info.initial_index = 0;
-      disk_control_ext_info.initial_path.clear();
-      disk_control_ext_info.image_paths.clear();
-      disk_control_ext_info.image_labels.clear();
-
+      clear_disc_state();
       return false;
    }
 
@@ -4584,14 +4648,7 @@ void retro_unload_game(void)
 
    MDFNMP_Kill();
 
-   for(unsigned i = 0; i < CDInterfaces.size(); i++)
-      delete CDInterfaces[i];
-   CDInterfaces.clear();
-
-   disk_control_ext_info.initial_index = 0;
-   disk_control_ext_info.initial_path.clear();
-   disk_control_ext_info.image_paths.clear();
-   disk_control_ext_info.image_labels.clear();
+   clear_disc_state();
 
    retro_cd_base_directory[0] = '\0';
    retro_cd_path[0]           = '\0';

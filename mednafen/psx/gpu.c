@@ -1856,7 +1856,8 @@ int32_t GPU_Update(const int32_t sys_timestamp)
                pix_clock = (GPU.HardwarePALType ? 53203425 : 53693182) / DotClockRatios[dmc];
                pix_clock_div = DotClockRatios[dmc];
 
-               PSX_GPULineHook(sys_timestamp,
+               FrontIO_GPULineHook(PSX_FIO,
+                               sys_timestamp,
                                sys_timestamp - ((uint64)gpu_clocks * 65536) / GPU.GPUClockRatio,
                                GPU.scanline == 0,
                                dest,
@@ -1869,7 +1870,8 @@ int32_t GPU_Update(const int32_t sys_timestamp)
             }
             else
             {
-               PSX_GPULineHook(sys_timestamp,
+               FrontIO_GPULineHook(PSX_FIO,
+                               sys_timestamp,
                                sys_timestamp - ((uint64)gpu_clocks * 65536) / GPU.GPUClockRatio,
                                GPU.scanline == 0,
                                NULL,

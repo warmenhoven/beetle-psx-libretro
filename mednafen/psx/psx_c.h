@@ -30,19 +30,29 @@ void PSX_RequestMLExit(void);
 
 extern unsigned psx_gpu_overclock_shift;
 
-/* PSX_GPULineHook: per-scanline callback invoked from inside the
- * GPU update loop into the libretro front-end. The full signature
- * matches psx.h's declaration verbatim - same param order, same
- * types. */
-void PSX_GPULineHook(const int32_t timestamp,
-                     const int32_t line_timestamp,
-                     bool          vsync,
-                     uint32_t     *pixels,
-                     const unsigned width,
-                     const unsigned pix_clock_offset,
-                     const unsigned pix_clock,
-                     const unsigned pix_clock_divider,
-                     const unsigned surf_pitchinpix,
-                     const unsigned upscale_factor);
+/* gpu.c emits a per-scanline callback into the FrontIO subsystem
+ * (which dispatches to lightgun / Justifier / Guncon hooks).  That
+ * used to go through a one-line PSX_GPULineHook trampoline in
+ * libretro.cpp; gpu.c now calls FrontIO_GPULineHook directly to
+ * cut out the indirection.
+ *
+ * FrontIO is opaque from C's perspective - the pointer is forwarded
+ * verbatim to the FrontIO C API.  PSX_FIO is owned by libretro.cpp;
+ * the GPU update loop only runs with a game loaded, during which
+ * PSX_FIO is guaranteed non-NULL. */
+struct FrontIO;
+extern struct FrontIO *PSX_FIO;
+
+void FrontIO_GPULineHook(struct FrontIO *fio,
+                         const int32_t  timestamp,
+                         const int32_t  line_timestamp,
+                         bool           vsync,
+                         uint32_t      *pixels,
+                         const unsigned width,
+                         const unsigned pix_clock_offset,
+                         const unsigned pix_clock,
+                         const unsigned pix_clock_divider,
+                         const unsigned surf_pitchinpix,
+                         const unsigned upscale_factor);
 
 #endif
