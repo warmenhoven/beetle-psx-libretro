@@ -39,7 +39,7 @@
 #include "CDAccess_CHD.h"
 #endif
 
-extern "C" CDAccess *cdaccess_open_image(bool *success, const char *path,
+CDAccess *cdaccess_open_image(bool *success, const char *path,
       bool image_memcache)
 {
    size_t    path_len = strlen(path);
@@ -71,13 +71,13 @@ extern "C" CDAccess *cdaccess_open_image(bool *success, const char *path,
  * that want the cheap subchannel-only path (CCD, CHD) override it.
  * ------------------------------------------------------------------ */
 
-extern "C" bool CDAccess_Read_Raw_Sector(CDAccess *cda, uint8_t *buf,
+bool CDAccess_Read_Raw_Sector(CDAccess *cda, uint8_t *buf,
       int32_t lba)
 {
    return cda->Read_Raw_Sector(cda, buf, lba);
 }
 
-extern "C" bool CDAccess_Read_Raw_PW(CDAccess *cda, uint8_t *buf,
+bool CDAccess_Read_Raw_PW(CDAccess *cda, uint8_t *buf,
       int32_t lba)
 {
    if (cda->Read_Raw_PW)
@@ -90,20 +90,4 @@ extern "C" bool CDAccess_Read_Raw_PW(CDAccess *cda, uint8_t *buf,
       memcpy(buf, tmpbuf + 2352, 96);
       return true;
    }
-}
-
-extern "C" bool CDAccess_Read_TOC(CDAccess *cda, TOC *toc)
-{
-   return cda->Read_TOC(cda, toc);
-}
-
-extern "C" void CDAccess_Eject(CDAccess *cda, bool eject_status)
-{
-   cda->Eject(cda, eject_status);
-}
-
-extern "C" void CDAccess_destroy(CDAccess *cda)
-{
-   if (cda)
-      cda->destroy(cda);
 }

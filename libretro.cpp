@@ -2749,15 +2749,15 @@ static void GSCondCode(MemoryPatch* patch, const char* cc, const unsigned len, c
 {
    char tmp[256];
 
-   if(patch->conditions.size() > 0)
-      patch->conditions.append(", ");
+   if (patch->conditions[0] != 0)
+      strlcat(patch->conditions, ", ", sizeof(patch->conditions));
 
-   if(len == 2)
+   if (len == 2)
       snprintf(tmp, 256, "%u L 0x%08x %s 0x%04x", len, addr, cc, val & 0xFFFFU);
    else
       snprintf(tmp, 256, "%u L 0x%08x %s 0x%02x", len, addr, cc, val & 0xFFU);
 
-   patch->conditions.append(tmp);
+   strlcat(patch->conditions, tmp, sizeof(patch->conditions));
 }
 
 static bool DecodeGS(const char *cheat_string, MemoryPatch *patch)
@@ -5449,8 +5449,8 @@ void retro_cheat_set(unsigned index, bool enabled, const char * codeLine)
    }
 
    MemoryPatch patch;
-   bool trueML=0;
-   for (cursor=0;cursor<codeParts.size();cursor++)
+   MemoryPatch_Init(&patch);
+   for (cursor=0;cursor<(int)codeParts.size();cursor++)
    {
       part=codeParts[cursor];
       if (part.length()==8)
@@ -5465,11 +5465,11 @@ void retro_cheat_set(unsigned index, bool enabled, const char * codeLine)
             snprintf(name, sizeof(name), "cheat_%i_%i",index,cursor);
 
             /* Set parameters */
-            patch.name=(std::string)name;
-            patch.status=enabled;
+            strlcpy(patch.name, name, sizeof(patch.name));
+            patch.status = enabled;
 
-            MDFNI_AddCheat(patch);
-            patch=MemoryPatch();
+            MDFNI_AddCheat(&patch);
+            MemoryPatch_Init(&patch);
          }
       }
    }

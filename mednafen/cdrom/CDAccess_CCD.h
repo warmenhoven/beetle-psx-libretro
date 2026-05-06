@@ -28,7 +28,7 @@ extern "C" {
 /* Factory: returns a CDAccess* whose vtable dispatches to the CCD
  * backend.  *success is set to true on success, false on failure;
  * a non-NULL pointer may still be returned on failure and must be
- * destroyed with CDAccess_destroy. */
+ * destroyed with `cda->destroy(cda)`. */
 CDAccess *CDAccess_CCD_New(bool *success, const char *path,
       bool image_memcache);
 

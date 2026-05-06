@@ -235,11 +235,11 @@ static bool CDIF_RT_EjectDisc(CDIF *cdif, bool eject_status,
       unsigned i;
 
       if (!skip_actual_eject)
-         CDAccess_Eject(cdif->disc_cdaccess, eject_status);
+         cdif->disc_cdaccess->Eject(cdif->disc_cdaccess, eject_status);
 
       if (!eject_status)
       {
-         CDAccess_Read_TOC(cdif->disc_cdaccess, &cdif->disc_toc);
+         cdif->disc_cdaccess->Read_TOC(cdif->disc_cdaccess, &cdif->disc_toc);
 
          if (cdif->disc_toc.first_track < 1
                || cdif->disc_toc.last_track > 99
@@ -507,11 +507,11 @@ bool CDIF_Eject(CDIF *cdif, bool eject_status)
 
       if (old_de != cdif->DiscEjected)
       {
-         CDAccess_Eject(cdif->disc_cdaccess, eject_status);
+         cdif->disc_cdaccess->Eject(cdif->disc_cdaccess, eject_status);
 
          if (!eject_status)
          {
-            CDAccess_Read_TOC(cdif->disc_cdaccess, &cdif->disc_toc);
+            cdif->disc_cdaccess->Read_TOC(cdif->disc_cdaccess, &cdif->disc_toc);
 
             if (cdif->disc_toc.first_track < 1
                   || cdif->disc_toc.last_track > 99
@@ -617,7 +617,7 @@ void CDIF_Close(CDIF *cdif)
    }
 
    if (cdif->disc_cdaccess)
-      CDAccess_destroy(cdif->disc_cdaccess);
+      cdif->disc_cdaccess->destroy(cdif->disc_cdaccess);
    cdif->disc_cdaccess = NULL;
 
    free(cdif);
@@ -676,7 +676,7 @@ static CDIF *CDIF_Open_ST(CDAccess *cda)
       return cdif;
    }
 
-   CDAccess_Read_TOC(cda, &cdif->disc_toc);
+   cda->Read_TOC(cda, &cdif->disc_toc);
 
    if (cdif->disc_toc.first_track < 1
          || cdif->disc_toc.last_track > 99
@@ -705,7 +705,7 @@ CDIF *CDIF_Open(bool *success, const char *path,
    if (!*success)
    {
       if (cda)
-         CDAccess_destroy(cda);
+         cda->destroy(cda);
       return NULL;
    }
 

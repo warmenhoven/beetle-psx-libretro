@@ -20,8 +20,9 @@ extern "C" {
  * the struct and installs the function pointers.
  *
  * Lifecycle: `cdaccess_open_image` dispatches on file extension
- * to the right factory.  Use `CDAccess_Read_Raw_Sector` etc. to
- * drive an instance, and `CDAccess_destroy` to tear it down.
+ * to the right factory.  Use `CDAccess_Read_Raw_Sector` (or
+ * `cda->Read_Raw_*` etc. for the rest of the vtable) to drive an
+ * instance, and `cda->destroy(cda)` to tear it down.
  *
  * Backends MUST set Read_Raw_Sector, Read_TOC, Eject, and destroy.
  * Read_Raw_PW is optional - if NULL, CDAccess_Read_Raw_PW falls
@@ -44,14 +45,13 @@ typedef struct CDAccess CDAccess;
 CDAccess *cdaccess_open_image(bool *success, const char *path,
       bool image_memcache);
 
-/* Public dispatch wrappers - invoke the vtable.  Identical to
- * `cda->Method(cda, ...)` but kept as named functions so call
- * sites and stack traces are readable. */
+/* Public dispatch wrappers - invoke the vtable.  Read_Raw_PW exists
+ * because not every backend implements its own subchannel-only path;
+ * the wrapper falls back to Read_Raw_Sector + memcpy for those.  The
+ * other ops (Read_TOC, Eject, destroy) are pure passthroughs and
+ * call sites invoke them through the vtable directly. */
 bool CDAccess_Read_Raw_Sector(CDAccess *cda, uint8_t *buf, int32_t lba);
 bool CDAccess_Read_Raw_PW    (CDAccess *cda, uint8_t *buf, int32_t lba);
-bool CDAccess_Read_TOC       (CDAccess *cda, TOC *toc);
-void CDAccess_Eject          (CDAccess *cda, bool eject_status);
-void CDAccess_destroy        (CDAccess *cda);
 
 #ifdef __cplusplus
 }

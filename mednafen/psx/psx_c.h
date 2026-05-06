@@ -55,4 +55,11 @@ void FrontIO_GPULineHook(struct FrontIO *fio,
                          const unsigned surf_pitchinpix,
                          const unsigned upscale_factor);
 
+/* Cheat-table peek/poke surface for mempatcher.c.  The full psx.h
+ * decls are C-clean (no `&` references) but they live in a header
+ * that drags in cpu.h with `class PS_CPU`, which a C TU can't
+ * parse.  Re-declared here with identical signatures. */
+uint8_t PSX_MemPeek8(uint32_t A);
+void    PSX_MemPoke8(uint32_t A, uint8_t V);
+
 #endif

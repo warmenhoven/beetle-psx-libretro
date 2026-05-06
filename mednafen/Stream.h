@@ -159,30 +159,6 @@ int stream_get_line(struct Stream *s, char *out, size_t cap);
 
 #ifdef __cplusplus
 }
-
-/* C++ shim for callers (CDAccess_Image, CDAccess_CCD) whose cue/toc
- * parsers do extensive std::string post-processing on each line.
- * Reads into an internal buffer, then assigns to `str`. Returns the
- * same value as stream_get_line. */
-#include <string>
-static INLINE int stream_get_line_string(struct Stream *s, std::string &str)
-{
-   /* CD-image cue/toc lines are short in practice; 4 KB is a generous
-    * cap that exceeds anything seen in real images. Lines that exceed
-    * this are silently truncated, matching the original (unbounded
-    * std::string growth was the only "protection" before, which was
-    * itself an OOM hazard on malformed input). */
-   char buf[4096];
-   int  ret = stream_get_line(s, buf, sizeof(buf));
-   if (ret < 0)
-   {
-      str.clear();
-      return ret;
-   }
-   str.assign(buf);
-   return ret;
-}
-
 #endif
 
 #endif

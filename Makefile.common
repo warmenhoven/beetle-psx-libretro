@@ -198,12 +198,11 @@ endif
       SOURCES_C += $(sort $(wildcard $(MEDNAFEN_DIR)/tremor/*.c))
    endif
 
-   SOURCES_CXX += $(CDROM_DIR)/CDAccess.cpp \
-                  $(CDROM_DIR)/CDAccess_Image.cpp \
-                  $(CDROM_DIR)/audioreader.cpp
-
-   SOURCES_C +=   $(CDROM_DIR)/CDAccess_CCD.c \
+   SOURCES_C +=   $(CDROM_DIR)/CDAccess.c \
+                  $(CDROM_DIR)/CDAccess_CCD.c \
+                  $(CDROM_DIR)/CDAccess_Image.c \
                   $(CDROM_DIR)/CDAccess_PBP.c \
+                  $(CDROM_DIR)/audioreader.c \
                   $(CDROM_DIR)/cdromif.c \
                   $(CDROM_DIR)/cdaccess_track.c \
                   $(CDROM_DIR)/CDUtility.c \
@@ -213,10 +212,10 @@ endif
                   $(CDROM_DIR)/recover-raw.c \
                   $(CDROM_DIR)/edc_crc32.c
 
-   SOURCES_CXX += $(MEDNAFEN_DIR)/mempatcher.cpp \
-                  $(CORE_DIR)/libretro.cpp
+   SOURCES_CXX += $(CORE_DIR)/libretro.cpp
 
-   SOURCES_C +=   $(MEDNAFEN_DIR)/general.c \
+   SOURCES_C +=   $(MEDNAFEN_DIR)/mempatcher.c \
+                  $(MEDNAFEN_DIR)/general.c \
                   $(MEDNAFEN_DIR)/error.c \
                   $(MEDNAFEN_DIR)/mednafen-endian.c \
                   $(MEDNAFEN_DIR)/video/Deinterlacer.c \

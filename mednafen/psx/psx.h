@@ -21,12 +21,18 @@ uint16_t MDFN_FASTCALL PSX_MemRead16(int32_t &timestamp, uint32_t A);
 uint32_t MDFN_FASTCALL PSX_MemRead24(int32_t &timestamp, uint32_t A);
 uint32_t MDFN_FASTCALL PSX_MemRead32(int32_t &timestamp, uint32_t A);
 
-uint8_t PSX_MemPeek8(uint32_t A);
+#ifdef __cplusplus
+extern "C" {
+#endif
+uint8_t  PSX_MemPeek8 (uint32_t A);
 uint16_t PSX_MemPeek16(uint32_t A);
 uint32_t PSX_MemPeek32(uint32_t A);
 
-// Should write to WO-locations if possible
+/* Should write to WO-locations if possible */
 void PSX_MemPoke8(uint32_t A, uint8_t V);
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 extern "C" {
