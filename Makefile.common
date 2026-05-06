@@ -201,12 +201,12 @@ endif
 
    SOURCES_CXX += $(CDROM_DIR)/CDAccess.cpp \
                   $(CDROM_DIR)/CDAccess_Image.cpp \
-                  $(CDROM_DIR)/CDAccess_CCD.cpp \
                   $(CDROM_DIR)/CDAccess_PBP.cpp \
                   $(CDROM_DIR)/audioreader.cpp \
                   $(CDROM_DIR)/misc.cpp
 
-   SOURCES_C +=   $(CDROM_DIR)/cdromif.c \
+   SOURCES_C +=   $(CDROM_DIR)/CDAccess_CCD.c \
+                  $(CDROM_DIR)/cdromif.c \
                   $(CDROM_DIR)/cdaccess_track.c \
                   $(CDROM_DIR)/CDUtility.c \
                   $(CDROM_DIR)/galois.c \
