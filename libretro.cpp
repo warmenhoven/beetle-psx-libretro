@@ -1,7 +1,7 @@
 #include "mednafen/mednafen.h"
 #include "mednafen/mempatcher.h"
 #include "mednafen/git.h"
-#include "mednafen/general.h"
+#include "mednafen/general_c.h"
 #include "mednafen/settings.h"
 #include <compat/msvc.h>
 #include "mednafen/psx/gpu.h"
@@ -4129,8 +4129,8 @@ static void check_variables(bool startup)
 
 static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsigned depth = 0)
 {
-   std::string dir_path;
-   char linebuf[2048];
+   char  dir_path[4096];
+   char  linebuf[2048];
    RFILE *fp;
 
    if (depth >= M3U_MAX_DEPTH)
@@ -4146,11 +4146,13 @@ static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsig
    if (fp == NULL)
       return;
 
-   MDFN_GetFilePathComponents(path, &dir_path);
+   MDFN_GetFilePathComponents_c(path.c_str(),
+         dir_path, sizeof(dir_path),
+         NULL, 0, NULL, 0);
 
    while(filestream_gets(fp, linebuf, sizeof(linebuf)) != NULL)
    {
-      std::string efp;
+      char efp_buf[4096];
 
       if(linebuf[0] == '#')
          continue;
@@ -4158,21 +4160,25 @@ static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsig
       if(linebuf[0] == 0)
          continue;
 
-      efp = MDFN_EvalFIP(dir_path, std::string(linebuf));
+      MDFN_EvalFIP_c(dir_path, linebuf, efp_buf, sizeof(efp_buf));
 
-      if(efp.size() >= 4 && efp.substr(efp.size() - 4) == ".m3u")
       {
-         if(efp == path)
-         {
-            log_cb(RETRO_LOG_ERROR, "M3U at \"%s\" references self.\n", efp.c_str());
-            goto end;
-         }
+         std::string efp(efp_buf);
 
-         /* Pre-increment so the depth limit actually trips. */
-         ReadM3U(file_list, efp, depth + 1);
+         if(efp.size() >= 4 && efp.substr(efp.size() - 4) == ".m3u")
+         {
+            if(efp == path)
+            {
+               log_cb(RETRO_LOG_ERROR, "M3U at \"%s\" references self.\n", efp.c_str());
+               goto end;
+            }
+
+            /* Pre-increment so the depth limit actually trips. */
+            ReadM3U(file_list, efp, depth + 1);
+         }
+         else
+            file_list.push_back(efp);
       }
-      else
-         file_list.push_back(efp);
    }
 
 end:
@@ -5412,7 +5418,7 @@ void retro_cheat_set(unsigned index, bool enabled, const char * codeLine)
    }
 }
 
-void MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1,
+extern "C" void MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1,
       char *out, size_t outlen)
 {
    int r;

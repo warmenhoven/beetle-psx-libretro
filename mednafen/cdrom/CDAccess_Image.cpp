@@ -42,12 +42,11 @@
 #include <string.h>
 #include <time.h>
 
-#include "../general.h"
+#include "../general_c.h"
 #include "../FileStream.h"
 #include "../MemoryStream.h"
 
 #include "CDAccess.h"
-#include "misc.h"
 #include "cdaccess_track.h"
 #include "CDAccess_Image.h"
 #include "CDUtility.h"
@@ -263,18 +262,19 @@ static bool CDAccess_Image_ParseTOCFileLineInfo(CDAccess_Image *self, CDRFILE_TR
    }
    else
    {
-      std::string efn;
+      char efn[4096];
 
       track->FirstFileInstance = 1;
 
-      efn = MDFN_EvalFIP(self->base_dir, filename);
+      MDFN_EvalFIP_c(self->base_dir.c_str(), filename.c_str(),
+            efn, sizeof(efn));
 
       if(image_memcache)
       {
-         FileStream *file = mdfn_filestream_new(efn.c_str());
+         FileStream *file = mdfn_filestream_new(efn);
          if (!mdfn_filestream_is_open(file))
          {
-            MDFN_Error(0, "Could not open track file \"%s\"", efn.c_str());
+            MDFN_Error(0, "Could not open track file \"%s\"", efn);
             if (file)
                stream_destroy(&file->base);
             return false;
@@ -295,10 +295,10 @@ static bool CDAccess_Image_ParseTOCFileLineInfo(CDAccess_Image *self, CDRFILE_TR
       }
       else
       {
-         FileStream *file = mdfn_filestream_new(efn.c_str());
+         FileStream *file = mdfn_filestream_new(efn);
          if (!mdfn_filestream_is_open(file))
          {
-            MDFN_Error(0, "Could not open track file \"%s\"", efn.c_str());
+            MDFN_Error(0, "Could not open track file \"%s\"", efn);
             if (file)
                stream_destroy(&file->base);
             return false;
@@ -461,13 +461,21 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
    int32 active_track = -1;
    int32 AutoTrackInc = 1; // For TOC
    CDRFILE_TRACK_INFO TmpTrack;
-   std::string file_base, file_ext;
+   char file_base_buf[4096];
+   char file_ext_buf [4096];
+   char base_dir_buf [4096];
    std::map<std::string, Stream*> toc_streamcache;
 
    self->disc_type = DISC_TYPE_CDDA_OR_M1;
    memset(&TmpTrack, 0, sizeof(TmpTrack));
 
-   MDFN_GetFilePathComponents(path, &self->base_dir, &file_base, &file_ext);
+   MDFN_GetFilePathComponents_c(path,
+         base_dir_buf,  sizeof(base_dir_buf),
+         file_base_buf, sizeof(file_base_buf),
+         file_ext_buf,  sizeof(file_ext_buf));
+   self->base_dir = base_dir_buf;
+   std::string file_base(file_base_buf);
+   std::string file_ext (file_ext_buf);
 
    if(!strcasecmp(file_ext.c_str(), ".toc"))
    {
@@ -508,7 +516,26 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
       }
 
       // Call trim AFTER we handle TOC-style comments, so we'll be sure to remove trailing whitespace in lines like: MONKEY  // BABIES
-      MDFN_trim(linebuf);
+      {
+         /* In-place trim of leading/trailing whitespace. */
+         size_t len = linebuf.length();
+         while (len > 0
+               && (linebuf[len - 1] == ' '  || linebuf[len - 1] == '\r'
+                || linebuf[len - 1] == '\n' || linebuf[len - 1] == '\t'
+                || linebuf[len - 1] == 0x0b))
+            len--;
+         linebuf.resize(len);
+
+         size_t i;
+         for (i = 0; i < linebuf.length(); i++)
+         {
+            char c = linebuf[i];
+            if (c != ' ' && c != '\r' && c != '\n' && c != '\t' && c != 0x0b)
+               break;
+         }
+         if (i)
+            linebuf.erase(0, i);
+      }
 
       if(linebuf.length() == 0)	// Skip blank lines.
          continue;
@@ -525,7 +552,16 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
          for(unsigned x = argcount; x < max_args; x++)
             args[x].clear();
 
-         MDFN_strtoupper(cmdbuf);
+         /* In-place ASCII uppercase of cmdbuf. */
+         {
+            size_t i, n = cmdbuf.length();
+            for (i = 0; i < n; i++)
+            {
+               char c = cmdbuf[i];
+               if (c >= 'a' && c <= 'z')
+                  cmdbuf[i] = (char)(c - 'a' + 'A');
+            }
+         }
       }
 
       if(IsTOC)
@@ -663,7 +699,16 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
          }
          else if(cmdbuf == "NO")
          {
-            MDFN_strtoupper(args[0]);
+            /* In-place ASCII uppercase of args[0]. */
+            {
+               size_t i, n = args[0].length();
+               for (i = 0; i < n; i++)
+               {
+                  char c = args[0][i];
+                  if (c >= 'a' && c <= 'z')
+                     args[0][i] = (char)(c - 'a' + 'A');
+               }
+            }
 
             if(args[0] == "COPY")
             {
@@ -712,18 +757,25 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
                active_track = -1;
             }
 
-            std::string efn;
+            char efn[4096];
 
             if(args[0].find("cdrom://") == std::string::npos)
-               efn = MDFN_EvalFIP(self->base_dir, args[0]);
+               MDFN_EvalFIP_c(self->base_dir.c_str(), args[0].c_str(),
+                     efn, sizeof(efn));
             else
-               efn = args[0];
+            {
+               size_t n = args[0].size();
+               if (n >= sizeof(efn))
+                  n = sizeof(efn) - 1;
+               memcpy(efn, args[0].data(), n);
+               efn[n] = 0;
+            }
 
             {
-               FileStream *probe = mdfn_filestream_new(efn.c_str());
+               FileStream *probe = mdfn_filestream_new(efn);
                if (!mdfn_filestream_is_open(probe))
                {
-                  MDFN_Error(0, "Could not open track file \"%s\"", efn.c_str());
+                  MDFN_Error(0, "Could not open track file \"%s\"", efn);
                   if (probe)
                      stream_destroy(&probe->base);
                   { ok = false; goto cleanup; }
@@ -991,7 +1043,8 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
    //
    if(!IsTOC)
    {
-      std::string sbi_path;
+      char sbi_path[4096];
+      char sbi_basename[4096];
       char sbi_ext[4] = { 's', 'b', 'i', 0 };
 
       if(file_ext.length() == 4 && file_ext[0] == '.')
@@ -1004,10 +1057,13 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
          }
       }
 
-      sbi_path = MDFN_EvalFIP(self->base_dir, file_base + std::string(".") + std::string(sbi_ext));
+      snprintf(sbi_basename, sizeof(sbi_basename), "%.*s.%s",
+            (int)(sizeof(sbi_basename) - 6), file_base.c_str(), sbi_ext);
+      MDFN_EvalFIP_c(self->base_dir.c_str(), sbi_basename,
+            sbi_path, sizeof(sbi_path));
 
-      if (filestream_exists(sbi_path.c_str()))
-         CDAccess_Image_LoadSBI(self, sbi_path.c_str());
+      if (filestream_exists(sbi_path))
+         CDAccess_Image_LoadSBI(self, sbi_path);
    }
 
 cleanup:

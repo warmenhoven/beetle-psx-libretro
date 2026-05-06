@@ -29,7 +29,6 @@
 #include <string.h>
 #include <time.h>
 
-#include "../general.h"
 #include "../mednafen-endian.h"
 
 AudioReader::AudioReader() : LastReadPos(0)
