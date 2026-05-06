@@ -588,10 +588,10 @@ static int64_t Memcard_SaveDelay[8];
 PS_CDC *PSX_CDC = NULL;
 FrontIO *PSX_FIO = NULL;
 
-MultiAccessSizeMem<512 * 1024> *BIOSROM = NULL;
-MultiAccessSizeMem<65536> *PIOMem = NULL;
-MultiAccessSizeMem<2048 * 1024> *MainRAM = NULL;
-MultiAccessSizeMem<1024> *ScratchRAM = NULL;
+MultiAccessSizeMem *BIOSROM = NULL;
+MultiAccessSizeMem *PIOMem = NULL;
+MultiAccessSizeMem *MainRAM = NULL;
+MultiAccessSizeMem *ScratchRAM = NULL;
 
 /*
  * C-linkage accessors for MainRAM declared in mednafen/psx/psx_mem.h.
@@ -1371,7 +1371,7 @@ static void PSX_Power(void)
 
    cd_warned_slow = false;
 
-   memset(MainRAM->data32, 0, 2048 * 1024);
+   memset(MainRAM->get_data32(), 0, 2048 * 1024);
 
    for(i = 0; i < 9; i++)
       SysControl.Regs[i] = 0;
@@ -2141,44 +2141,58 @@ static void InitCommon(const bool EmulateMemcards = true, const bool WantPIOMem 
    else
       SetDiscWrapper(CD_TrayOpen);
 
+#define RAM_SIZE     (2048 * 1024)
+#define SCRATCH_SIZE (1024)
+#define BIOS_SIZE    (512 * 1024)
+#define PIO_SIZE     (65536)
+
 #ifdef HAVE_LIGHTREC
    psx_mmap = lightrec_init_mmap();
 
-   if(psx_mmap > 0)
+   if (psx_mmap > 0)
    {
-      MainRAM = new(psx_mem) MultiAccessSizeMem<RAM_SIZE>();
-      ScratchRAM = new(psx_scratch) MultiAccessSizeMem<SCRATCH_SIZE>();
-      BIOSROM = new(psx_bios) MultiAccessSizeMem<BIOS_SIZE>();
+      MainRAM    = new MultiAccessSizeMem();
+      MainRAM->attach(psx_mem,     RAM_SIZE);
+      ScratchRAM = new MultiAccessSizeMem();
+      ScratchRAM->attach(psx_scratch, SCRATCH_SIZE);
+      BIOSROM    = new MultiAccessSizeMem();
+      BIOSROM->attach(psx_bios,    BIOS_SIZE);
    }
    else
 #endif
    {
-      MainRAM = new MultiAccessSizeMem<2048 * 1024>();
-      ScratchRAM = new MultiAccessSizeMem<1024>();
-      BIOSROM = new MultiAccessSizeMem<512 * 1024>();
+      MainRAM    = new MultiAccessSizeMem();
+      MainRAM->init(RAM_SIZE);
+      ScratchRAM = new MultiAccessSizeMem();
+      ScratchRAM->init(SCRATCH_SIZE);
+      BIOSROM    = new MultiAccessSizeMem();
+      BIOSROM->init(BIOS_SIZE);
    }
 
-   PIOMem  = NULL;
+   PIOMem = NULL;
 
-   if(WantPIOMem)
-      PIOMem = new MultiAccessSizeMem<65536>();
+   if (WantPIOMem)
+   {
+      PIOMem = new MultiAccessSizeMem();
+      PIOMem->init(PIO_SIZE);
+   }
 
    for(uint32_t ma = 0x00000000; ma < 0x00800000; ma += 2048 * 1024)
    {
-      CPU_SetFastMap(PSX_CPU, MainRAM->data32, 0x00000000 + ma, 2048 * 1024);
-      CPU_SetFastMap(PSX_CPU, MainRAM->data32, 0x80000000 + ma, 2048 * 1024);
-      CPU_SetFastMap(PSX_CPU, MainRAM->data32, 0xA0000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MainRAM->get_data32(), 0x00000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MainRAM->get_data32(), 0x80000000 + ma, 2048 * 1024);
+      CPU_SetFastMap(PSX_CPU, MainRAM->get_data32(), 0xA0000000 + ma, 2048 * 1024);
    }
 
-   CPU_SetFastMap(PSX_CPU, BIOSROM->data32, 0x1FC00000, 512 * 1024);
-   CPU_SetFastMap(PSX_CPU, BIOSROM->data32, 0x9FC00000, 512 * 1024);
-   CPU_SetFastMap(PSX_CPU, BIOSROM->data32, 0xBFC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, BIOSROM->get_data32(), 0x1FC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, BIOSROM->get_data32(), 0x9FC00000, 512 * 1024);
+   CPU_SetFastMap(PSX_CPU, BIOSROM->get_data32(), 0xBFC00000, 512 * 1024);
 
    if(PIOMem)
    {
-      CPU_SetFastMap(PSX_CPU, PIOMem->data32, 0x1F000000, 65536);
-      CPU_SetFastMap(PSX_CPU, PIOMem->data32, 0x9F000000, 65536);
-      CPU_SetFastMap(PSX_CPU, PIOMem->data32, 0xBF000000, 65536);
+      CPU_SetFastMap(PSX_CPU, PIOMem->get_data32(), 0x1F000000, 65536);
+      CPU_SetFastMap(PSX_CPU, PIOMem->get_data32(), 0x9F000000, 65536);
+      CPU_SetFastMap(PSX_CPU, PIOMem->get_data32(), 0xBF000000, 65536);
    }
 
 

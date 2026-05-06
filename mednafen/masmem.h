@@ -1,6 +1,9 @@
 #ifndef __MDFN_PSX_MASMEM_H
 #define __MDFN_PSX_MASMEM_H
 
+#include <stdlib.h>
+#include <string.h>
+
 #include <retro_inline.h>
 
 #include "mednafen-types.h"
@@ -16,13 +19,6 @@
  * PIOMem is always laid out little-endian on disk and at runtime, so
  * the LE host case is a straight pointer dereference and the BE host
  * case is a byte-swap.
- *
- * Previously this file had three layers: a public LoadU*_LE / StoreU*_LE
- * pair that #ifdef'd to call LoadU*_RBO / StoreU*_RBO, which themselves
- * #ifdef'd between hand-written shifts and PowerPC lhbrx/lwbrx
- * instructions. That collapsed at -O2 but the source obscured the fact
- * that the LE path is one mov. Each operation is now defined directly
- * for its host with no internal branching.
  */
 
 #ifdef MSB_FIRST
@@ -90,70 +86,102 @@ static INLINE void   StoreU32_LE(uint32 *a, const uint32 v) { *a = v; }
  * supports aligned 8/16/24/32-bit access against the same backing
  * storage. Used for MainRAM, BIOSROM, ScratchRAM, and PIOMem.
  *
- * The template originally took (size, max_unit_type, big_endian)
- * parameters but every instantiation in the codebase passes
- * (size, uint32, false) - the last two never vary - so the only live
- * parameter is the size. The "false" big_endian means "the data is
- * stored little-endian regardless of host", which collapses to:
- *   - LE host: direct dereference
- *   - BE host: byte-swap
+ * Originally a C++ template parameterised on size, max_unit_type,
+ * and big_endian. Every instantiation passed (size, uint32, false),
+ * so the last two parameters were dead weight, and the size was
+ * only meaningful for the static buffer the union backed.
  *
- * which is exactly what LoadU*_LE / StoreU*_LE already do, so the
- * read/write helpers below just call into them.
+ * The backing buffer is now heap-allocated (calloc - so it's
+ * zero-initialised, matching the original value-initialised C++
+ * union) and the struct holds a uint8_t pointer plus a size.
+ * All four instances allocate their own buffer at construction.
  *
- * The template body remains C++ because it's still a template (size
- * is a template parameter). C-callable wrappers exist on the .cpp
- * side where any C consumer needs them.
+ * The struct is intentionally still C++; its instances live in
+ * libretro.cpp and only that TU touches them via member calls.
+ * The C-callable accessors in psx_mem.h forward to the same
+ * member functions for cpu.c / dma.c consumers.
  */
 #ifdef __cplusplus
-template<unsigned size>
 struct MultiAccessSizeMem
 {
-   union
-   {
-      uint8  data8 [size];
-      uint16 data16[size / sizeof(uint16)];
-      uint32 data32[size / sizeof(uint32)];
-   };
+   uint8_t  *data8;
+   uint32_t  size;
+   bool      owned;
 
-   INLINE uint8 ReadU8(uint32 address)
+   /* The original union exposed data16/data32 as aliases of the
+    * same storage. data16 was unused; data32 is still touched in a
+    * handful of places (the lightrec FastMap setup, OSD overlay
+    * blits) so it stays as an alias-cast accessor. */
+   uint32_t *get_data32(void) { return (uint32_t *)data8; }
+
+   MultiAccessSizeMem() : data8(NULL), size(0), owned(false) {}
+
+   /* Allocator: calloc gives us zero-initialised storage, matching
+    * the C++ template's value-initialised in-class array. */
+   bool init(uint32_t buf_size)
+   {
+      data8 = (uint8_t *)calloc(1, buf_size);
+      size  = buf_size;
+      owned = true;
+      return data8 != NULL;
+   }
+
+   /* attach: take an existing buffer (typically lightrec mmap
+    * region) without taking ownership.  The destructor must not
+    * free attached buffers - they're owned by the caller. */
+   void attach(uint8_t *buf, uint32_t buf_size)
+   {
+      data8 = buf;
+      size  = buf_size;
+      owned = false;
+   }
+
+   ~MultiAccessSizeMem()
+   {
+      if (owned)
+         free(data8);
+      data8 = NULL;
+      size  = 0;
+   }
+
+   INLINE uint8_t ReadU8(uint32_t address)
    {
       return data8[address];
    }
 
-   INLINE uint16 ReadU16(uint32 address)
+   INLINE uint16_t ReadU16(uint32_t address)
    {
-      return LoadU16_LE((uint16 *)(data8 + address));
+      return LoadU16_LE((uint16_t *)(data8 + address));
    }
 
-   INLINE uint32 ReadU32(uint32 address)
+   INLINE uint32_t ReadU32(uint32_t address)
    {
-      return LoadU32_LE((uint32 *)(data8 + address));
+      return LoadU32_LE((uint32_t *)(data8 + address));
    }
 
-   INLINE uint32 ReadU24(uint32 address)
+   INLINE uint32_t ReadU24(uint32_t address)
    {
       return  ReadU8(address)
            | (ReadU8(address + 1) << 8)
            | (ReadU8(address + 2) << 16);
    }
 
-   INLINE void WriteU8(uint32 address, uint8 value)
+   INLINE void WriteU8(uint32_t address, uint8_t value)
    {
       data8[address] = value;
    }
 
-   INLINE void WriteU16(uint32 address, uint16 value)
+   INLINE void WriteU16(uint32_t address, uint16_t value)
    {
-      StoreU16_LE((uint16 *)(data8 + address), value);
+      StoreU16_LE((uint16_t *)(data8 + address), value);
    }
 
-   INLINE void WriteU32(uint32 address, uint32 value)
+   INLINE void WriteU32(uint32_t address, uint32_t value)
    {
-      StoreU32_LE((uint32 *)(data8 + address), value);
+      StoreU32_LE((uint32_t *)(data8 + address), value);
    }
 
-   INLINE void WriteU24(uint32 address, uint32 value)
+   INLINE void WriteU24(uint32_t address, uint32_t value)
    {
       WriteU8(address + 0, value >> 0);
       WriteU8(address + 1, value >> 8);
@@ -161,7 +189,7 @@ struct MultiAccessSizeMem
    }
 
    template<typename T>
-   INLINE T Read(uint32 address)
+   INLINE T Read(uint32_t address)
    {
       if (sizeof(T) == 4)
          return ReadU32(address);
@@ -171,7 +199,7 @@ struct MultiAccessSizeMem
    }
 
    template<typename T>
-   INLINE void Write(uint32 address, T value)
+   INLINE void Write(uint32_t address, T value)
    {
       if (sizeof(T) == 4)
          WriteU32(address, value);

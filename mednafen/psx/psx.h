@@ -62,9 +62,9 @@ extern PS_CPU *PSX_CPU;
 #endif
 
 #ifdef __cplusplus
-extern MultiAccessSizeMem<512 * 1024>  *BIOSROM;
-extern MultiAccessSizeMem<2048 * 1024> *MainRAM;
-extern MultiAccessSizeMem<1024>        *ScratchRAM;
+extern MultiAccessSizeMem  *BIOSROM;
+extern MultiAccessSizeMem *MainRAM;
+extern MultiAccessSizeMem        *ScratchRAM;
 #endif
 
 #ifdef HAVE_LIGHTREC
