@@ -3,7 +3,6 @@ SOURCES_C   :=
 
 DEPS_DIR     := $(CORE_DIR)/deps
 LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
-LIBKIRK_DIR  := $(DEPS_DIR)/libkirk
 MEDNAFEN_DIR := $(CORE_DIR)/mednafen
 CORE_EMU_DIR := $(MEDNAFEN_DIR)/psx
 RSXGL_DIR    := $(CORE_DIR)/rustation-libretro/src
@@ -201,11 +200,11 @@ endif
 
    SOURCES_CXX += $(CDROM_DIR)/CDAccess.cpp \
                   $(CDROM_DIR)/CDAccess_Image.cpp \
-                  $(CDROM_DIR)/CDAccess_PBP.cpp \
                   $(CDROM_DIR)/audioreader.cpp \
                   $(CDROM_DIR)/misc.cpp
 
    SOURCES_C +=   $(CDROM_DIR)/CDAccess_CCD.c \
+                  $(CDROM_DIR)/CDAccess_PBP.c \
                   $(CDROM_DIR)/cdromif.c \
                   $(CDROM_DIR)/cdaccess_track.c \
                   $(CDROM_DIR)/CDUtility.c \
@@ -307,14 +306,6 @@ endif
       endif
 
    endif
-
-SOURCES_C +=   $(LIBKIRK_DIR)/aes.c \
-               $(LIBKIRK_DIR)/amctrl.c \
-               $(LIBKIRK_DIR)/bn.c \
-               $(LIBKIRK_DIR)/des.c \
-               $(LIBKIRK_DIR)/ec.c \
-               $(LIBKIRK_DIR)/kirk_engine.c \
-               $(LIBKIRK_DIR)/sha1.c
 
 SOURCES_C +=   $(CORE_DIR)/pgxp/pgxp_cpu.c \
                $(CORE_DIR)/pgxp/pgxp_debug.c \
