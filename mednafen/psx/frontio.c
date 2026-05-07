@@ -39,9 +39,7 @@ extern uint8_t analog_combo_hold;
 #include "../../osd_message.h"
 #include "../video/surface.h"
 
-
-
-
+extern bool setting_apply_analog_default;
 
 /* Factory functions for the input device implementations that
  * follow at the bottom of this file.  Each one returns a freshly-
@@ -1924,10 +1922,6 @@ static void InputDevice_DualShock_ResetTS(InputDevice *self_)
    self->lastts = 0;
 }
 
-#ifdef __LIBRETRO__
-extern bool setting_apply_analog_default;
-#endif
-
 static void InputDevice_DualShock_SetAMCT(InputDevice *self_, bool enabled)
 {
    InputDevice_DualShock *self = (InputDevice_DualShock *)self_;
@@ -3434,10 +3428,6 @@ static void InputDevice_neGconRumble_ResetTS(InputDevice *self_)
       self->combo_anatoggle_counter += self->lastts;
    self->lastts = 0;
 }
-
-#ifdef __LIBRETRO__
-extern bool setting_apply_analog_default;
-#endif
 
 static void InputDevice_neGconRumble_SetAMCT(InputDevice *self_, bool enabled)
 {
