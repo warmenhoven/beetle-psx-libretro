@@ -23,7 +23,6 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
 #include <vector>
 #include <stdlib.h>
 
@@ -95,35 +94,4 @@ protected:
 #endif
 };
 
-template<typename T>
-class ThreadSafeObjectPool : private ObjectPool<T>
-{
-public:
-	template<typename... P>
-	T *allocate(P &&... p)
-	{
-		std::lock_guard<std::mutex> holder{lock};
-		return ObjectPool<T>::allocate(std::forward<P>(p)...);
-	}
-
-	void free(T *ptr)
-	{
-#ifndef OBJECT_POOL_DEBUG
-		ptr->~T();
-		std::lock_guard<std::mutex> holder{lock};
-		this->vacants.push_back(ptr);
-#else
-		delete ptr;
-#endif
-	}
-
-	void clear()
-	{
-		std::lock_guard<std::mutex> holder{lock};
-		ObjectPool<T>::clear();
-	}
-
-private:
-	std::mutex lock;
-};
 }
