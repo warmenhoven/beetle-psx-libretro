@@ -143,7 +143,6 @@ public:
 		bool texture_color_modulate = false;
 		bool mask_test = false;
 		bool display_on = false;
-		//bool dither = false;
 		bool adaptive_smoothing = true;
 
 		UVRect UVLimits;
@@ -279,13 +278,6 @@ public:
 
 		render_state.display_on = enable;
 	}
-
-#if 0
-	void set_dither(bool dither)
-	{
-		render_state.dither = dither;
-	}
-#endif
 
 	void set_dither_native_resolution(bool enable)
 	{

@@ -874,7 +874,6 @@ void rsx_vulkan_push_triangle(
    renderer->set_texture_color_modulate(texture_blend_mode == 2);
    renderer->set_palette_offset(clut_x, clut_y);
    renderer->set_texture_offset(texpage_x, texpage_y);
-   //renderer->set_dither(dither);
    renderer->set_mask_test(mask_test);
    renderer->set_force_mask_bit(set_mask);
    renderer->set_UV_limits(min_u, min_v, max_u, max_v);
@@ -955,7 +954,6 @@ void rsx_vulkan_push_quad(
    renderer->set_texture_color_modulate(texture_blend_mode == 2);
    renderer->set_palette_offset(clut_x, clut_y);
    renderer->set_texture_offset(texpage_x, texpage_y);
-   //renderer->set_dither(dither);
    renderer->set_mask_test(mask_test);
    renderer->set_force_mask_bit(set_mask);
    renderer->set_UV_limits(min_u, min_v, max_u, max_v);
@@ -1054,7 +1052,6 @@ void rsx_vulkan_push_line(
       { float(p0x), float(p0y), 1.0f, c0, 0, 0 },
       { float(p1x), float(p1y), 1.0f, c1, 0, 0 },
    };
-   //renderer->set_dither(dither);
    renderer->set_texture_color_modulate(false);
    renderer->draw_line(vertices);
 }

@@ -65,7 +65,7 @@ class BufferPool
 {
 public:
 	~BufferPool();
-	void init(Device *device, VkDeviceSize block_size, VkDeviceSize alignment, VkBufferUsageFlags usage, bool need_device_local);
+	void init(Device *device, VkDeviceSize block_size, VkDeviceSize alignment, VkBufferUsageFlags usage);
 	void reset();
 
 	VkDeviceSize get_block_size() const
@@ -83,6 +83,5 @@ private:
 	VkBufferUsageFlags usage = 0;
 	std::vector<BufferBlock> blocks;
 	BufferBlock allocate_block(VkDeviceSize size);
-	bool need_device_local = false;
 };
 }

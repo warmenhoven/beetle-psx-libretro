@@ -28,13 +28,12 @@ using namespace std;
 
 namespace Vulkan
 {
-void BufferPool::init(Device *device, VkDeviceSize block_size, VkDeviceSize alignment, VkBufferUsageFlags usage, bool need_device_local)
+void BufferPool::init(Device *device, VkDeviceSize block_size, VkDeviceSize alignment, VkBufferUsageFlags usage)
 {
 	this->device = device;
 	this->block_size = block_size;
 	this->alignment = alignment;
 	this->usage = usage;
-	this->need_device_local = need_device_local;
 }
 
 BufferBlock::~BufferBlock()
@@ -48,15 +47,12 @@ void BufferPool::reset()
 
 BufferBlock BufferPool::allocate_block(VkDeviceSize size)
 {
-	BufferDomain ideal_domain = need_device_local ? BufferDomain::Device : BufferDomain::Host;
-	VkBufferUsageFlags extra_usage = ideal_domain == BufferDomain::Device ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0;
-
 	BufferBlock block;
 
 	BufferCreateInfo info;
-	info.domain = ideal_domain;
+	info.domain = BufferDomain::Host;
 	info.size = size;
-	info.usage = usage | extra_usage;
+	info.usage = usage;
 
 	block.gpu = device->create_buffer(info, nullptr);
 	device->set_name(*block.gpu, "chain-allocated-block-gpu");
