@@ -1078,21 +1078,7 @@ static u8 get_mfhi_mflo_reg(const struct block *block, u16 offset,
 				    (mflo && next->r.op == OP_SPECIAL_MFLO)))
 					return next->r.rd;
 
-				/* `jr $ra` returns to the caller.  We cannot prove
-				 * the parent function does not MFHI/MFLO the value
-				 * we computed, so do not signal "definitely unused"
-				 * here: that would make the emitter skip the
-				 * LO/HI write (LIGHTREC_NO_LO/LIGHTREC_NO_HI) and
-				 * the parent's MFHI/MFLO would read a stale value
-				 * from an earlier MULT/DIV.  This is the same class
-				 * of bug fixed upstream by pcercuei/lightrec
-				 * commit aa2f992e ("optimizer: Don't remove DIV(U)
-				 * opcode when LO/HI are unused" -- THPS2 garbled
-				 * screen, also seen here as a stretched-vertex
-				 * artifact on the PSX BIOS boot logo).  Return the
-				 * conservative pseudo-reg (REG_LO/REG_HI) so the
-				 * caller treats the value as live. */
-				return reg;
+				return 0;
 			case OP_SPECIAL_JALR:
 				return reg;
 			case OP_SPECIAL_MFHI:
