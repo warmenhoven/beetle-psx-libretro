@@ -105,6 +105,12 @@ static int memcard_right_index = 1;
 static int memcard_right_index_old;
 
 unsigned cd_2x_speedup = 1;
+/* Compatibility cap on cd_2x_speedup for known-fragile titles.  Set
+ * once during disc identification (see the cd_speedup_compat_table
+ * in CalcDiscSCEx_BySYSTEMCNF), 0 means "no cap" (i.e. honour the
+ * full user-selected CD Loading Speed setting).  Applied in
+ * check_variables after the user-facing option is parsed. */
+static unsigned cd_speedup_compat_max = 0;
 bool cd_async = false;
 bool cd_warned_slow = false;
 int64 cd_slow_timeout = 8000; // microseconds
@@ -1659,6 +1665,50 @@ static const char *CalcDiscSCEx_BySYSTEMCNF(CDIF *c, unsigned *rr)
          {
             is_monkey_hero = true;
             log_cb(RETRO_LOG_INFO, "Monkey Hero FBWrite Tweak Activated\n");
+         }
+
+         /* Per-game CD-speedup compatibility caps.
+          *
+          * Some titles' CD-handling code can't keep up when the CDC
+          * feeds data sectors at the high end of the cd_2x_speedup
+          * range; the user picks "8x" in core options and the game
+          * wedges or crashes during a streaming read.  We don't try
+          * to fix the underlying mismatch (the timing assumptions
+          * are baked into the game binary), we just clamp the
+          * speedup to the highest value that's been observed to
+          * work for that title.
+          *
+          * The cap is the max value of cd_2x_speedup itself, not
+          * the user-facing "Nx" label - so 3 here means "up to 6x
+          * (2 * 3)" is fine.  Add new entries with the BOOT-format
+          * serial (AAAA_NNN.NN) as it appears in SYSTEM.CNF, not
+          * the redump/SLUS-NNNNN form. */
+         {
+            static const struct { const char *serial; unsigned cap; }
+            cd_speedup_compat_table[] = {
+               /* Myst (Cyan / Psygnosis): freezes/crashes at 8x
+                * when the post-seek streaming pipeline desyncs.
+                * 6x is the highest speed observed to work. */
+               { "SCUS_946.02", 3 }, /* NTSC-U */
+               { "SLES_002.18", 3 }, /* PAL */
+               { "SLPS_000.24", 3 }, /* NTSC-J original */
+               { "SLPS_910.23", 3 }, /* NTSC-J [Playstation the Best] */
+               { "SLPS_911.23", 3 }, /* NTSC-J [Playstation the Best] [Rerelease] */
+               { "SLPS_029.24", 3 }, /* NTSC-J [Value 1500] */
+            };
+            unsigned k;
+            for (k = 0; k < sizeof(cd_speedup_compat_table) / sizeof(cd_speedup_compat_table[0]); k++)
+            {
+               if (!strncmp(bootpos, cd_speedup_compat_table[k].serial, 11))
+               {
+                  cd_speedup_compat_max = cd_speedup_compat_table[k].cap;
+                  log_cb(RETRO_LOG_INFO,
+                        "CD speedup capped to %ux for compatibility (serial %s)\n",
+                        cd_speedup_compat_max * 2,
+                        cd_speedup_compat_table[k].serial);
+                  break;
+               }
+            }
          }
 
          if ((tmp = strchr(bootpos, '_'))) *tmp = 0;
@@ -4260,6 +4310,12 @@ static void check_variables(bool startup)
    else
       cd_2x_speedup = 1;
 
+   /* Apply per-game compatibility cap if the loaded disc is on the
+    * known-fragile list.  Silent clamp - the one-time log message at
+    * detection covers the user notification. */
+   if (cd_speedup_compat_max && cd_2x_speedup > cd_speedup_compat_max)
+      cd_2x_speedup = cd_speedup_compat_max;
+
    var.key = BEETLE_OPT(memcard_left_index);
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
@@ -4615,8 +4671,16 @@ bool retro_load_game(const struct retro_game_info *info)
    MDFNMP_InstallReadPatches();
 
    // Determine content_is_pal before calling alloc_surface()
+   cd_speedup_compat_max = 0; /* reset; CalcDiscSCEx may repopulate */
    disc_region = CalcDiscSCEx();
    content_is_pal = (disc_region == REGION_EU);
+
+   /* CalcDiscSCEx may have populated cd_speedup_compat_max from the
+    * disc serial.  check_variables(true) above ran before disc
+    * identification, so re-apply the cap here to honour it on the
+    * very first frame as well. */
+   if (cd_speedup_compat_max && cd_2x_speedup > cd_speedup_compat_max)
+      cd_2x_speedup = cd_speedup_compat_max;
 
    alloc_surface();
 
