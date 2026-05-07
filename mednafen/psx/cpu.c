@@ -3013,7 +3013,25 @@ static void cop2_op(struct lightrec_state *state, u32 func)
             "Invalid CP2 function %u\n", func);
    }
    else
-      GTE_Instruction(func);
+   {
+      /* Honour the GTE op cycle latency that the interpreter records
+       * via gte_ts_done.  GTE_Instruction returns (cycles - 1); the
+       * interpreter tracks completion as
+       *   gte_ts_done = timestamp + GTE_Instruction(func);
+       * (cpu.c BEGIN_OPF(COP2)/0x10..0x1F).  Lightrec previously
+       * dropped the return value, so any subsequent MFC2/CFC2 issued
+       * by recompiled code returned the GTE result without the proper
+       * stall, while the interpreter blocked on the latency.  This
+       * mismatched the cycle accounting around GTE-heavy code (BIOS
+       * boot logo, early game frames before lightrec re-recompiles),
+       * producing transient glitches such as one stretched vertex on
+       * the spinning Sony diamond. */
+      pscpu_timestamp_t timestamp = lightrec_current_cycle_count(state);
+      pscpu_timestamp_t latency   = GTE_Instruction(func);
+      if (timestamp < gte_ts_done)
+         timestamp = gte_ts_done;
+      gte_ts_done = timestamp + latency;
+   }
 }
 
 static void reset_target_cycle_count(struct lightrec_state *state, pscpu_timestamp_t timestamp){
