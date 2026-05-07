@@ -39,16 +39,12 @@ extern retro_log_printf_t libretro_log;
 #include <intrin.h>
 #endif
 
-namespace Util
-{
 #ifdef __GNUC__
 #define leading_zeroes(x) ((x) == 0 ? 32 : __builtin_clz(x))
 #define trailing_zeroes(x) ((x) == 0 ? 32 : __builtin_ctz(x))
 #define trailing_ones(x) __builtin_ctz(~(x))
 #elif defined(_MSC_VER)
-namespace Internal
-{
-static inline uint32_t clz(uint32_t x)
+static inline uint32_t util_clz(uint32_t x)
 {
 	unsigned long result;
 	if (_BitScanReverse(&result, x))
@@ -57,7 +53,7 @@ static inline uint32_t clz(uint32_t x)
 		return 32;
 }
 
-static inline uint32_t ctz(uint32_t x)
+static inline uint32_t util_ctz(uint32_t x)
 {
 	unsigned long result;
 	if (_BitScanForward(&result, x))
@@ -65,36 +61,28 @@ static inline uint32_t ctz(uint32_t x)
 	else
 		return 32;
 }
-}
 
-#define leading_zeroes(x) ::Util::Internal::clz(x)
-#define trailing_zeroes(x) ::Util::Internal::ctz(x)
-#define trailing_ones(x) ::Util::Internal::ctz(~(x))
+#define leading_zeroes(x) util_clz(x)
+#define trailing_zeroes(x) util_ctz(x)
+#define trailing_ones(x) util_ctz(~(x))
 #else
 #error "Implement me."
 #endif
 
-template<typename T>
-inline void for_each_bit(uint32_t value, const T &func)
-{
-	while (value)
-	{
-		uint32_t bit = trailing_zeroes(value);
-		func(bit);
-		value &= ~(1u << bit);
-	}
-}
+/* Iterate over each set bit in a uint32_t mask. Inside the body, BIT_VAR holds
+ * the bit index. C-style: just expand into a for loop, no captures or lambdas. */
+#define FOR_EACH_BIT(value, bit_var)                                          \
+	for (uint32_t _fe_v = (uint32_t)(value), bit_var = trailing_zeroes(_fe_v); \
+	     _fe_v;                                                                \
+	     _fe_v &= _fe_v - 1u, bit_var = trailing_zeroes(_fe_v))
 
-template<typename T>
-inline void for_each_bit_range(uint32_t value, const T &func)
-{
-	while (value)
-	{
-		uint32_t bit = trailing_zeroes(value);
-		uint32_t range = trailing_ones(value >> bit);
-		func(bit, range);
-		value &= ~((1u << (bit + range)) - 1);
-	}
-}
-
-}
+/* Iterate over each contiguous run of 1-bits in a uint32_t mask. BASE_VAR is
+ * the bit index of the run's first 1, RANGE_VAR is the run length. */
+#define FOR_EACH_BIT_RANGE(value, base_var, range_var)                            \
+	for (uint32_t _fe_v = (uint32_t)(value),                                       \
+	              base_var = trailing_zeroes(_fe_v),                               \
+	              range_var = (_fe_v ? trailing_ones(_fe_v >> base_var) : 0u);     \
+	     _fe_v;                                                                    \
+	     _fe_v &= ~((1u << (base_var + range_var)) - 1u),                          \
+	     base_var = trailing_zeroes(_fe_v),                                        \
+	     range_var = (_fe_v ? trailing_ones(_fe_v >> base_var) : 0u))

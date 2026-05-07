@@ -604,12 +604,13 @@ VkPipeline CommandBuffer::build_compute_pipeline(Hash hash)
 		spec_info.dataSize = sizeof(potential_static_state.spec_constants);
 		spec_info.pMapEntries = spec_entries;
 
-		for_each_bit(mask, [&](uint32_t bit) {
+		FOR_EACH_BIT(mask, bit)
+		{
 			auto &entry = spec_entries[spec_info.mapEntryCount++];
 			entry.offset = sizeof(uint32_t) * bit;
 			entry.size = sizeof(uint32_t);
 			entry.constantID = bit;
-		});
+				}
 	}
 
 	VkPipeline compute_pipeline;
@@ -700,23 +701,25 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 	vi.pVertexAttributeDescriptions = vi_attribs;
 	uint32_t attr_mask = current_layout->get_resource_layout().attribute_mask;
 	uint32_t binding_mask = 0;
-	for_each_bit(attr_mask, [&](uint32_t bit) {
+	FOR_EACH_BIT(attr_mask, bit)
+	{
 		auto &attr = vi_attribs[vi.vertexAttributeDescriptionCount++];
 		attr.location = bit;
 		attr.binding = attribs[bit].binding;
 		attr.format = attribs[bit].format;
 		attr.offset = attribs[bit].offset;
 		binding_mask |= 1u << attr.binding;
-	});
+		}
 
 	VkVertexInputBindingDescription vi_bindings[VULKAN_NUM_VERTEX_BUFFERS];
 	vi.pVertexBindingDescriptions = vi_bindings;
-	for_each_bit(binding_mask, [&](uint32_t bit) {
+	FOR_EACH_BIT(binding_mask, bit)
+	{
 		auto &bind = vi_bindings[vi.vertexBindingDescriptionCount++];
 		bind.binding = bit;
 		bind.inputRate = vbo.input_rates[bit];
 		bind.stride = vbo.strides[bit];
-	});
+		}
 
 	// Input assembly
 	VkPipelineInputAssemblyStateCreateInfo ia = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
@@ -747,8 +750,8 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 	VkPipelineShaderStageCreateInfo stages[static_cast<unsigned>(ShaderStage::Count)];
 	unsigned num_stages = 0;
 
-	VkSpecializationInfo spec_info[ecast(ShaderStage::Count)] = {};
-	VkSpecializationMapEntry spec_entries[ecast(ShaderStage::Count)][VULKAN_NUM_SPEC_CONSTANTS];
+	VkSpecializationInfo spec_info[(unsigned)ShaderStage::Count] = {};
+	VkSpecializationMapEntry spec_entries[(unsigned)ShaderStage::Count][VULKAN_NUM_SPEC_CONSTANTS];
 
 	for (unsigned i = 0; i < static_cast<unsigned>(ShaderStage::Count); i++)
 	{
@@ -776,12 +779,13 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 				spec_info[i].dataSize = sizeof(potential_static_state.spec_constants);
 				spec_info[i].pMapEntries = spec_entries[i];
 
-				for_each_bit(mask, [&](uint32_t bit) {
+				FOR_EACH_BIT(mask, bit)
+				{
 					auto &entry = spec_entries[i][spec_info[i].mapEntryCount++];
 					entry.offset = sizeof(uint32_t) * bit;
 					entry.size = sizeof(uint32_t);
 					entry.constantID = bit;
-				});
+								}
 			}
 		}
 	}
@@ -822,9 +826,10 @@ void CommandBuffer::flush_compute_pipeline()
 	uint32_t combined_spec_constant = layout.combined_spec_constant_mask;
 	combined_spec_constant &= static_state.state.spec_constant_mask;
 	h.u32(combined_spec_constant);
-	for_each_bit(combined_spec_constant, [&](uint32_t bit) {
+	FOR_EACH_BIT(combined_spec_constant, bit)
+	{
 		h.u32(potential_static_state.spec_constants[bit]);
-	});
+		}
 
 	auto hash = h.get();
 	current_pipeline = current_program->get_pipeline(hash);
@@ -837,18 +842,20 @@ void CommandBuffer::flush_graphics_pipeline()
 	Hasher h;
 	active_vbos = 0;
 	auto &layout = current_layout->get_resource_layout();
-	for_each_bit(layout.attribute_mask, [&](uint32_t bit) {
+	FOR_EACH_BIT(layout.attribute_mask, bit)
+	{
 		h.u32(bit);
 		active_vbos |= 1u << attribs[bit].binding;
 		h.u32(attribs[bit].binding);
 		h.u32(attribs[bit].format);
 		h.u32(attribs[bit].offset);
-	});
+		}
 
-	for_each_bit(active_vbos, [&](uint32_t bit) {
+	FOR_EACH_BIT(active_vbos, bit)
+	{
 		h.u32(vbo.input_rates[bit]);
 		h.u32(vbo.strides[bit]);
-	});
+		}
 
 	h.u64(compatible_render_pass->get_hash());
 	h.u32(current_subpass);
@@ -873,9 +880,10 @@ void CommandBuffer::flush_graphics_pipeline()
 	uint32_t combined_spec_constant = layout.combined_spec_constant_mask;
 	combined_spec_constant &= static_state.state.spec_constant_mask;
 	h.u32(combined_spec_constant);
-	for_each_bit(combined_spec_constant, [&](uint32_t bit) {
+	FOR_EACH_BIT(combined_spec_constant, bit)
+	{
 		h.u32(potential_static_state.spec_constants[bit]);
-	});
+		}
 
 	auto hash = h.get();
 	current_pipeline = current_program->get_pipeline(hash);
@@ -960,13 +968,14 @@ void CommandBuffer::flush_render_state()
 	}
 
 	uint32_t update_vbo_mask = dirty_vbos & active_vbos;
-	for_each_bit_range(update_vbo_mask, [&](uint32_t binding, uint32_t binding_count) {
+	FOR_EACH_BIT_RANGE(update_vbo_mask, binding, binding_count)
+	{
 #ifdef VULKAN_DEBUG
 		for (unsigned i = binding; i < binding + binding_count; i++)
 			VK_ASSERT(vbo.buffers[i] != VK_NULL_HANDLE);
 #endif
 		vkCmdBindVertexBuffers(cmd, binding, binding_count, vbo.buffers + binding, vbo.offsets + binding);
-	});
+		}
 	dirty_vbos &= ~update_vbo_mask;
 }
 
@@ -1148,7 +1157,7 @@ void *CommandBuffer::update_image(const Image &image, const VkOffset3D &offset, 
 
 	uint32_t blocks_x = row_length;
 	uint32_t blocks_y = image_height;
-	format_num_blocks(create_info.format, blocks_x, blocks_y);
+	format_num_blocks(create_info.format, &blocks_x, &blocks_y);
 
 	VkDeviceSize size =
 	    TextureFormatLayout::format_block_size(create_info.format) * subresource.layerCount * depth * blocks_x * blocks_y;
@@ -1380,30 +1389,34 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 	h.u32(set_layout.fp_mask);
 
 	// UBOs
-	for_each_bit(set_layout.uniform_buffer_mask, [&](uint32_t binding) {
+	FOR_EACH_BIT(set_layout.uniform_buffer_mask, binding)
+	{
 		h.u64(bindings.cookies[set][binding]);
 		h.u32(bindings.bindings[set][binding].buffer.range);
 		VK_ASSERT(bindings.bindings[set][binding].buffer.buffer != VK_NULL_HANDLE);
 
 		dynamic_offsets[num_dynamic_offsets++] = bindings.bindings[set][binding].buffer.offset;
-	});
+		}
 
 	// SSBOs
-	for_each_bit(set_layout.storage_buffer_mask, [&](uint32_t binding) {
+	FOR_EACH_BIT(set_layout.storage_buffer_mask, binding)
+	{
 		h.u64(bindings.cookies[set][binding]);
 		h.u32(bindings.bindings[set][binding].buffer.offset);
 		h.u32(bindings.bindings[set][binding].buffer.range);
 		VK_ASSERT(bindings.bindings[set][binding].buffer.buffer != VK_NULL_HANDLE);
-	});
+		}
 
 	// Sampled buffers
-	for_each_bit(set_layout.sampled_buffer_mask, [&](uint32_t binding) {
+	FOR_EACH_BIT(set_layout.sampled_buffer_mask, binding)
+	{
 		h.u64(bindings.cookies[set][binding]);
 		VK_ASSERT(bindings.bindings[set][binding].buffer_view != VK_NULL_HANDLE);
-	});
+		}
 
 	// Sampled images
-	for_each_bit(set_layout.sampled_image_mask, [&](uint32_t binding) {
+	FOR_EACH_BIT(set_layout.sampled_image_mask, binding)
+	{
 		h.u64(bindings.cookies[set][binding]);
 		if (!has_immutable_sampler(set_layout, binding))
 		{
@@ -1412,34 +1425,38 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 		}
 		h.u32(bindings.bindings[set][binding].image.fp.imageLayout);
 		VK_ASSERT(bindings.bindings[set][binding].image.fp.imageView != VK_NULL_HANDLE);
-	});
+		}
 
 	// Separate images
-	for_each_bit(set_layout.separate_image_mask, [&](uint32_t binding) {
+	FOR_EACH_BIT(set_layout.separate_image_mask, binding)
+	{
 		h.u64(bindings.cookies[set][binding]);
 		h.u32(bindings.bindings[set][binding].image.fp.imageLayout);
 		VK_ASSERT(bindings.bindings[set][binding].image.fp.imageView != VK_NULL_HANDLE);
-	});
+		}
 
 	// Separate samplers
-	for_each_bit(set_layout.sampler_mask & ~set_layout.immutable_sampler_mask, [&](uint32_t binding) {
+	FOR_EACH_BIT(set_layout.sampler_mask & ~set_layout.immutable_sampler_mask, binding)
+	{
 		h.u64(bindings.secondary_cookies[set][binding]);
 		VK_ASSERT(bindings.bindings[set][binding].image.fp.sampler != VK_NULL_HANDLE);
-	});
+		}
 
 	// Storage images
-	for_each_bit(set_layout.storage_image_mask, [&](uint32_t binding) {
+	FOR_EACH_BIT(set_layout.storage_image_mask, binding)
+	{
 		h.u64(bindings.cookies[set][binding]);
 		h.u32(bindings.bindings[set][binding].image.fp.imageLayout);
 		VK_ASSERT(bindings.bindings[set][binding].image.fp.imageView != VK_NULL_HANDLE);
-	});
+		}
 
 	// Input attachments
-	for_each_bit(set_layout.input_attachment_mask, [&](uint32_t binding) {
+	FOR_EACH_BIT(set_layout.input_attachment_mask, binding)
+	{
 		h.u64(bindings.cookies[set][binding]);
 		h.u32(bindings.bindings[set][binding].image.fp.imageLayout);
 		VK_ASSERT(bindings.bindings[set][binding].image.fp.imageView != VK_NULL_HANDLE);
-	});
+		}
 
 	Hash hash = h.get();
 	auto allocated = current_layout->get_allocator(set)->find(thread_index, hash);
@@ -1452,7 +1469,8 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 		VkWriteDescriptorSet writes[VULKAN_NUM_BINDINGS];
 		VkDescriptorBufferInfo buffer_info[VULKAN_NUM_BINDINGS];
 
-		for_each_bit(set_layout.uniform_buffer_mask, [&](uint32_t binding) {
+		FOR_EACH_BIT(set_layout.uniform_buffer_mask, binding)
+		{
 			auto &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
@@ -1467,9 +1485,10 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 			buffer = bindings.bindings[set][binding].buffer;
 			buffer.offset = 0;
 			write.pBufferInfo = &buffer;
-		});
+				}
 
-		for_each_bit(set_layout.storage_buffer_mask, [&](uint32_t binding) {
+		FOR_EACH_BIT(set_layout.storage_buffer_mask, binding)
+		{
 			auto &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
@@ -1479,9 +1498,10 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 			write.dstBinding = binding;
 			write.dstSet = allocated.first;
 			write.pBufferInfo = &bindings.bindings[set][binding].buffer;
-		});
+				}
 
-		for_each_bit(set_layout.sampled_buffer_mask, [&](uint32_t binding) {
+		FOR_EACH_BIT(set_layout.sampled_buffer_mask, binding)
+		{
 			auto &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
@@ -1491,9 +1511,10 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 			write.dstBinding = binding;
 			write.dstSet = allocated.first;
 			write.pTexelBufferView = &bindings.bindings[set][binding].buffer_view;
-		});
+				}
 
-		for_each_bit(set_layout.sampled_image_mask, [&](uint32_t binding) {
+		FOR_EACH_BIT(set_layout.sampled_image_mask, binding)
+		{
 			auto &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
@@ -1507,9 +1528,10 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 				write.pImageInfo = &bindings.bindings[set][binding].image.fp;
 			else
 				write.pImageInfo = &bindings.bindings[set][binding].image.integer;
-		});
+				}
 
-		for_each_bit(set_layout.separate_image_mask, [&](uint32_t binding) {
+		FOR_EACH_BIT(set_layout.separate_image_mask, binding)
+		{
 			auto &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
@@ -1523,9 +1545,10 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 				write.pImageInfo = &bindings.bindings[set][binding].image.fp;
 			else
 				write.pImageInfo = &bindings.bindings[set][binding].image.integer;
-		});
+				}
 
-		for_each_bit(set_layout.sampler_mask & ~set_layout.immutable_sampler_mask, [&](uint32_t binding) {
+		FOR_EACH_BIT(set_layout.sampler_mask & ~set_layout.immutable_sampler_mask, binding)
+		{
 			auto &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
@@ -1535,9 +1558,10 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 			write.dstBinding = binding;
 			write.dstSet = allocated.first;
 			write.pImageInfo = &bindings.bindings[set][binding].image.fp;
-		});
+				}
 
-		for_each_bit(set_layout.storage_image_mask, [&](uint32_t binding) {
+		FOR_EACH_BIT(set_layout.storage_image_mask, binding)
+		{
 			auto &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
@@ -1551,9 +1575,10 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 				write.pImageInfo = &bindings.bindings[set][binding].image.fp;
 			else
 				write.pImageInfo = &bindings.bindings[set][binding].image.integer;
-		});
+				}
 
-		for_each_bit(set_layout.input_attachment_mask, [&](uint32_t binding) {
+		FOR_EACH_BIT(set_layout.input_attachment_mask, binding)
+		{
 			auto &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
@@ -1566,7 +1591,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 				write.pImageInfo = &bindings.bindings[set][binding].image.fp;
 			else
 				write.pImageInfo = &bindings.bindings[set][binding].image.integer;
-		});
+				}
 
 		vkUpdateDescriptorSets(device->get_device(), write_count, writes, 0, nullptr);
 	}
@@ -1579,7 +1604,8 @@ void CommandBuffer::flush_descriptor_sets()
 {
 	auto &layout = current_layout->get_resource_layout();
 	uint32_t set_update = layout.descriptor_set_mask & dirty_sets;
-	for_each_bit(set_update, [&](uint32_t set) { flush_descriptor_set(set); });
+	FOR_EACH_BIT(set_update, set)
+	{ flush_descriptor_set(set); 	}
 	dirty_sets &= ~set_update;
 }
 

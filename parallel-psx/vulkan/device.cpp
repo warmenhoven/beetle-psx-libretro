@@ -24,7 +24,6 @@
 #include "format.hpp"
 #include "type_to_string.hpp"
 #include "quirks.hpp"
-#include "enum_cast.hpp"
 #include <algorithm>
 #include <string.h>
 
@@ -342,7 +341,8 @@ void Device::bake_program(Program &program)
 			layout.sets[set].separate_image_mask |= shader_layout.sets[set].separate_image_mask;
 			layout.sets[set].fp_mask |= shader_layout.sets[set].fp_mask;
 
-			for_each_bit(shader_layout.sets[set].immutable_sampler_mask, [&](uint32_t binding) {
+			FOR_EACH_BIT(shader_layout.sets[set].immutable_sampler_mask, binding)
+			{
 				StockSampler sampler = get_immutable_sampler(shader_layout.sets[set], binding);
 
 				// Do we already have an immutable sampler? Make sure it matches the layout.
@@ -353,7 +353,7 @@ void Device::bake_program(Program &program)
 				}
 
 				set_immutable_sampler(layout.sets[set], binding, sampler);
-			});
+						}
 
 			uint32_t active_binds =
 					shader_layout.sets[set].sampled_image_mask |
@@ -368,9 +368,10 @@ void Device::bake_program(Program &program)
 			if (active_binds)
 				layout.stages_for_sets[set] |= stage_mask;
 
-			for_each_bit(active_binds, [&](uint32_t bit) {
+			FOR_EACH_BIT(active_binds, bit)
+			{
 				layout.stages_for_bindings[set][bit] |= stage_mask;
-			});
+						}
 		}
 
 		// Merge push constant ranges into one range.
@@ -3097,7 +3098,7 @@ const RenderPass &Device::request_render_pass(const RenderPassInfo &info, bool c
 	}
 
 	depth_stencil = info.depth_stencil ? info.depth_stencil->get_format() : VK_FORMAT_UNDEFINED;
-	h.data(formats, info.num_color_attachments * sizeof(VkFormat));
+	h.data(reinterpret_cast<const uint32_t *>(formats), info.num_color_attachments * sizeof(VkFormat));
 	h.u32(info.num_color_attachments);
 	h.u32(depth_stencil);
 

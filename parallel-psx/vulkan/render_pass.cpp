@@ -664,8 +664,8 @@ RenderPass::RenderPass(Hash hash, Device *device, const RenderPassInfo &info)
 	rp_info.attachmentCount = num_attachments;
 
 	// Add external subpass dependencies.
-	for_each_bit(external_color_dependencies | external_depth_dependencies | external_input_dependencies,
-	             [&](unsigned subpass) {
+	FOR_EACH_BIT(external_color_dependencies | external_depth_dependencies | external_input_dependencies, subpass)
+	{
 		             external_dependencies.emplace_back();
 		             auto &dep = external_dependencies.back();
 		             dep.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -699,10 +699,11 @@ RenderPass::RenderPass(Hash hash, Device *device, const RenderPassInfo &info)
 			                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 			             dep.dstAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 		             }
-	             });
+	             	}
 
 	// Queue up self-dependencies (COLOR | DEPTH) -> INPUT.
-	for_each_bit(color_self_dependencies | depth_self_dependencies, [&](unsigned subpass) {
+	FOR_EACH_BIT(color_self_dependencies | depth_self_dependencies, subpass)
+	{
 		external_dependencies.emplace_back();
 		auto &dep = external_dependencies.back();
 		dep.srcSubpass = subpass;
@@ -723,7 +724,7 @@ RenderPass::RenderPass(Hash hash, Device *device, const RenderPassInfo &info)
 
 		dep.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		dep.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-	});
+		}
 
 	// Flush and invalidate caches between each subpass.
 	for (unsigned subpass = 1; subpass < num_subpasses; subpass++)

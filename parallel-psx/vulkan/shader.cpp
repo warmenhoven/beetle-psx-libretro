@@ -279,7 +279,7 @@ Shader::~Shader()
 
 void Program::set_shader(ShaderStage stage, Shader *handle)
 {
-	shaders[Util::ecast(stage)] = handle;
+	shaders[(unsigned)stage] = handle;
 }
 
 Program::Program(Device *device, Shader *vertex, Shader *fragment)
