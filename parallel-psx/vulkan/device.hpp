@@ -33,7 +33,6 @@
 #include "sampler.hpp"
 #include "semaphore.hpp"
 #include "semaphore_manager.hpp"
-#include "event_manager.hpp"
 #include "shader.hpp"
 #include "vulkan.hpp"
 #include "query_pool.hpp"
@@ -79,7 +78,6 @@ struct HandlePool
 	VulkanObjectPool<Sampler> samplers;
 	VulkanObjectPool<FenceHolder> fences;
 	VulkanObjectPool<SemaphoreHolder> semaphores;
-	VulkanObjectPool<EventHolder> events;
 	VulkanObjectPool<QueryPoolResult> query;
 	VulkanObjectPool<CommandBuffer> command_buffers;
 };
@@ -91,8 +89,6 @@ public:
 	// Don't want to expose a lot of internal guts to make this work.
 	friend class QueryPool;
 	friend struct QueryPoolResultDeleter;
-	friend class EventHolder;
-	friend struct EventHolderDeleter;
 	friend class SemaphoreHolder;
 	friend struct SemaphoreHolderDeleter;
 	friend class FenceHolder;
@@ -307,7 +303,6 @@ private:
 		DeviceAllocator memory;
 		FenceManager fence;
 		SemaphoreManager semaphore;
-		EventManager event;
 		BufferPool vbo, ibo, ubo, staging;
 	};
 	Managers managers;
@@ -358,7 +353,6 @@ private:
 		std::vector<CommandBufferHandle> compute_submissions;
 		std::vector<CommandBufferHandle> transfer_submissions;
 		std::vector<VkSemaphore> recycled_semaphores;
-		std::vector<VkEvent> recycled_events;
 		std::vector<VkSemaphore> destroyed_semaphores;
 		std::vector<ImageHandle> keep_alive_images;
 	};
@@ -440,7 +434,6 @@ private:
 	std::vector<CommandBufferHandle> &get_queue_submissions(CommandBuffer::Type type);
 	void clear_wait_semaphores();
 	void submit_staging(CommandBufferHandle &cmd, VkBufferUsageFlags usage, bool flush);
-	PipelineEvent request_pipeline_event();
 
 	std::function<void ()> queue_lock_callback;
 	std::function<void ()> queue_unlock_callback;
@@ -459,7 +452,6 @@ private:
 	void destroy_framebuffer(VkFramebuffer framebuffer);
 	void destroy_semaphore(VkSemaphore semaphore);
 	void recycle_semaphore(VkSemaphore semaphore);
-	void destroy_event(VkEvent event);
 	void free_memory(const DeviceAllocation &alloc);
 	void reset_fence(VkFence fence);
 	void keep_handle_alive(ImageHandle handle);
@@ -473,7 +465,6 @@ private:
 	void destroy_framebuffer_nolock(VkFramebuffer framebuffer);
 	void destroy_semaphore_nolock(VkSemaphore semaphore);
 	void recycle_semaphore_nolock(VkSemaphore semaphore);
-	void destroy_event_nolock(VkEvent event);
 	void free_memory_nolock(const DeviceAllocation &alloc);
 
 	void flush_frame_nolock();

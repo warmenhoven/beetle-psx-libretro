@@ -29,7 +29,6 @@
 #include "sampler.hpp"
 #include "shader.hpp"
 #include "vulkan.hpp"
-#include "pipeline_event.hpp"
 #include "query_pool.hpp"
 #include "buffer_pool.hpp"
 #include <string.h>
@@ -285,13 +284,6 @@ public:
 	void pixel_barrier();
 	void barrier(VkPipelineStageFlags src_stage, VkAccessFlags src_access, VkPipelineStageFlags dst_stage,
 	             VkAccessFlags dst_access);
-
-	PipelineEvent signal_event(VkPipelineStageFlags stages);
-	void wait_events(unsigned num_events, const VkEvent *events,
-	                 VkPipelineStageFlags src_stages, VkPipelineStageFlags dst_stages,
-	                 unsigned barriers, const VkMemoryBarrier *globals,
-	                 unsigned buffer_barriers, const VkBufferMemoryBarrier *buffers,
-	                 unsigned image_barriers, const VkImageMemoryBarrier *images);
 
 	void barrier(VkPipelineStageFlags src_stages, VkPipelineStageFlags dst_stages,
 	             unsigned barriers, const VkMemoryBarrier *globals,

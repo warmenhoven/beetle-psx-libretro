@@ -515,14 +515,10 @@ void Device::init_workarounds()
 {
 #if 0
 	workarounds.wsi_acquire_barrier_is_expensive = true;
-	workarounds.emulate_event_as_pipeline_barrier = true;
 	workarounds.optimize_all_graphics_barrier = true;
 #else
 	// UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL stalls, so need to acquire async.
 	workarounds.wsi_acquire_barrier_is_expensive = gpu_props.vendorID == VENDOR_ID_ARM;
-
-	// VkEvent is suboptimal in some cases or not supported (MoltenVK later?).
-	workarounds.emulate_event_as_pipeline_barrier = gpu_props.vendorID == VENDOR_ID_ARM;
 
 	// srcStageMask = ALL_GRAPHICS_BIT causes some weird stalls compared to waiting for fragment only.
 	workarounds.optimize_all_graphics_barrier = gpu_props.vendorID == VENDOR_ID_ARM;
@@ -562,7 +558,6 @@ void Device::set_context(const Context &context)
 	managers.memory.set_supports_dedicated_allocation(ext.supports_dedicated);
 	managers.semaphore.init(device);
 	managers.fence.init(device);
-	managers.event.init(this);
 	managers.vbo.init(this, 4 * 1024, 16, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 	                  ImplementationQuirks::get().staging_need_device_local);
 	managers.ibo.init(this, 4 * 1024, 16, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -1615,12 +1610,6 @@ void Device::destroy_buffer_view(VkBufferView view)
 	destroy_buffer_view_nolock(view);
 }
 
-void Device::destroy_event(VkEvent event)
-{
-	LOCK();
-	destroy_event_nolock(event);
-}
-
 void Device::destroy_framebuffer(VkFramebuffer framebuffer)
 {
 	LOCK();
@@ -1690,17 +1679,6 @@ void Device::destroy_semaphore_nolock(VkSemaphore semaphore)
 void Device::recycle_semaphore_nolock(VkSemaphore semaphore)
 {
 	managers.semaphore.recycle(semaphore);
-}
-
-void Device::destroy_event_nolock(VkEvent event)
-{
-	VK_ASSERT(!exists(frame().recycled_events, event));
-	frame().recycled_events.push_back(event);
-}
-
-PipelineEvent Device::request_pipeline_event()
-{
-	return PipelineEvent(handle_pool.events.allocate(this, managers.event.request_cleared_event()));
 }
 
 void Device::destroy_image_nolock(VkImage image)
@@ -1899,8 +1877,6 @@ void Device::PerFrame::begin()
 #endif
 		managers.semaphore.recycle(semaphore);
 	}
-	for (auto &event : recycled_events)
-		managers.event.recycle(event);
 	for (auto &alloc : allocations)
 		alloc.free_immediate(managers.memory);
 
@@ -1926,7 +1902,6 @@ void Device::PerFrame::begin()
 	destroyed_buffers.clear();
 	destroyed_semaphores.clear();
 	recycled_semaphores.clear();
-	recycled_events.clear();
 	allocations.clear();
 }
 

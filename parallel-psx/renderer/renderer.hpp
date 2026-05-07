@@ -484,8 +484,6 @@ private:
 	Vulkan::CommandBufferHandle &command_buffer_hack_fixme() override;
 
 	void hd_texture_uniforms(HdTextureHandle hd_texture_index);
-	void update_hd_texture(const Rect &imageRect, const Rect &dstRect, const void *pixels);
-	void update_hd_textures();
 	HdTextureHandle get_hd_texture_index(const Rect &uvlimits, bool &fastpath_capable_out, bool &cache_hit_out);
 
 	struct

@@ -984,41 +984,6 @@ void CommandBuffer::flush_render_state()
 	dirty_vbos &= ~update_vbo_mask;
 }
 
-void CommandBuffer::wait_events(unsigned num_events, const VkEvent *events,
-                                VkPipelineStageFlags src_stages, VkPipelineStageFlags dst_stages,
-                                unsigned barriers,
-                                const VkMemoryBarrier *globals, unsigned buffer_barriers,
-                                const VkBufferMemoryBarrier *buffers, unsigned image_barriers,
-                                const VkImageMemoryBarrier *images)
-{
-	VK_ASSERT(!framebuffer);
-	VK_ASSERT(!actual_render_pass);
-
-	if (device->get_workarounds().emulate_event_as_pipeline_barrier)
-	{
-		barrier(src_stages, dst_stages,
-		        barriers, globals,
-		        buffer_barriers, buffers,
-		        image_barriers, images);
-	}
-	else
-	{
-		vkCmdWaitEvents(cmd, num_events, events, src_stages, dst_stages,
-		                barriers, globals, buffer_barriers, buffers, image_barriers, images);
-	}
-}
-
-PipelineEvent CommandBuffer::signal_event(VkPipelineStageFlags stages)
-{
-	VK_ASSERT(!framebuffer);
-	VK_ASSERT(!actual_render_pass);
-	auto event = device->request_pipeline_event();
-	if (!device->get_workarounds().emulate_event_as_pipeline_barrier)
-		vkCmdSetEvent(cmd, event->get_event(), stages);
-	event->set_stages(stages);
-	return event;
-}
-
 void CommandBuffer::set_vertex_attrib(uint32_t attrib, uint32_t binding, VkFormat format, VkDeviceSize offset)
 {
 	VK_ASSERT(attrib < VULKAN_NUM_VERTEX_ATTRIBS);
