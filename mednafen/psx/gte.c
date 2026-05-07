@@ -1147,7 +1147,7 @@ static INLINE void check_mac_overflow(int64_t value)
 static INLINE void TransformXY(int64_t h_div_sz, float precise_h_div_sz, float precise_z)
 {
 
-   float widescreen_hack_aspect_ratio;
+   float widescreen_hack_aspect_ratio = 0.75f; /* 16:9 default for unrecognized settings */
    switch(widescreen_hack_aspect_ratio_setting)
    {
       case 0: /* 16:10 */

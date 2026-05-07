@@ -133,19 +133,6 @@ float PGXP_NCLIP()
 	return nclip;
 }
 
-static PGXP_value PGXP_MFC2_int(u32 reg)
-{
-	switch (reg) 
-	{
-	case 15:
-		GTE_data_reg[reg] = SXYP = SXY2;
-		break;
-	}
-
-	return GTE_data_reg[reg];
-}
-
-
 static void PGXP_MTC2_int(PGXP_value value, u32 reg)
 {
 	switch(reg)

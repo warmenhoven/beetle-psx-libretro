@@ -828,9 +828,12 @@ static void SPU_ReleaseEnvelope(SPU_Voice *voice)
 static void SPU_RunEnvelope(SPU_Voice *voice)
 {
    SPU_ADSR *ADSR = &voice->ADSR;
-   int increment;
-   int divinco;
-   int16 uoflow_reset;
+   /* Defensively initialize - assert(0) in the default case below
+    * is a no-op under -DNDEBUG, so without these initializers the
+    * fall-through path would read uninitialized values. */
+   int    increment    = 0;
+   int    divinco      = 0;
+   int16  uoflow_reset = 0;
 
    if(ADSR->Phase == ADSR_ATTACK && ADSR->EnvLevel == 0x7FFF)
       ADSR->Phase++;

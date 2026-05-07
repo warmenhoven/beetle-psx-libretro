@@ -184,7 +184,7 @@ static bool firmware_is_present(unsigned region)
     * `static const size_t list_size = 16` is not one, so spell it
     * with an enum. */
    enum { list_size = 16 };
-   const char *bios_name_list[list_size];
+   const char *bios_name_list[list_size] = {0};
    const char *bios_sha1 = NULL;
    char        obtained_sha1[41];
    size_t      i;
@@ -3102,9 +3102,6 @@ static CheatFormatStruct CheatFormats[] =
 
 //forward decls
 extern void Emulate(EmulateSpecStruct *espec);
-
-static bool overscan;
-static double last_sound_rate;
 
 #ifdef NEED_DEINTERLACER
 static bool PrevInterlaced;

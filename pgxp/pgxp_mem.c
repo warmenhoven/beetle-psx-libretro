@@ -58,8 +58,6 @@ void PGXP_InitMem()
 */
 void ValidateAddress(u32 addr)
 {
-	int* pi = NULL;
-
 	if ((addr >= 0x00000000) && (addr <= 0x007fffff)) {}	/* Kernel + User Memory x 8 */
 	else if ((addr >= 0x1f000000) && (addr <= 0x1f00ffff)) {}	/* Parallel Port */
 	else if ((addr >= 0x1f800000) && (addr <= 0x1f8003ff)) {}	/* Scratch Pad */
@@ -72,7 +70,7 @@ void ValidateAddress(u32 addr)
 	else if (addr == 0xfffe0130) {}								/* Used for cache flushing */
 	else
 	{
-		/*	*pi = 5; */
+		/* Unrecognized address - debug breakpoint hook would go here */
 	}
 
 }

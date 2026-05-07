@@ -148,7 +148,6 @@ static inline void rsx_intf_dump_init(void)
 
 bool rsx_intf_open(bool is_pal, bool force_software)
 {
-   struct retro_variable var = {0};
    bool software_selected    = false;
    enum force_renderer_type force_type = AUTO;
    unsigned preferred        = 0; /* Will be set to RETRO_HW_CONTEXT_DUMMY if GET_PREFERRED_HW_RENDER is not supported by frontend */
@@ -156,6 +155,7 @@ bool rsx_intf_open(bool is_pal, bool force_software)
    gl_initialized            = false;
 
 #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES) || defined(HAVE_VULKAN)
+   struct retro_variable var = {0};
    var.key                   = BEETLE_OPT(renderer);
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
