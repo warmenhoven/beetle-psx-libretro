@@ -220,6 +220,7 @@ endif
                   $(CORE_EMU_DIR)/spu.c \
                   $(CORE_EMU_DIR)/timer.c \
                   $(CORE_DIR)/rsx/rsx_intf.c \
+                  $(CORE_DIR)/rsx/rsx_defer.c \
                   $(MEDNAFEN_DIR)/FileStream.c \
                   $(MEDNAFEN_DIR)/MemoryStream.c \
                   $(MEDNAFEN_DIR)/Stream.c \

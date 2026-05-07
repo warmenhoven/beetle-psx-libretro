@@ -17,6 +17,7 @@
 #include "libretro_options.h"
 
 #include "rsx/rsx_intf.h" /* enums */
+#include "rsx/rsx_defer.h"
 #include "beetle_psx_globals.h"
 
 #define gl_draw_buffer_is_empty(x)           ((x)->map_index == 0)
@@ -765,6 +766,21 @@ static gl_draw_config persistent_config = {
 };
 
 static retro_gl static_renderer;
+
+/*
+ * Queue for rsx_gl_* operations that arrive between the libretro
+ * frontend's RETRO_ENVIRONMENT_SET_HW_RENDER acceptance (in rsx_gl_open)
+ * and the frontend actually calling our gl_context_reset to bring the
+ * GL renderer up. Drained at the end of gl_context_reset so the buffered
+ * state and VRAM uploads land on a live renderer. See rsx/rsx_defer.h
+ * for the policy on which ops are deferred and which are dropped.
+ */
+static rsx_defer_queue_t gl_defer_queue;
+
+/* Forward declarations for the rsx_gl_* entry points the dispatcher
+ * replays into. They are defined further down in this file; the
+ * dispatcher itself is static so no header touch is needed. */
+static void gl_defer_dispatch(void *user, const rsx_defer_op_t *op);
 
 static bool has_software_fb = false;
 
@@ -3008,6 +3024,76 @@ static void gl_caps_init(void)
    }
 }
 
+/*
+ * Dispatcher for the deferred-op queue. Invoked once per queued op
+ * during gl_context_reset's drain. Each case calls back into the
+ * matching rsx_gl_<op>() entry point with the captured arguments. By
+ * drain time the renderer is up, so the entry point's "renderer present"
+ * branch executes and actually performs the work that was originally
+ * dropped. The `user` parameter is unused - we don't need any extra
+ * state because the entry points already read everything they need from
+ * the file-static `static_renderer`.
+ */
+static void gl_defer_dispatch(void *user, const rsx_defer_op_t *op)
+{
+   (void)user;
+   if (!op)
+      return;
+
+   switch (op->kind)
+   {
+      case RSX_DEFER_SET_TEX_WINDOW:
+         rsx_gl_set_tex_window(op->u.set_tex_window.tww,
+                               op->u.set_tex_window.twh,
+                               op->u.set_tex_window.twx,
+                               op->u.set_tex_window.twy);
+         break;
+      case RSX_DEFER_SET_DRAW_OFFSET:
+         rsx_gl_set_draw_offset(op->u.set_draw_offset.x,
+                                op->u.set_draw_offset.y);
+         break;
+      case RSX_DEFER_SET_DRAW_AREA:
+         rsx_gl_set_draw_area(op->u.set_draw_area.x0,
+                              op->u.set_draw_area.y0,
+                              op->u.set_draw_area.x1,
+                              op->u.set_draw_area.y1);
+         break;
+      case RSX_DEFER_SET_VRAM_FRAMEBUFFER_COORDS:
+         rsx_gl_set_vram_framebuffer_coords(
+               op->u.set_vram_framebuffer_coords.xstart,
+               op->u.set_vram_framebuffer_coords.ystart);
+         break;
+      case RSX_DEFER_SET_HORIZONTAL_DISPLAY_RANGE:
+         rsx_gl_set_horizontal_display_range(
+               op->u.set_horizontal_display_range.x1,
+               op->u.set_horizontal_display_range.x2);
+         break;
+      case RSX_DEFER_SET_VERTICAL_DISPLAY_RANGE:
+         rsx_gl_set_vertical_display_range(
+               op->u.set_vertical_display_range.y1,
+               op->u.set_vertical_display_range.y2);
+         break;
+      case RSX_DEFER_SET_DISPLAY_MODE:
+         rsx_gl_set_display_mode(op->u.set_display_mode.depth_24bpp,
+                                 op->u.set_display_mode.is_pal,
+                                 op->u.set_display_mode.is_480i,
+                                 op->u.set_display_mode.width_mode);
+         break;
+      case RSX_DEFER_LOAD_IMAGE:
+         rsx_gl_load_image(op->u.load_image.x,
+                           op->u.load_image.y,
+                           op->u.load_image.w,
+                           op->u.load_image.h,
+                           op->u.load_image.vram,
+                           op->u.load_image.mask_test,
+                           op->u.load_image.set_mask);
+         break;
+      case RSX_DEFER_TOGGLE_DISPLAY:
+         rsx_gl_toggle_display(op->u.toggle_display.status);
+         break;
+   }
+}
+
 static void gl_context_reset(void)
 {
    /* Resolve the GL function-pointer table for this context.
@@ -3057,6 +3143,24 @@ static void gl_context_reset(void)
       GPU_RestoreStateP1(true);
       GPU_RestoreStateP2(true);
       GPU_RestoreStateP3();
+
+      /* Replay any rsx_gl_* state-sets / VRAM uploads / display
+       * toggles that arrived between rsx_gl_open's SET_HW_RENDER
+       * and this context_reset firing. By this point the renderer
+       * is live, so every push the dispatcher makes lands on a
+       * real GL renderer rather than getting silently dropped.
+       *
+       * Drained AFTER GPU_RestoreStateP3 so the deferred ops layer
+       * on top of the freshly-restored P3 baseline; this matches
+       * the Vulkan backend, which also drains its queue after
+       * the renderer has taken its initial state snapshot. */
+      if (rsx_defer_count(&gl_defer_queue) > 0)
+      {
+         log_cb(RETRO_LOG_INFO,
+               "[gl_context_reset] replaying %u deferred RSX op(s)\n",
+               (unsigned)rsx_defer_count(&gl_defer_queue));
+         rsx_defer_drain(&gl_defer_queue, gl_defer_dispatch, NULL);
+      }
    }
    else
    {
@@ -3066,6 +3170,12 @@ static void gl_context_reset(void)
       gl_renderer_free(static_renderer.state_data);
       free(static_renderer.state_data);
       static_renderer.state_data = NULL;
+
+      /* Drop any pending deferred ops too: with no renderer they
+       * can never be replayed, and surviving across a failed
+       * context_reset would let them leak into a future, unrelated
+       * reset attempt. */
+      rsx_defer_clear(&gl_defer_queue);
    }
 }
 
@@ -3080,6 +3190,11 @@ static void gl_context_destroy(void)
    static_renderer.state_data = NULL;
    static_renderer.state      = GL_STATE_INVALID;
    static_renderer.inited     = false;
+
+   /* Free the deferred-op storage. A new context_reset would start
+    * from an empty queue anyway; carrying allocations across a
+    * destroy would just hold memory we have no use for. */
+   rsx_defer_clear(&gl_defer_queue);
 }
 
 static struct retro_system_av_info get_av_info(gl_video_clock std)
@@ -3558,7 +3673,13 @@ void rsx_gl_set_tex_window(uint8_t tww, uint8_t twh, uint8_t twx, uint8_t twy)
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      /* Renderer not yet constructed - buffer the call so it lands
+       * once gl_context_reset brings the renderer up. Matches the
+       * Vulkan backend's defer policy for the same entry point. */
+      rsx_defer_push_set_tex_window(&gl_defer_queue, tww, twh, twx, twy);
       return;
+   }
 
    renderer->tex_x_mask = ~(tww << 3);
    renderer->tex_x_or   = (twx & tww) << 3;
@@ -3596,7 +3717,10 @@ void rsx_gl_set_draw_offset(int16_t x, int16_t y)
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      rsx_defer_push_set_draw_offset(&gl_defer_queue, x, y);
       return;
+   }
 
    /* Finish drawing anything with the current offset */
    if (!gl_draw_buffer_is_empty(renderer->command_buffer))
@@ -3616,7 +3740,10 @@ void rsx_gl_set_draw_area(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      rsx_defer_push_set_draw_area(&gl_defer_queue, x0, y0, x1, y1);
       return;
+   }
 
    /* Finish drawing anything in the current area */
    if (!gl_draw_buffer_is_empty(renderer->command_buffer))
@@ -3640,7 +3767,11 @@ void rsx_gl_set_vram_framebuffer_coords(uint32_t xstart, uint32_t ystart)
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      rsx_defer_push_set_vram_framebuffer_coords(&gl_defer_queue,
+            xstart, ystart);
       return;
+   }
 
    renderer->config.display_top_left[0] = xstart;
    renderer->config.display_top_left[1] = ystart;
@@ -3655,7 +3786,10 @@ void rsx_gl_set_horizontal_display_range(uint16_t x1, uint16_t x2)
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      rsx_defer_push_set_horizontal_display_range(&gl_defer_queue, x1, x2);
       return;
+   }
 
    renderer->config.display_area_hrange[0] = x1;
    renderer->config.display_area_hrange[1] = x2;
@@ -3670,7 +3804,10 @@ void rsx_gl_set_vertical_display_range(uint16_t y1, uint16_t y2)
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      rsx_defer_push_set_vertical_display_range(&gl_defer_queue, y1, y2);
       return;
+   }
 
    renderer->config.display_area_vrange[0] = y1;
    renderer->config.display_area_vrange[1] = y2;
@@ -3688,7 +3825,11 @@ void rsx_gl_set_display_mode(bool depth_24bpp,
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      rsx_defer_push_set_display_mode(&gl_defer_queue,
+            depth_24bpp, is_pal, is_480i, width_mode);
       return;
+   }
 
    renderer->config.display_24bpp         = depth_24bpp;
 
@@ -4075,7 +4216,20 @@ void rsx_gl_load_image(
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      /* This is the case King's Field on GL was hitting: the game's
+       * boot uploads HUD glyph tiles via this entry point before the
+       * frontend has called gl_context_reset, so without buffering
+       * the glyph VRAM pixels were dropped on the floor and only
+       * appeared after a savestate-load (which replays the entire
+       * 1MiB VRAM blob via GPU_RestoreStateP3()). Defer the upload;
+       * gl_context_reset's drain will replay it on the live
+       * renderer. The captured `vram` pointer aliases GPU.vram,
+       * which lives for the whole core lifetime - safe to hold. */
+      rsx_defer_push_load_image(&gl_defer_queue,
+            x, y, w, h, vram, mask_test, set_mask);
       return;
+   }
 
    renderer->set_mask     = set_mask;
    renderer->mask_test    = mask_test;
@@ -4870,7 +5024,10 @@ void rsx_gl_toggle_display(bool status)
 
    renderer = static_renderer.state_data;
    if (!renderer)
+   {
+      rsx_defer_push_toggle_display(&gl_defer_queue, status);
       return;
+   }
 
    renderer->config.display_off = status;
 }
