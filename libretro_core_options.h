@@ -273,6 +273,22 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "disabled"
    },
    {
+      BEETLE_OPT(region),
+      "System Region",
+      NULL,
+      "Sets the fallback region used when content cannot be auto-detected (e.g. raw PS-X EXE files). Disc-based games still use the region embedded on the disc. Restart required.",
+      NULL,
+      "system",
+      {
+         { "auto",   "Auto" },
+         { "ntsc-j", "NTSC-J (Japan)" },
+         { "ntsc-u", "NTSC-U (North America)" },
+         { "pal",    "PAL (Europe)" },
+         { NULL, NULL },
+      },
+      "auto"
+   },
+   {
       BEETLE_OPT(internal_resolution),
       "Internal GPU Resolution",
       NULL,

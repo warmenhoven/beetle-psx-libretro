@@ -3445,6 +3445,28 @@ static void check_variables(bool startup)
 {
    struct retro_variable var = {0};
 
+   /* Region default fallback (used by CalcDiscSCEx() for non-disc
+    * content like raw PS-X EXEs, and for any disc whose region cannot
+    * be determined from SYSTEM.CNF / "Licensed by" header).  Disc
+    * region detection still wins for normal CD content.  Read on
+    * startup only -- changing region implies a different BIOS file and
+    * a fresh GPU_Init(), neither of which we can do mid-session. */
+   if (startup)
+   {
+      var.key = BEETLE_OPT(region);
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      {
+         if (!strcmp(var.value, "ntsc-j"))
+            setting_region_default = 0; /* REGION_JP */
+         else if (!strcmp(var.value, "ntsc-u"))
+            setting_region_default = 1; /* REGION_NA */
+         else if (!strcmp(var.value, "pal"))
+            setting_region_default = 2; /* REGION_EU */
+         else
+            setting_region_default = 1; /* "auto" -> NA fallback */
+      }
+   }
+
 #ifndef EMSCRIPTEN
    var.key = BEETLE_OPT(cd_access_method);
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)

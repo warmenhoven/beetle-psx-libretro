@@ -31,6 +31,16 @@ int setting_last_scanline_pal = 287;
 int setting_crosshair_color_p1 = 0xFF0000;
 int setting_crosshair_color_p2 = 0x0080FF;
 
+/* Region fallback used by CalcDiscSCEx() when no disc is present (e.g.
+ * raw PS-X EXE content) or when the disc region cannot be determined.
+ * Defaults to NA to preserve historical behaviour; populated from the
+ * "beetle_psx[_hw]_region" core option in check_variables().
+ *   0 = REGION_JP, 1 = REGION_NA, 2 = REGION_EU.
+ * For CD-based content the on-disc region in SYSTEM.CNF / "Licensed by"
+ * still wins, so changing this only affects content the core cannot
+ * auto-detect. */
+int setting_region_default = 1;
+
 uint32_t setting_psx_multitap_port_1 = 0;
 uint32_t setting_psx_multitap_port_2 = 0;
 uint32_t setting_psx_analog_toggle = 0;
@@ -53,8 +63,8 @@ uint64_t MDFN_GetSettingUI(const char *name)
 
 int64_t MDFN_GetSettingI(const char *name)
 {
-   if (!strcmp("psx.region_default", name)) /* make configurable */
-      return 1; /* REGION_JP = 0, REGION_NA = 1, REGION_EU = 2 */
+   if (!strcmp("psx.region_default", name))
+      return setting_region_default;
    if (!strcmp("psx.slstart", name))
       return setting_initial_scanline;
    if (!strcmp("psx.slstartp", name))
