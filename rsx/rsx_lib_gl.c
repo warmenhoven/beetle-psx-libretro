@@ -4170,11 +4170,17 @@ void rsx_gl_load_image(
  * `texel_put` duplicates it as an `upscale x upscale` block in `vram`
  * so that subsequent `texel_fetch` reads return the correct value.
  *
+ * Internal color depth handling:
+ *   - 16bpp (default): `fb_out` is GL_RGB5_A1.  We read directly with
+ *     GL_UNSIGNED_SHORT_1_5_5_5_REV (desktop) or GL_UNSIGNED_SHORT_5_5_5_1
+ *     (GLES3) which matches the layout `g->vram` expects.
+ *   - 32bpp: `fb_out` is GL_RGBA8.  We read RGBA8 and convert to the
+ *     platform's native 1555 layout per pixel.  This loses the extra
+ *     precision the 32bpp render target was capturing, which is
+ *     unavoidable - PS1 VRAM is 16bpp and any FBRead consumer is
+ *     written to that format.
+ *
  * Limitations addressed by `return false` (caller keeps prior data):
- *   - 32bpp internal color depth (`internal_color_depth == 32`).
- *     `fb_out` is GL_RGBA8 in that mode and we'd need RGBA8 ->
- *     RGBA1555 conversion; the default depth is 16bpp,
- *     so leave 32bpp for a follow-up.
  *   - VRAM seam wrap-around (x+w>1024 or y+h>512).  Pre-existing
  *     limitation shared with `gl_texture_set_sub_image_window`.
  *   - Upscale > 1 with no glBlitFramebuffer extension.  All modern
@@ -4197,7 +4203,9 @@ bool rsx_gl_read_vram(uint16_t x, uint16_t y,
    GLboolean scissor_was_enabled;
    GLenum   err;
    bool     ok = false;
+   bool     is_32bpp;
    uint16_t *scratch_pixels = NULL;
+   uint32_t *scratch_rgba8  = NULL;
    size_t   row;
 
    if (static_renderer.state == GL_STATE_INVALID)
@@ -4216,9 +4224,7 @@ bool rsx_gl_read_vram(uint16_t x, uint16_t y,
    if (w == 0 || h == 0)
       return true;
 
-   /* 32bpp -> 1555 conversion is a follow-up. */
-   if (renderer->internal_color_depth != 16)
-      return false;
+   is_32bpp = (renderer->internal_color_depth == 32);
 
    upscale = renderer->internal_upscaling;
    if (upscale == 0)
@@ -4247,12 +4253,23 @@ bool rsx_gl_read_vram(uint16_t x, uint16_t y,
    glPixelStorei(GL_PACK_ROW_LENGTH, 0); /* tightly packed scratch */
 #endif
 
-   /* Allocate a tightly-packed `w x h` scratch buffer that holds the
-    * PS1-native readback.  We then expand it into the caller's vram
-    * with the right upscale-factor block duplication. */
+   /* Allocate a tightly-packed `w x h` scratch buffer in PS1 1555
+    * format that holds the eventually-converted readback.  We then
+    * expand it into the caller's vram with the right upscale-factor
+    * block duplication.
+    *
+    * In 32bpp mode we additionally allocate an RGBA8 scratch that
+    * receives the raw glReadPixels result; pixels are converted to
+    * 1555 before going into scratch_pixels. */
    scratch_pixels = (uint16_t *)malloc((size_t)w * (size_t)h * sizeof(uint16_t));
    if (!scratch_pixels)
       goto cleanup;
+   if (is_32bpp)
+   {
+      scratch_rgba8 = (uint32_t *)malloc((size_t)w * (size_t)h * sizeof(uint32_t));
+      if (!scratch_rgba8)
+         goto cleanup;
+   }
 
    if (upscale == 1)
    {
@@ -4283,28 +4300,42 @@ bool rsx_gl_read_vram(uint16_t x, uint16_t y,
             GL_FRAMEBUFFER_COMPLETE)
       {
          GLint gl_y = (GLint)VRAM_HEIGHT - (GLint)y - (GLint)h;
-         glReadPixels(
-               (GLint) x, gl_y,
-               (GLsizei) w, (GLsizei) h,
-               GL_RGBA,
+         if (is_32bpp)
+         {
+            glReadPixels(
+                  (GLint) x, gl_y,
+                  (GLsizei) w, (GLsizei) h,
+                  GL_RGBA, GL_UNSIGNED_BYTE,
+                  scratch_rgba8);
+         }
+         else
+         {
+            glReadPixels(
+                  (GLint) x, gl_y,
+                  (GLsizei) w, (GLsizei) h,
+                  GL_RGBA,
 #ifdef HAVE_OPENGLES3
-               GL_UNSIGNED_SHORT_5_5_5_1,
+                  GL_UNSIGNED_SHORT_5_5_5_1,
 #else
-               GL_UNSIGNED_SHORT_1_5_5_5_REV,
+                  GL_UNSIGNED_SHORT_1_5_5_5_REV,
 #endif
-               scratch_pixels);
+                  scratch_pixels);
+         }
          ok = (glGetError() == GL_NO_ERROR);
       }
    }
    else
    {
-      /* Upscaled: use glBlitFramebuffer with a Y-flip to land the
-       * rect right-side-up in a 1x scratch RGB5_A1 texture.
-       * Blit accepts inverted source/dest rectangles and will flip
-       * automatically when the y bounds run opposite directions. */
+      /* Upscaled: blit the upscaled fb_out rect to a 1x scratch
+       * texture (matching fb_out's format so we don't lose precision
+       * at the blit step), then read the scratch.  We use NEAREST
+       * downsampling to match the SW renderer's "no filtering"
+       * behaviour. */
+      GLenum   scratch_format = is_32bpp ? GL_RGBA8 : GL_RGB5_A1;
+
       glGenTextures(1, &scratch_tex);
       glBindTexture(GL_TEXTURE_2D, scratch_tex);
-      glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB5_A1,
+      glTexStorage2D(GL_TEXTURE_2D, 1, scratch_format,
             (GLsizei) w, (GLsizei) h);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -4356,17 +4387,77 @@ bool rsx_gl_read_vram(uint16_t x, uint16_t y,
          glBindFramebuffer(GL_READ_FRAMEBUFFER, scratch_fbo);
          glReadBuffer(GL_COLOR_ATTACHMENT0);
 
-         glReadPixels(
-               0, 0,
-               (GLsizei) w, (GLsizei) h,
-               GL_RGBA,
+         if (is_32bpp)
+         {
+            glReadPixels(
+                  0, 0,
+                  (GLsizei) w, (GLsizei) h,
+                  GL_RGBA, GL_UNSIGNED_BYTE,
+                  scratch_rgba8);
+         }
+         else
+         {
+            glReadPixels(
+                  0, 0,
+                  (GLsizei) w, (GLsizei) h,
+                  GL_RGBA,
 #ifdef HAVE_OPENGLES3
-               GL_UNSIGNED_SHORT_5_5_5_1,
+                  GL_UNSIGNED_SHORT_5_5_5_1,
 #else
-               GL_UNSIGNED_SHORT_1_5_5_5_REV,
+                  GL_UNSIGNED_SHORT_1_5_5_5_REV,
 #endif
-               scratch_pixels);
+                  scratch_pixels);
+         }
          ok = (glGetError() == GL_NO_ERROR);
+      }
+   }
+
+   /* In 32bpp mode, downsample RGBA8 scratch -> 1555 scratch.  PS1
+    * VRAM is 16bpp natively so the extra precision the 32bpp render
+    * target captured is unavoidably lost here; any FBRead consumer
+    * is operating in 16bpp anyway.
+    *
+    * The 1555 layout is platform-specific, matching the rest of the
+    * codebase:
+    *   Desktop (GL_UNSIGNED_SHORT_1_5_5_5_REV): (a<<15)|(b<<10)|(g<<5)|r
+    *   GLES3   (GL_UNSIGNED_SHORT_5_5_5_1):     (r<<11)|(g<<6)|(b<<1)|a
+    * which are the same packings the command_fragment shader
+    * `rebuild_psx_color` produces. */
+   if (ok && is_32bpp)
+   {
+      size_t n = (size_t)w * (size_t)h;
+      size_t k;
+      for (k = 0; k < n; k++)
+      {
+         uint32_t px = scratch_rgba8[k];
+         /* On both desktop and GLES, GL_RGBA + GL_UNSIGNED_BYTE
+          * stores bytes as R, G, B, A in memory.  When reinterpreted
+          * as a host uint32_t this is little-endian R | G<<8 |
+          * B<<16 | A<<24 on x86/ARM little-endian platforms.  The
+          * rest of the codebase already assumes a little-endian
+          * host (e.g. GL_UNSIGNED_SHORT_1_5_5_5_REV interpretation),
+          * so we follow suit. */
+         uint32_t r8 = (px      ) & 0xFFu;
+         uint32_t g8 = (px >>  8) & 0xFFu;
+         uint32_t b8 = (px >> 16) & 0xFFu;
+         uint32_t a8 = (px >> 24) & 0xFFu;
+         /* 8-bit -> 5-bit: divide by 8 with rounding-to-nearest, the
+          * same `floor(c*31 + 0.5)` the shader uses (note c here is
+          * already 0..255 so c*31/255 + 0.5 == c/8.226... and the
+          * `(c * 249 + 1024) >> 11` reciprocal-multiply form rounds
+          * identically).  We use the simpler exact form: round
+          * c8 * 31 / 255. */
+         uint32_t r5 = (r8 * 31u + 127u) / 255u;
+         uint32_t g5 = (g8 * 31u + 127u) / 255u;
+         uint32_t b5 = (b8 * 31u + 127u) / 255u;
+         uint32_t a1 = (a8 >= 128u) ? 1u : 0u;
+#ifdef HAVE_OPENGLES3
+         scratch_pixels[k] = (uint16_t)(
+               (r5 << 11) | (g5 << 6) | (b5 << 1) | a1);
+#else
+         scratch_pixels[k] = (uint16_t)(
+               (a1 << 15) | (b5 << 10) | (g5 << 5) | r5);
+#endif
       }
    }
 
@@ -4418,6 +4509,8 @@ bool rsx_gl_read_vram(uint16_t x, uint16_t y,
 cleanup:
    if (scratch_pixels)
       free(scratch_pixels);
+   if (scratch_rgba8)
+      free(scratch_rgba8);
 
 #ifdef GL_PACK_ROW_LENGTH
    glPixelStorei(GL_PACK_ROW_LENGTH, prev_pack_row_length);
