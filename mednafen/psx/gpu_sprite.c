@@ -224,9 +224,14 @@ DRAWSPRITE_T1_BMGROUP(1, 2, 1, 1)
  */
 
 /* The optional rsx_intf_push_quad() backend hook is factored out
- * since it conditionally compiles based on backend availability. */
+ * since it conditionally compiles based on backend availability.
+ *
+ * The hook does the (clut_x, clut_y) bit-extraction itself rather
+ * than taking them as args; this keeps the variables out of the
+ * caller entirely so the empty-hook build (no GL/GLES/Vulkan) does
+ * not declare two locals just to drop them. */
 #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES) || defined(HAVE_VULKAN)
-#define GPU_SPR_RSX_PUSH_HOOK(gpu, x, y, w, h, u, v, color, clut_x, clut_y, T_LIT, TM_LIT, MO_LIT, BM_VAL, ME_LIT) \
+#define GPU_SPR_RSX_PUSH_HOOK(gpu, x, y, w, h, u, v, color, clut, T_LIT, TM_LIT, MO_LIT, BM_VAL, ME_LIT) \
    do { \
       enum blending_modes blend_mode = BLEND_MODE_AVERAGE; \
       if (T_LIT) \
@@ -260,7 +265,8 @@ DRAWSPRITE_T1_BMGROUP(1, 2, 1, 1)
                               (v) + (h) - 1, \
                               (gpu)->TexPageX, \
                               (gpu)->TexPageY, \
-                              (clut_x), (clut_y), \
+                              (uint16_t)((clut) & (0x3f << 4)), \
+                              (uint16_t)(((clut) >> 10) & 0x1ff), \
                               blend_mode, \
                               2 - (MO_LIT), \
                               DitherEnabled(gpu), \
@@ -271,7 +277,7 @@ DRAWSPRITE_T1_BMGROUP(1, 2, 1, 1)
       } \
    } while (0)
 #else
-#define GPU_SPR_RSX_PUSH_HOOK(gpu, x, y, w, h, u, v, color, clut_x, clut_y, T_LIT, TM_LIT, MO_LIT, BM_VAL, ME_LIT) ((void)0)
+#define GPU_SPR_RSX_PUSH_HOOK(gpu, x, y, w, h, u, v, color, clut, T_LIT, TM_LIT, MO_LIT, BM_VAL, ME_LIT) ((void)0)
 #endif
 
 /* Inner switch helper macro: emit the 4-way SpriteFlip switch with
@@ -329,7 +335,6 @@ static void Command_DrawSprite_##SUFFIX(PS_GPU *gpu, const uint32_t *cb) \
    uint8_t  u    = 0, v = 0; \
    uint32_t color = 0; \
    uint32_t clut  = 0; \
-   uint16_t clut_x, clut_y; \
    gpu->DrawTimeAvail -= 16;                /* FIXME, correct time. */ \
    color = *cb & 0x00FFFFFF; \
    cb++; \
@@ -354,9 +359,7 @@ static void Command_DrawSprite_##SUFFIX(PS_GPU *gpu, const uint32_t *cb) \
    } \
    x = sign_x_to_s32(11, x + gpu->OffsX); \
    y = sign_x_to_s32(11, y + gpu->OffsY); \
-   clut_x = (clut & (0x3f << 4)); \
-   clut_y = (clut >> 10) & 0x1ff; \
-   GPU_SPR_RSX_PUSH_HOOK(gpu, x, y, w, h, u, v, color, clut_x, clut_y, T_LIT, TM_LIT, MO_LIT, BM_VAL, ME_LIT); \
+   GPU_SPR_RSX_PUSH_HOOK(gpu, x, y, w, h, u, v, color, clut, T_LIT, TM_LIT, MO_LIT, BM_VAL, ME_LIT); \
    if (!rsx_intf_has_software_renderer()) \
       return; \
    SPR_DISPATCH_DRAW(TM_LIT, BM_TAG, MO_LIT, ME_LIT, T_LIT) \
