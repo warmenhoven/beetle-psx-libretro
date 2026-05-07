@@ -4687,6 +4687,136 @@ cleanup:
 }
 
 
+#ifdef GL_READ_FRAMEBUFFER
+/* === Mirror a region of fb_out down into fb_texture ===
+ *
+ * The GL backend keeps two surfaces:
+ *   - fb_out:     upscaled render target (drawn into by all primitives)
+ *   - fb_texture: 1x texture that the command shader samples for textured
+ *                 draws (you can't sample-and-render the same texture in
+ *                 portable GL).
+ *
+ * They're loosely synchronised by an unconditional fb_out -> fb_texture
+ * blit at end-of-frame (see the bottom of rsx_gl_finalize_frame). That
+ * is sufficient for fb_out mutations whose effect only needs to be
+ * visible to the *next* frame's textured draws. It is NOT sufficient
+ * when the same frame later samples the mutated region as a texture -
+ * fb_texture stays stale until end-of-frame, so the textured draw reads
+ * pre-mutation pixels.
+ *
+ * Historically that gap was papered over by the "Software gl_framebuffer"
+ * core option, which spins up a shadow software renderer that keeps
+ * GPU.vram in sync; some downstream paths feed that back into
+ * fb_texture. With the SW option disabled (the modern-GL path users
+ * actually want, to avoid the per-frame CPU bookkeeping), the gap is
+ * exposed.
+ *
+ * This helper closes the gap on demand. Call it from any rsx_gl_*
+ * entry point that mutates a region of fb_out and wants subsequent
+ * same-frame textured draws to see the new pixels. The blit goes
+ * through GL_NEAREST (matching the historical 1x-degrade behaviour
+ * the SW path would have produced) and downsamples from upscaled
+ * fb_out to native fb_texture in one call.
+ *
+ * Gating (the same conditions the long-standing rsx_gl_copy_rect
+ * mirror has used since the FF7-swirl fix):
+ *
+ *   - has_software_fb is false. When it's true the shadow SW renderer
+ *     plus the end-of-frame mirror produce the right result and a
+ *     per-op mirror is wasted GPU work.
+ *
+ *   - gl_caps.fp_glBlitFramebuffer is non-NULL. GL 3.0+ / GLES 3.0+
+ *     have it; GLES 2.0 drivers without GL_NV_framebuffer_blit do
+ *     not, and on those platforms the SW option is the only correct
+ *     mode. (The codebase's GL caps floor is GL/GLES 3.0 anyway, so
+ *     this branch is taken in practice.)
+ *
+ * fb_texture is permanently 1x: the blit downsamples upscaled detail
+ * to native resolution. That is a fundamental consequence of the
+ * dual-surface architecture, not a defect of the mirror.
+ *
+ * Args are PS1 native coords for the destination rect; the source rect
+ * in fb_out is the same rect scaled by internal_upscaling. */
+static void gl_mirror_fb_out_to_fb_texture(gl_renderer *renderer,
+                                           uint16_t x, uint16_t y,
+                                           uint16_t w, uint16_t h)
+{
+   GLuint    read_fbo = 0;
+   GLuint    draw_fbo = 0;
+   GLboolean scissor_was_enabled;
+   GLint     ux;
+   GLint     uy;
+   GLint     uw;
+   GLint     uh;
+   uint32_t  upscale;
+
+   if (has_software_fb || !gl_caps.fp_glBlitFramebuffer)
+      return;
+
+   upscale = renderer->internal_upscaling;
+   ux      = (GLint) x * (GLint) upscale;
+   uy      = (GLint) y * (GLint) upscale;
+   uw      = (GLint) w * (GLint) upscale;
+   uh      = (GLint) h * (GLint) upscale;
+
+   scissor_was_enabled = glIsEnabled(GL_SCISSOR_TEST);
+
+   glGenFramebuffers(1, &read_fbo);
+   glGenFramebuffers(1, &draw_fbo);
+
+   /* Read source: fb_out at upscaled coords. */
+   glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
+#ifdef HAVE_OPENGLES3
+   glFramebufferTexture2D(GL_READ_FRAMEBUFFER,
+         GL_COLOR_ATTACHMENT0,
+         GL_TEXTURE_2D,
+         renderer->fb_out.id,
+         0);
+#else
+   glFramebufferTexture(GL_READ_FRAMEBUFFER,
+         GL_COLOR_ATTACHMENT0,
+         renderer->fb_out.id,
+         0);
+#endif
+   glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+   /* Draw target: fb_texture at native coords. */
+   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fbo);
+#ifdef HAVE_OPENGLES3
+   glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER,
+         GL_COLOR_ATTACHMENT0,
+         GL_TEXTURE_2D,
+         renderer->fb_texture.id,
+         0);
+#else
+   glFramebufferTexture(GL_DRAW_FRAMEBUFFER,
+         GL_COLOR_ATTACHMENT0,
+         renderer->fb_texture.id,
+         0);
+#endif
+
+   /* glBlitFramebuffer writes through the scissor; disable so we
+    * always cover the full target rect. */
+   if (scissor_was_enabled)
+      glDisable(GL_SCISSOR_TEST);
+
+   gl_caps.fp_glBlitFramebuffer(
+         ux, uy, ux + uw, uy + uh,
+         (GLint) x, (GLint) y, (GLint)(x + w), (GLint)(y + h),
+         GL_COLOR_BUFFER_BIT,
+         GL_NEAREST);
+
+   if (scissor_was_enabled)
+      glEnable(GL_SCISSOR_TEST);
+
+   glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+   glDeleteFramebuffers(1, &read_fbo);
+   glDeleteFramebuffers(1, &draw_fbo);
+}
+#endif /* GL_READ_FRAMEBUFFER */
+
+
 void rsx_gl_fill_rect(
       uint32_t color,
       uint16_t x, uint16_t y,
@@ -4773,6 +4903,19 @@ void rsx_gl_fill_rect(
    renderer->config.draw_area_bot_right[1]   = draw_area_bot_right[1];
 
    apply_scissor(renderer);
+
+#ifdef GL_READ_FRAMEBUFFER
+   /* Mirror the cleared region into fb_texture so subsequent
+    * same-frame textured draws sample fresh pixels. Without this,
+    * games that fill a VRAM region and then sample it as a texture
+    * later in the same frame (Dino Crisis 1's character textures
+    * appear to fall in this category) read pre-fill stale pixels
+    * from fb_texture and render garbage. See
+    * gl_mirror_fb_out_to_fb_texture for the gating rationale (only
+    * runs when has_software_fb is off and glBlitFramebuffer is
+    * present). */
+   gl_mirror_fb_out_to_fb_texture(renderer, x, y, w, h);
+#endif
 }
 
 void rsx_gl_copy_rect(
@@ -4889,120 +5032,13 @@ void rsx_gl_copy_rect(
    }
 #endif /* GL_READ_FRAMEBUFFER */
 
-   /* === Mirror the FBCopy result into fb_texture ===
-    *
-    * fb_out is the GPU rendering target (upscaled).  fb_texture is
-    * the 1x source the command shader samples for textured draws.
-    * The two are kept loosely in sync by an end-of-frame
-    * fb_out -> fb_texture mirror at the bottom of
-    * rsx_gl_finalize_frame, which is enough for textures that
-    * games upload via FBWrite (those go straight into fb_texture
-    * via rsx_gl_load_image).
-    *
-    * FBCopy is the case the end-of-frame mirror handles
-    * imperfectly: the dest region in fb_out is up to date
-    * immediately, but fb_texture won't see it until the frame
-    * ends, so a textured draw later in this same frame that
-    * samples the dest region reads stale data.  When the
-    * "Software gl_framebuffer" core option is enabled, the shadow
-    * software renderer keeps GPU.vram in sync and that path can
-    * eventually feed fb_texture; with it disabled, GPU.vram is
-    * not maintained for the FBCopy region and fb_texture goes
-    * stale for the rest of the frame.  This is what produced
-    * the visible one-frame lag (and a fully-stale first frame)
-    * in the FF7 battle swirl on GL with software FB off.
-    *
-    * Mirror the dest region from fb_out down to fb_texture using
-    * glBlitFramebuffer so subsequent textured draws in this same
-    * frame see the freshly-copied pixels.  Only do it when:
-    *
-    *   - has_software_fb is false: when it's true the existing
-    *     end-of-frame mirror plus the SW shadow's vram already
-    *     produce the right result, and adding a per-FBCopy
-    *     mirror would just waste GPU work.
-    *
-    *   - gl_caps.fp_glBlitFramebuffer is non-NULL: GLES 2.0
-    *     drivers without GL_NV_framebuffer_blit etc. lack the
-    *     entry point; in that environment FF7 swirl on GL+SW-FB-off
-    *     stays as broken as it was before this commit (i.e. fully
-    *     stale fb_texture for the swirl region).  Such platforms
-    *     should leave Software gl_framebuffer enabled.
-    *
-    * Note that fb_texture is permanently 1x - this mirror does
-    * not preserve the upscaled detail in fb_out's dest region.
-    * The visible result is that the swirl quad samples a 1x
-    * snapshot of upscaled content, producing chunky pixelation
-    * during the swirl.  That is a fundamental consequence of the
-    * GL backend's dual-surface architecture (fb_texture stores
-    * paletted texture data which can't be meaningfully upscaled)
-    * and is out of scope for this fix. */
+   /* Mirror the FBCopy result into fb_texture for same-frame
+    * sampling. See gl_mirror_fb_out_to_fb_texture for the full
+    * rationale - this used to be ~60 lines of inline FBO dance
+    * here, extracted so rsx_gl_fill_rect can share it. */
 #ifdef GL_READ_FRAMEBUFFER
-   if (!has_software_fb && gl_caps.fp_glBlitFramebuffer)
-   {
-      GLuint read_fbo = 0;
-      GLuint draw_fbo = 0;
-      GLboolean scissor_was_enabled;
-
-      scissor_was_enabled = glIsEnabled(GL_SCISSOR_TEST);
-
-      glGenFramebuffers(1, &read_fbo);
-      glGenFramebuffers(1, &draw_fbo);
-
-      /* Read source: fb_out at upscaled coords. */
-      glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
-#ifdef HAVE_OPENGLES3
-      glFramebufferTexture2D(GL_READ_FRAMEBUFFER,
-            GL_COLOR_ATTACHMENT0,
-            GL_TEXTURE_2D,
-            renderer->fb_out.id,
-            0);
-#else
-      glFramebufferTexture(GL_READ_FRAMEBUFFER,
-            GL_COLOR_ATTACHMENT0,
-            renderer->fb_out.id,
-            0);
+   gl_mirror_fb_out_to_fb_texture(renderer, dst_x, dst_y, w, h);
 #endif
-      glReadBuffer(GL_COLOR_ATTACHMENT0);
-
-      /* Draw target: fb_texture at native coords. */
-      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fbo);
-#ifdef HAVE_OPENGLES3
-      glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER,
-            GL_COLOR_ATTACHMENT0,
-            GL_TEXTURE_2D,
-            renderer->fb_texture.id,
-            0);
-#else
-      glFramebufferTexture(GL_DRAW_FRAMEBUFFER,
-            GL_COLOR_ATTACHMENT0,
-            renderer->fb_texture.id,
-            0);
-#endif
-
-      /* glBlitFramebuffer writes to the destination through the
-       * scissor; disable so we always cover the full target rect. */
-      if (scissor_was_enabled)
-         glDisable(GL_SCISSOR_TEST);
-
-      /* GL_NEAREST matches the historical 1x-degrade behaviour
-       * of the software FBCopy path. */
-      gl_caps.fp_glBlitFramebuffer(
-            new_dst_x, new_dst_y,
-            new_dst_x + new_w, new_dst_y + new_h,
-            (GLint) dst_x, (GLint) dst_y,
-            (GLint) (dst_x + w), (GLint) (dst_y + h),
-            GL_COLOR_BUFFER_BIT,
-            GL_NEAREST);
-
-      if (scissor_was_enabled)
-         glEnable(GL_SCISSOR_TEST);
-
-      glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-      glDeleteFramebuffers(1, &read_fbo);
-      glDeleteFramebuffers(1, &draw_fbo);
-   }
-#endif /* GL_READ_FRAMEBUFFER */
 
 #ifdef DEBUG
    get_error("rsx_gl_copy_rect");
