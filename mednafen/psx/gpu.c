@@ -26,6 +26,7 @@
 #include "../math_ops.h"
 #include "../state_helpers.h"
 #include "../../rsx/rsx_intf.h"
+#include "../../rsx/tt_trace.h"
 
 #include "../pgxp/pgxp_main.h"
 #include "../pgxp/pgxp_gpu.h"
@@ -388,6 +389,13 @@ static void Command_FBCopy(PS_GPU* g, const uint32 *cb)
    if(!height)
       height = 0x200;
 
+   tt_log("gpu Command_FBCopy src=(%d,%d) dst=(%d,%d) %dx%d sw=%d mask_eval=%d mask_set=%d\n",
+         (int)sourceX, (int)sourceY, (int)destX, (int)destY,
+         (int)width, (int)height,
+         (int)rsx_intf_has_software_renderer(),
+         (int)(g->MaskEvalAND != 0),
+         (int)(g->MaskSetOR != 0));
+
    InvalidateTexCache(g);
 
    g->DrawTimeAvail -= (width * height) * 2;
@@ -451,6 +459,13 @@ static void Command_FBWrite(PS_GPU* g, const uint32 *cb)
    g->FBRW_CurX = g->FBRW_X;
    g->FBRW_CurY = g->FBRW_Y;
 
+   tt_log("gpu Command_FBWrite rect=(%u,%u %ux%u) sw=%d mask_eval=%d mask_set=%d\n",
+         (unsigned)g->FBRW_X, (unsigned)g->FBRW_Y,
+         (unsigned)g->FBRW_W, (unsigned)g->FBRW_H,
+         (int)rsx_intf_has_software_renderer(),
+         (int)(g->MaskEvalAND != 0),
+         (int)(g->MaskSetOR != 0));
+
    InvalidateTexCache(g);
 
    if(g->FBRW_W != 0 && g->FBRW_H != 0)
@@ -479,6 +494,11 @@ static void Command_FBRead(PS_GPU* g, const uint32 *cb)
 
    g->FBRW_CurX = g->FBRW_X;
    g->FBRW_CurY = g->FBRW_Y;
+
+   tt_log("gpu Command_FBRead rect=(%u,%u %ux%u) sw=%d\n",
+         (unsigned)g->FBRW_X, (unsigned)g->FBRW_Y,
+         (unsigned)g->FBRW_W, (unsigned)g->FBRW_H,
+         (int)rsx_intf_has_software_renderer());
 
    InvalidateTexCache(g);
 

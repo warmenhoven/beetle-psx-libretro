@@ -18,6 +18,7 @@
 
 #include "rsx/rsx_intf.h" /* enums */
 #include "rsx/rsx_defer.h"
+#include "rsx/tt_trace.h"
 #include "beetle_psx_globals.h"
 
 #define gl_draw_buffer_is_empty(x)           ((x)->map_index == 0)
@@ -2085,6 +2086,9 @@ static bool gl_renderer_new(gl_renderer *renderer, gl_draw_config config)
    renderer->frontend_resolution[1] = 0;
    renderer->internal_upscaling = upscaling;
    renderer->internal_color_depth = depth;
+
+   tt_log_startup("gl renderer init: internal_upscaling=%u depth=%u has_software_fb=%d\n",
+         (unsigned)upscaling, (unsigned)depth, (int)has_software_fb);
    renderer->crop_overscan = crop_overscan;
    renderer->image_offset_cycles = image_offset_cycles;
    renderer->image_crop = image_crop;
@@ -2413,6 +2417,9 @@ static bool retro_refresh_variables(gl_renderer *renderer)
       /* If 'BEETLE_OPT(renderer_software_fb)' option is not found, then
        * we are running in software mode */
       has_software_fb = true;
+
+   tt_log_startup("rsx_gl_refresh_variables: has_software_fb=%d\n",
+         (int)has_software_fb);
 
    get_variables(&upscaling, &display_vram);
 
@@ -3531,6 +3538,10 @@ void rsx_gl_finalize_frame(const void *fb, unsigned width,
    if (!renderer)
       return;
 
+   tt_log("gl finalize_frame display=%ux%u\n",
+         (unsigned)width, (unsigned)height);
+   tt_frame_advance();
+
    /* Draw pending commands */
    if (!gl_draw_buffer_is_empty(renderer->command_buffer))
       gl_renderer_draw(renderer);
@@ -3685,6 +3696,9 @@ void rsx_gl_set_tex_window(uint8_t tww, uint8_t twh, uint8_t twx, uint8_t twy)
    renderer->tex_x_or   = (twx & tww) << 3;
    renderer->tex_y_mask = ~(twh << 3);
    renderer->tex_y_or   = (twy & twh) << 3;
+
+   tt_log("gl set_tex_window tww=%u twh=%u twx=%u twy=%u\n",
+         (unsigned)tww, (unsigned)twh, (unsigned)twx, (unsigned)twy);
 }
 
 void rsx_gl_set_mask_setting(uint32_t mask_set_or, uint32_t mask_eval_and)
@@ -3748,6 +3762,9 @@ void rsx_gl_set_draw_area(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
    /* Finish drawing anything in the current area */
    if (!gl_draw_buffer_is_empty(renderer->command_buffer))
       gl_renderer_draw(renderer);
+
+   tt_log("gl set_draw_area top_left=(%u,%u) bot_right_inclusive=(%u,%u)\n",
+         (unsigned)x0, (unsigned)y0, (unsigned)x1, (unsigned)y1);
 
    renderer->config.draw_area_top_left[0] = x0;
    renderer->config.draw_area_top_left[1] = y0;
@@ -4234,6 +4251,10 @@ void rsx_gl_load_image(
    renderer->set_mask     = set_mask;
    renderer->mask_test    = mask_test;
 
+   tt_log("gl load_image rect=(%u,%u %ux%u) mask_test=%d set_mask=%d\n",
+         (unsigned)x, (unsigned)y, (unsigned)w, (unsigned)h,
+         (int)mask_test, (int)set_mask);
+
    top_left[0]            = x;
    top_left[1]            = y;
    dimensions[0]          = w;
@@ -4377,6 +4398,9 @@ bool rsx_gl_read_vram(uint16_t x, uint16_t y,
       return false;
    if (w == 0 || h == 0)
       return true;
+
+   tt_log("gl read_vram rect=(%u,%u %ux%u)\n",
+         (unsigned)x, (unsigned)y, (unsigned)w, (unsigned)h);
 
    is_32bpp = (renderer->internal_color_depth == 32);
 
@@ -4837,6 +4861,10 @@ void rsx_gl_fill_rect(
    if (!renderer)
       return;
 
+   tt_log("gl fill_rect rect=(%u,%u %ux%u) color=0x%06x\n",
+         (unsigned)x, (unsigned)y, (unsigned)w, (unsigned)h,
+         (unsigned)(color & 0xFFFFFFu));
+
    top_left[0]   = x;
    top_left[1]   = y;
    dimensions[0] = w;
@@ -4945,6 +4973,12 @@ void rsx_gl_copy_rect(
 
    if (src_x == dst_x && src_y == dst_y)
      return;
+
+   tt_log("gl copy_rect src=(%u,%u) dst=(%u,%u) %ux%u mask_test=%d set_mask=%d\n",
+         (unsigned)src_x, (unsigned)src_y,
+         (unsigned)dst_x, (unsigned)dst_y,
+         (unsigned)w, (unsigned)h,
+         (int)mask_test, (int)set_mask);
 
    renderer->set_mask          = set_mask;
    renderer->mask_test         = mask_test;

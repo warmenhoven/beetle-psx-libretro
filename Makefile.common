@@ -233,6 +233,18 @@ endif
       CXXFLAGS    += -DRSX_DUMP
    endif
 
+   # HAVE_TRACE: env-gated diagnostic tracing of VRAM-mutating ops.
+   # Unset by default - the trace facility is then completely absent
+   # from the build (no source compiled, no symbols, no rodata, no
+   # call instructions emitted at hooked sites). Set HAVE_TRACE=1 to
+   # include it; tracing is then ALSO env-gated at runtime by setting
+   # BEETLE_PSX_TRACE in the environment, see rsx/tt_trace.h.
+   ifeq ($(HAVE_TRACE), 1)
+      SOURCES_C   += $(CORE_DIR)/rsx/tt_trace.c
+      CFLAGS      += -DHAVE_TRACE
+      CXXFLAGS    += -DHAVE_TRACE
+   endif
+
    ifeq ($(HAVE_VULKAN), 1)
       CFLAGS      += -DTEXTURE_DUMPING_ENABLED
       CXXFLAGS    += -DTEXTURE_DUMPING_ENABLED
