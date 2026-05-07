@@ -4617,46 +4617,40 @@ bool rsx_gl_read_vram(uint16_t x, uint16_t y,
 
    if (ok)
    {
-      /* Splat scratch pixels into the caller's upscale-sized vram
-       * buffer.  scratch_pixels is in GL order (bottom-to-top from
-       * the initial readback).  PS1 vram is top-to-bottom, so each
-       * scratch row maps to its mirror PS1 row. */
-      const size_t  vram_stride = (size_t)VRAM_WIDTH_PIXELS * upscale;
-      const size_t  ux          = (size_t)x * upscale;
-      const size_t  uy          = (size_t)y * upscale;
+      /* Splat scratch pixels into the caller's vram buffer.
+       * scratch_pixels is in GL order (bottom-to-top from the initial
+       * readback). PS1 vram is top-to-bottom, so each scratch row maps
+       * to its mirror PS1 row.
+       *
+       * IMPORTANT: `vram` is always the native-resolution PS1 mirror
+       * (1024 x 512 uint16). When a hardware backend is in use the
+       * core forces psx_gpu_upscale_shift=0 (see
+       * libretro.c:rsx_intf_open's hw_renderer branch); GPU.vram is
+       * therefore allocated 1024*512*sizeof(uint16) = 1 MiB, NOT
+       * (1024*upscale)*(512*upscale)*sizeof(uint16). The GL renderer's
+       * `internal_upscaling` is independent and applies only to the
+       * GL-side `fb_out` texture; by the time we reach this splat we
+       * have already downsampled to a tightly-packed `w x h` scratch
+       * (the blit-down at line 4535 took care of that), so the splat
+       * MUST also be native-sized.
+       *
+       * The previous version of this code multiplied the destination
+       * stride/origin by `upscale` and per-pixel splatted an
+       * upscale x upscale block, which was correct ONLY if `vram` were
+       * sized to upscale resolution - it isn't. With internal_upscaling=8
+       * and a Dino Crisis 2 FBRead of (x=0, y=256, w=320, h=240), the
+       * loop wrote ~41 MiB into a 1 MiB buffer and crashed in
+       * Command_FBRead via rsx_intf_read_vram. */
+      const size_t vram_stride = (size_t)VRAM_WIDTH_PIXELS;
 
-      if (upscale == 1)
+      for (row = 0; row < h; row++)
       {
-         for (row = 0; row < h; row++)
-         {
-            /* scratch row 0 == GL bottom == PS1 row (y + h - 1).
-             * scratch row r == PS1 row (y + h - 1 - r). */
-            size_t ps1_row = uy + (h - 1 - row);
-            memcpy(&vram[ps1_row * vram_stride + ux],
-                   &scratch_pixels[row * w],
-                   (size_t)w * sizeof(uint16_t));
-         }
-      }
-      else
-      {
-         /* Upscaled: each PS1 pixel becomes an upscale x upscale
-          * block.  Flip rows the same way. */
-         size_t i, j, dx, dy;
-         for (i = 0; i < h; i++)
-         {
-            size_t ps1_i = h - 1 - i;
-            for (j = 0; j < w; j++)
-            {
-               uint16_t v = scratch_pixels[i * w + j];
-               for (dy = 0; dy < upscale; dy++)
-               {
-                  size_t  drow = uy + ps1_i * upscale + dy;
-                  uint16_t *dst = &vram[drow * vram_stride + ux + j * upscale];
-                  for (dx = 0; dx < upscale; dx++)
-                     dst[dx] = v;
-               }
-            }
-         }
+         /* scratch row 0 == GL bottom == PS1 row (y + h - 1).
+          * scratch row r == PS1 row (y + h - 1 - r). */
+         size_t ps1_row = (size_t)y + (h - 1 - row);
+         memcpy(&vram[ps1_row * vram_stride + (size_t)x],
+                &scratch_pixels[row * w],
+                (size_t)w * sizeof(uint16_t));
       }
    }
 
