@@ -120,12 +120,6 @@ static void Endian_A16_Swap(void *src, uint32_t nelements)
    }
 }
 
-static INLINE void MDFN_en16lsb(uint8_t *buf, uint16_t morp)
-{
-   buf[0]=morp;
-   buf[1]=morp>>8;
-}
-
 /* Tokenize one whitespace-separated argument out of `src` starting at
  * source_offset.  Writes up to destlen-1 characters into dest, NUL-
  * terminated.  Returns the offset to the start of the next argument
@@ -1190,7 +1184,6 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
             if(ct->AReader)
             {
                int16   AudioBuf[588 * 2];
-               int     i;
                int64_t frames_read = AR_Read(ct->AReader,
                      (ct->FileOffset / 4) + (lba - ct->LBA) * 588,
                      AudioBuf, 588);
@@ -1203,8 +1196,15 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
                if(frames_read < 588)
                   memset((uint8 *)AudioBuf + frames_read * 2 * sizeof(int16), 0, (588 - frames_read) * 2 * sizeof(int16));
 
-               for(i = 0; i < 588 * 2; i++)
-                  MDFN_en16lsb(buf + i * 2, AudioBuf[i]);
+               /* AudioBuf is in host byte order from the decoder; the
+                * raw CDDA sector format requires little-endian samples.
+                * On LE hosts the bytes are already correct, so a single
+                * memcpy suffices.  On BE hosts copy then byteswap in
+                * place. */
+               memcpy(buf, AudioBuf, 588 * 2 * sizeof(int16));
+#ifdef MSB_FIRST
+               Endian_A16_Swap(buf, 588 * 2);
+#endif
             }
             else	/* Binary, woo. */
             {

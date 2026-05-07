@@ -24,14 +24,9 @@
 
 /* The base member is always the first field, so a `struct Stream *`
  * passed to a vtable op can be safely cast to a `struct FileStream *`. */
-static struct FileStream *fs_from_stream(struct Stream *s)
-{
-   return (struct FileStream *)s;
-}
-
 static uint64_t fs_read(struct Stream *s, void *data, uint64_t count)
 {
-   struct FileStream *fs = fs_from_stream(s);
+   struct FileStream *fs = (struct FileStream *)s;
    int64_t got;
 
    if (!fs->fp)
@@ -48,7 +43,7 @@ static uint64_t fs_read(struct Stream *s, void *data, uint64_t count)
 
 static void fs_seek(struct Stream *s, int64_t offset, int whence)
 {
-   struct FileStream *fs = fs_from_stream(s);
+   struct FileStream *fs = (struct FileStream *)s;
    int seek_position = -1;
 
    if (!fs->fp)
@@ -70,7 +65,7 @@ static void fs_seek(struct Stream *s, int64_t offset, int whence)
 
 static uint64_t fs_tell(struct Stream *s)
 {
-   struct FileStream *fs = fs_from_stream(s);
+   struct FileStream *fs = (struct FileStream *)s;
    int64_t pos;
 
    if (!fs->fp)
@@ -84,7 +79,7 @@ static uint64_t fs_tell(struct Stream *s)
 
 static uint64_t fs_size(struct Stream *s)
 {
-   struct FileStream *fs = fs_from_stream(s);
+   struct FileStream *fs = (struct FileStream *)s;
    int64_t sz;
 
    if (!fs->fp)
@@ -98,7 +93,7 @@ static uint64_t fs_size(struct Stream *s)
 
 static void fs_close(struct Stream *s)
 {
-   struct FileStream *fs = fs_from_stream(s);
+   struct FileStream *fs = (struct FileStream *)s;
    if (!fs->fp)
       return;
    filestream_close(fs->fp);
@@ -110,7 +105,7 @@ static void fs_destroy(struct Stream *s)
    if (!s)
       return;
    fs_close(s);
-   free(fs_from_stream(s));
+   free((struct FileStream *)s);
 }
 
 static const struct StreamOps filestream_ops_heap =

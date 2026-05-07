@@ -351,7 +351,7 @@ static int CDIF_ReadThread(void *v_arg)
          slock_unlock(cdif->SBMutex);
 
          /* Read directly into the slot - saves a 2448-byte memcpy. */
-         CDAccess_Read_Raw_Sector(cdif->disc_cdaccess, slot->data,
+         cdif->disc_cdaccess->Read_Raw_Sector(cdif->disc_cdaccess, slot->data,
                cdif->ra_lba);
 
          slock_lock(cdif->SBMutex);
@@ -408,7 +408,7 @@ bool CDIF_ReadRawSector(CDIF *cdif, uint8_t *buf, uint32_t lba,
    if (!cdif->is_mt)
    {
       (void)timeout_us;
-      CDAccess_Read_Raw_Sector(cdif->disc_cdaccess, buf, lba);
+      cdif->disc_cdaccess->Read_Raw_Sector(cdif->disc_cdaccess, buf, lba);
       return true;
    }
    else
@@ -480,7 +480,7 @@ bool CDIF_ReadRawSectorPWOnly(CDIF *cdif, uint8_t *buf, uint32_t lba,
    if (cdif->is_mt && hint_fullread)
       CDIF_HintReadSector(cdif, lba);
 
-   return CDAccess_Read_Raw_PW(cdif->disc_cdaccess, buf, lba);
+   return cdif->disc_cdaccess->Read_Raw_PW(cdif->disc_cdaccess, buf, lba);
 }
 
 bool CDIF_Eject(CDIF *cdif, bool eject_status)
@@ -583,11 +583,6 @@ int CDIF_ReadSector(CDIF *cdif, uint8_t *pBuf, uint32_t lba, uint32_t nSectors)
    }
 
    return ret;
-}
-
-bool CDIF_IsUnrecoverable(const CDIF *cdif)
-{
-   return cdif->UnrecoverableError;
 }
 
 void CDIF_Close(CDIF *cdif)
@@ -749,9 +744,14 @@ typedef struct CDIF_Stream_Thing
 
 static uint64_t cst_read(struct Stream *s, void *data, uint64_t count)
 {
-   CDIF_Stream_Thing *cst      = (CDIF_Stream_Thing *)s;
-   uint64_t           end_byte = (uint64_t)cst->sector_count * 2048;
-   uint64_t           rp;
+   CDIF_Stream_Thing *cst        = (CDIF_Stream_Thing *)s;
+   uint64_t           end_byte   = (uint64_t)cst->sector_count * 2048;
+   uint64_t           total;
+   uint8_t           *out;
+   uint32_t           lba;
+   uint64_t           in_sector_off;
+   uint64_t           full_sectors;
+   uint64_t           tail;
 
    if (cst->position < 0 || (uint64_t)cst->position >= end_byte)
       return 0;
@@ -761,26 +761,53 @@ static uint64_t cst_read(struct Stream *s, void *data, uint64_t count)
    if (!count)
       return 0;
 
-   for (rp = (uint64_t)cst->position;
-         rp < (uint64_t)cst->position + count;
-         rp = (rp & ~(uint64_t)2047) + 2048)
+   total         = count;
+   out           = (uint8_t *)data;
+   lba           = cst->start_lba + (uint32_t)((uint64_t)cst->position / 2048);
+   in_sector_off = (uint64_t)cst->position & 2047;
+
+   /* Partial first sector: bytes [in_sector_off, 2048) of one sector.
+    * Has to go through a temp buffer because we want a tail of the
+    * sector but ReadSector always writes the full 2048 bytes. */
+   if (in_sector_off)
    {
       uint8_t  buf[2048];
-      uint64_t in_sector_off = rp & 2047;
-      uint64_t want          = 2048 - in_sector_off;
-      uint64_t remaining     = count - (rp - (uint64_t)cst->position);
+      uint64_t want = 2048 - in_sector_off;
+      if (want > count)
+         want = count;
 
-      CDIF_ReadSector(cst->cdintf, buf,
-            cst->start_lba + (uint32_t)(rp / 2048), 1);
+      CDIF_ReadSector(cst->cdintf, buf, lba, 1);
+      memcpy(out, buf + in_sector_off, (size_t)want);
 
-      if (want > remaining)
-         want = remaining;
-      memcpy((uint8_t *)data + (rp - (uint64_t)cst->position),
-            buf + in_sector_off, (size_t)want);
+      out   += want;
+      count -= want;
+      lba++;
    }
 
-   cst->position += count;
-   return count;
+   /* Full middle sectors: read straight into the caller's buffer.
+    * One CDIF_ReadSector call covers the whole run since it loops
+    * internally. */
+   full_sectors = count / 2048;
+   if (full_sectors)
+   {
+      CDIF_ReadSector(cst->cdintf, out, lba, (uint32_t)full_sectors);
+      out   += full_sectors * 2048;
+      count -= full_sectors * 2048;
+      lba   += (uint32_t)full_sectors;
+   }
+
+   /* Partial last sector: bytes [0, count) of one sector.  Same temp-
+    * buffer requirement as the head partial. */
+   tail = count;
+   if (tail)
+   {
+      uint8_t buf[2048];
+      CDIF_ReadSector(cst->cdintf, buf, lba, 1);
+      memcpy(out, buf, (size_t)tail);
+   }
+
+   cst->position += total;
+   return total;
 }
 
 static void cst_seek(struct Stream *s, int64_t offset, int whence)

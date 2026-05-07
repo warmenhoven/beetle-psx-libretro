@@ -199,6 +199,12 @@ typedef struct CDC_CTEntry
    int32_t  (*func2)(PS_CDC *cdc);
 } CDC_CTEntry;
 
+/* Async-IRQ-pending state reset.  Two assignments, called from many
+ * sites - macro avoids both the function-call overhead and a
+ * forward-decl tax for what is structurally a setter. */
+#define PS_CDC_CLEAR_AIP(cdc) \
+   do { (cdc)->AsyncResultsPendingCount = 0; (cdc)->AsyncIRQPending = 0; } while (0)
+
 /* Forward decls for all PS_CDC_* free functions and SetAIP variants
  * so order-of-definition doesn't matter inside this file.  Keeps the
  * conversion mechanical - we don't have to topologically sort the
@@ -215,7 +221,6 @@ static uint8_t  PS_CDC_MakeStatus(PS_CDC *cdc, bool cmd_error);
 static bool     PS_CDC_DecodeSubQ(PS_CDC *cdc, uint8_t *subpw);
 static bool     PS_CDC_CommandCheckDiscPresent(PS_CDC *cdc);
 static void     PS_CDC_DMForceStop(PS_CDC *cdc);
-static void     PS_CDC_ClearAIP(PS_CDC *cdc);
 static void     PS_CDC_CheckAIP(PS_CDC *cdc);
 static void     PS_CDC_SetAIP_Buf(PS_CDC *cdc, unsigned irq,
                                   unsigned result_count, uint8_t *r);
@@ -351,7 +356,7 @@ void PS_CDC_DMForceStop(PS_CDC *cdc)
 
    cdc->HeaderBufValid = false;
    cdc->DriveStatus = DS_STOPPED;
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
    cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
    cdc->SectorsRead = 0;
 }
@@ -460,7 +465,7 @@ void PS_CDC_SoftReset(PS_CDC *cdc)
 
    cdc->HeaderBufValid = false;
    cdc->DriveStatus = DS_STOPPED;
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
    cdc->StatusAfterSeek = DS_STOPPED;
    cdc->SeekRetryCounter = 0;
 
@@ -598,23 +603,25 @@ int PS_CDC_StateAction(PS_CDC *cdc, StateMem *sm, int load, int data_only)
       SFVAR(cdc->SeekTarget),
       SFVAR(cdc->SeekRetryCounter),
 
-/* FIXME: Save TOC stuff? */
-#if 0
-      CDUtility::TOC cdc->toc;
-      bool cdc->IsPSXDisc;
-      uint8 cdc->DiscID[4];
-#endif
+      /* Intentionally NOT in the savestate: cdc->toc, cdc->IsPSXDisc,
+       * cdc->DiscID.  These are reconstructed by the SetDisc()/
+       * SetDiscWrapper() call in libretro.c's StateAction load path,
+       * which runs BEFORE this CDC_StateAction.  Reconstructing from
+       * the currently-loaded disc image is correct - savestates can
+       * outlive the emulator process, and the disc image's TOC and
+       * identifier should follow the disc that's actually inserted
+       * now, not whatever was inserted when the state was saved. */
       SFVAR(cdc->CommandLoc),
-         SFVAR(cdc->CommandLoc_Dirty),
-         SFARRAY16(&cdc->xa_previous[0][0], sizeof(cdc->xa_previous) / sizeof(cdc->xa_previous[0][0])),
+      SFVAR(cdc->CommandLoc_Dirty),
+      SFARRAY16(&cdc->xa_previous[0][0], sizeof(cdc->xa_previous) / sizeof(cdc->xa_previous[0][0])),
 
-         SFVAR(cdc->xa_cur_set),
-         SFVAR(cdc->xa_cur_file),
-         SFVAR(cdc->xa_cur_chan),
+      SFVAR(cdc->xa_cur_set),
+      SFVAR(cdc->xa_cur_file),
+      SFVAR(cdc->xa_cur_chan),
 
-         SFVAR(cdc->ReportLastF),
+      SFVAR(cdc->ReportLastF),
 
-         SFEND
+      SFEND
    };
 
    int ret = MDFNSS_StateAction(sm, load, data_only, StateRegs, "CDC");
@@ -654,7 +661,7 @@ void PS_CDC_RecalcIRQ(PS_CDC *cdc)
 {
    IRQ_Assert(IRQ_CD, (bool)(cdc->IRQBuffer & (cdc->IRQOutTestMask & 0x1F)));
 }
-/*static int32 doom_ts; */
+
 void PS_CDC_WriteIRQ(PS_CDC *cdc, uint8 V)
 {
    assert(cdc->CDCReadyReceiveCounter <= 0);
@@ -816,10 +823,10 @@ INLINE void PS_CDC_ApplyVolume(PS_CDC *cdc, int32 samples[2])
    /* Saturate each output channel to signed 16-bit. The CDC
     * publishes samples in the int16 range to the SPU's CD-DA
     * input mixer; clipping here matches PS1 silicon behaviour. */
-   if (left_out  < -32768) left_out  = -32768;
-   if (left_out  >  32767) left_out  =  32767;
-   if (right_out < -32768) right_out = -32768;
-   if (right_out >  32767) right_out =  32767;
+   if      (left_out  < -32768) left_out  = -32768;
+   else if (left_out  >  32767) left_out  =  32767;
+   if      (right_out < -32768) right_out = -32768;
+   else if (right_out >  32767) right_out =  32767;
 
    samples[0] = left_out;
    samples[1] = right_out;
@@ -859,8 +866,8 @@ void PS_CDC_GetCDAudio(PS_CDC *cdc, int32 samples[2], const unsigned freq)
          acc >>= 15;
          /* Saturate resampled output to signed 16-bit; required
           * by this function's contract per its leading comment. */
-         if (acc < -32768) acc = -32768;
-         if (acc >  32767) acc =  32767;
+         if      (acc < -32768) acc = -32768;
+         else if (acc >  32767) acc =  32767;
          samples[i] = acc;
       }
       }
@@ -1015,8 +1022,8 @@ static void DecodeXAADPCM(const uint8 *input, int16 *output, const unsigned shif
        * via output[i-1]/output[i-2] into subsequent iterations'
        * IIR-style filter (weights from SPU's ADPCM playback - may
        * not be exact for CD-XA ADPCM per the comment above). */
-      if (sample < -32768) sample = -32768;
-      if (sample >  32767) sample =  32767;
+      if      (sample < -32768) sample = -32768;
+      else if (sample >  32767) sample =  32767;
       output[i] = sample;
    }
    }
@@ -1109,12 +1116,6 @@ void PS_CDC_XA_ProcessSector(PS_CDC *cdc, const uint8 *sdata, CD_Audio_Buffer *a
    }
 }
 
-void PS_CDC_ClearAIP(PS_CDC *cdc)
-{
-   cdc->AsyncResultsPendingCount = 0;
-   cdc->AsyncIRQPending = 0;
-}
-
 void PS_CDC_CheckAIP(PS_CDC *cdc)
 {
    if(cdc->AsyncIRQPending && cdc->CDCReadyReceiveCounter <= 0)
@@ -1129,13 +1130,13 @@ void PS_CDC_CheckAIP(PS_CDC *cdc)
 
       PS_CDC_WriteIRQ(cdc, cdc->AsyncIRQPending);
 
-      PS_CDC_ClearAIP(cdc);
+      PS_CDC_CLEAR_AIP(cdc);
    }
 }
 
 static void PS_CDC_SetAIP_Buf(PS_CDC *cdc, unsigned irq, unsigned result_count, uint8_t *r)
 {
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
 
    cdc->AsyncResultsPendingCount = result_count;
 
@@ -1433,8 +1434,6 @@ int32_t PS_CDC_Update(PS_CDC *cdc, const int32_t timestamp)
 
    overclock_cpu_to_device(&clocks);
 
-   /*doom_ts = timestamp; */
-
    while(clocks > 0)
    {
       int32 chunk_clocks = clocks;
@@ -1502,7 +1501,7 @@ int32_t PS_CDC_Update(PS_CDC *cdc, const int32_t timestamp)
                   cdc->CommandLoc     = 0;
 
                   cdc->DriveStatus    = DS_PAUSED;  /* or DS_STANDBY? */
-                  PS_CDC_ClearAIP(cdc);
+                  PS_CDC_CLEAR_AIP(cdc);
                   break;
                case DS_SEEKING:
                   {
@@ -2022,7 +2021,7 @@ int32 PS_CDC_Command_Play(PS_CDC *cdc, const int arg_count, const uint8 *args)
    if(!PS_CDC_CommandCheckDiscPresent(cdc))
       return(0);
 
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
 
    PS_CDC_WriteResult(cdc, PS_CDC_MakeStatus(cdc, false));
    PS_CDC_WriteIRQ(cdc, CDCIRQ_ACKNOWLEDGE);
@@ -2138,7 +2137,7 @@ void PS_CDC_ReadBase(PS_CDC *cdc)
    if(cdc->CommandLoc_Dirty || cdc->DriveStatus != DS_READING)
    {
       /* Don't flush the DMABuffer here; see CTR course selection screen. */
-      PS_CDC_ClearAIP(cdc);
+      PS_CDC_CLEAR_AIP(cdc);
       PS_CDC_ClearAudioBuffers(cdc);
       cdc->SB_In = 0;
       cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
@@ -2188,7 +2187,7 @@ int32 PS_CDC_Command_Stop(PS_CDC *cdc, const int arg_count, const uint8 *args)
       return(5000);
 
    PS_CDC_ClearAudioBuffers(cdc);
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
    cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
    cdc->SectorsRead = 0;
 
@@ -2225,7 +2224,7 @@ int32 PS_CDC_Command_Standby(PS_CDC *cdc, const int arg_count, const uint8 *args
    PS_CDC_WriteIRQ(cdc, CDCIRQ_ACKNOWLEDGE);
 
    PS_CDC_ClearAudioBuffers(cdc);
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
    cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
    cdc->SectorsRead = 0;
 
@@ -2264,7 +2263,7 @@ int32 PS_CDC_Command_Pause(PS_CDC *cdc, const int arg_count, const uint8 *args)
    /* "Viewpoint" flips out and crashes if reading isn't stopped (almost?) immediately. */
    /*PS_CDC_ClearAudioBuffers(cdc); */
    cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
    cdc->DriveStatus = DS_PAUSED;
 
    /* An approximation. */
@@ -2480,7 +2479,7 @@ int32 PS_CDC_Command_SeekL(PS_CDC *cdc, const int arg_count, const uint8 *args)
    PS_CDC_PreSeekHack(cdc, cdc->SeekTarget);
    cdc->DriveStatus = DS_SEEKING_LOGICAL;
    cdc->StatusAfterSeek = DS_STANDBY;
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
 
    return(cdc->PSRCounter);
 }
@@ -2500,7 +2499,7 @@ int32 PS_CDC_Command_SeekP(PS_CDC *cdc, const int arg_count, const uint8 *args)
    PS_CDC_PreSeekHack(cdc, cdc->SeekTarget);
    cdc->DriveStatus = DS_SEEKING;
    cdc->StatusAfterSeek = DS_STANDBY;
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
 
    return(cdc->PSRCounter);
 }
@@ -2710,7 +2709,7 @@ int32 PS_CDC_Command_ReadTOC(PS_CDC *cdc, const int arg_count, const uint8 *args
    ret_time = 30000000 + PS_CDC_CalcSeekTime(cdc, cdc->CurSector, 0, cdc->DriveStatus != DS_STOPPED, cdc->DriveStatus == DS_PAUSED);
 
    cdc->DriveStatus = DS_PAUSED;  /* Ends up in a pause state when the command is finished.  Maybe we should add DS_READTOC or something... */
-   PS_CDC_ClearAIP(cdc);
+   PS_CDC_CLEAR_AIP(cdc);
 
    return ret_time;
 }

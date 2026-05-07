@@ -227,9 +227,6 @@ void subpw_interleave(const uint8_t *in_buf, uint8_t *out_buf);
 // TODO
 //void subq_extrapolate(const uint8_t *subq_input, int32_t position_delta, uint8_t *subq_output);
 
-// (De)Scrambles data sector.
-void scrambleize_data_sector(uint8_t *sector_data);
-
 #ifdef __cplusplus
 }
 #endif

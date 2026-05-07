@@ -22,14 +22,9 @@
 #include "MemoryStream.h"
 #include "error.h"
 
-static struct MemoryStream *ms_from_stream(struct Stream *s)
-{
-   return (struct MemoryStream *)s;
-}
-
 static uint64_t ms_read(struct Stream *s, void *data, uint64_t count)
 {
-   struct MemoryStream *ms = ms_from_stream(s);
+   struct MemoryStream *ms = (struct MemoryStream *)s;
    uint64_t avail;
 
    if (!ms->data_buffer || ms->position < 0
@@ -47,7 +42,7 @@ static uint64_t ms_read(struct Stream *s, void *data, uint64_t count)
 
 static void ms_seek(struct Stream *s, int64_t offset, int whence)
 {
-   struct MemoryStream *ms = ms_from_stream(s);
+   struct MemoryStream *ms = (struct MemoryStream *)s;
    int64_t new_position;
 
    switch (whence)
@@ -76,17 +71,19 @@ static void ms_seek(struct Stream *s, int64_t offset, int whence)
 
 static uint64_t ms_tell(struct Stream *s)
 {
-   return (uint64_t)ms_from_stream(s)->position;
+   struct MemoryStream *ms = (struct MemoryStream *)s;
+   return (uint64_t)ms->position;
 }
 
 static uint64_t ms_size(struct Stream *s)
 {
-   return ms_from_stream(s)->data_buffer_size;
+   struct MemoryStream *ms = (struct MemoryStream *)s;
+   return ms->data_buffer_size;
 }
 
 static void ms_close(struct Stream *s)
 {
-   struct MemoryStream *ms = ms_from_stream(s);
+   struct MemoryStream *ms = (struct MemoryStream *)s;
    if (ms->data_buffer)
    {
       free(ms->data_buffer);
@@ -101,7 +98,7 @@ static void ms_destroy(struct Stream *s)
    if (!s)
       return;
    ms_close(s);
-   free(ms_from_stream(s));
+   free((struct MemoryStream *)s);
 }
 
 /* Memory-stream fast path for line reads. Avoids the byte-at-a-time
@@ -110,7 +107,7 @@ static void ms_destroy(struct Stream *s)
  * even after the C conversion. */
 static int ms_get_line(struct Stream *s, char *out, size_t cap)
 {
-   struct MemoryStream *ms = ms_from_stream(s);
+   struct MemoryStream *ms = (struct MemoryStream *)s;
    size_t n      = 0;
    bool   got_any = false;
 

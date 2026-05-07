@@ -76,9 +76,6 @@ bool CDIF_ValidateRawSector(uint8_t *buf);
  * success or NOP. */
 bool CDIF_Eject(CDIF *cdif, bool eject_status);
 
-/* True iff CDIF_Open or the read thread reported a fatal error. */
-bool CDIF_IsUnrecoverable(const CDIF *cdif);
-
 /* Construct a Stream view onto a (start_lba, sector_count) region
  * of the disc.  The stream borrows cdif and must not outlive it. */
 struct Stream *CDIF_MakeStream(CDIF *cdif, uint32_t lba, uint32_t sector_count);

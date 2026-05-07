@@ -24,9 +24,9 @@ extern "C" {
  * `cda->Read_Raw_*` etc. for the rest of the vtable) to drive an
  * instance, and `cda->destroy(cda)` to tear it down.
  *
- * Backends MUST set Read_Raw_Sector, Read_TOC, Eject, and destroy.
- * Read_Raw_PW is optional - if NULL, CDAccess_Read_Raw_PW falls
- * back to a Read_Raw_Sector + memcpy of the 96 subchannel bytes.
+ * Backends MUST set Read_Raw_Sector, Read_Raw_PW, Read_TOC, Eject,
+ * and destroy.  All five vtable slots are required - the public
+ * dispatch wrappers below invoke them unconditionally.
  */
 struct CDAccess
 {
@@ -45,13 +45,9 @@ typedef struct CDAccess CDAccess;
 CDAccess *cdaccess_open_image(bool *success, const char *path,
       bool image_memcache);
 
-/* Public dispatch wrappers - invoke the vtable.  Read_Raw_PW exists
- * because not every backend implements its own subchannel-only path;
- * the wrapper falls back to Read_Raw_Sector + memcpy for those.  The
- * other ops (Read_TOC, Eject, destroy) are pure passthroughs and
- * call sites invoke them through the vtable directly. */
-bool CDAccess_Read_Raw_Sector(CDAccess *cda, uint8_t *buf, int32_t lba);
-bool CDAccess_Read_Raw_PW    (CDAccess *cda, uint8_t *buf, int32_t lba);
+/* All vtable ops are invoked directly through the cda->op(cda, ...)
+ * call shape; there are no public dispatch wrappers because they
+ * would be one-line passthroughs. */
 
 #ifdef __cplusplus
 }

@@ -324,18 +324,3 @@ void synth_leadout_sector_lba(uint8_t mode, const struct TOC *toc, const int32_t
       }
    }
 }
-
-
-/* ISO/IEC 10149:1995 (E): 20.2 */
-#if 0
-/* TODO/FIXME - missing functions */
-void subpw_synth_udapp_lba(const TOC& toc, const int32 lba, const int32 lba_subq_relative_offs, uint8* SubPWBuf);
-void synth_udapp_sector_lba(uint8 mode, const TOC& toc, const int32 lba, int32 lba_subq_relative_offs, uint8* out_buf);
-#endif
-
-void scrambleize_data_sector(uint8_t *sector_data)
-{
-   unsigned i;
-   for(i = 12; i < 2352; i++)
-      sector_data[i] ^= cdutil_scramble_table[i - 12];
-}

@@ -32,7 +32,6 @@
 #include "pgxp_main.h"
 #include "pgxp_value.h"
 #include "pgxp_mem.h"
-#include "pgxp_debug.h"
 #include "pgxp_cpu.h"
 #include "pgxp_gpu.h"
 

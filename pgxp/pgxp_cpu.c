@@ -5,7 +5,6 @@
 #include "pgxp_value.h"
 #include "pgxp_mem.h"
 
-#include "pgxp_debug.h"
 
 #include "limits.h"
 

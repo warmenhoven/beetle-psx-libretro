@@ -769,8 +769,8 @@ static void SPU_RunDecoder(SPU_Voice *voice)
           * values to int16 range too (matching PS1 silicon
           * behaviour where the ADPCM unit operates on 16-bit
           * intermediates). */
-         if (sample < -32768) sample = -32768;
-         if (sample >  32767) sample =  32767;
+         if      (sample < -32768) sample = -32768;
+         else if (sample >  32767) sample =  32767;
 
          tb[i] = sample;
          voice->DecodeM2 = voice->DecodeM1;
@@ -914,8 +914,7 @@ static INLINE int16 ReverbSat(int32 samp)
 {
  if(samp > 32767)
   samp = 32767;
-
- if(samp < -32768)
+ else if(samp < -32768)
   samp = -32768;
 
  return(samp);
@@ -965,8 +964,8 @@ static INLINE int32 Reverb4422(const int16 *src)
 
    /* Saturate to signed 16-bit before returning to the reverb
     * downsample/upsample chain. */
-   if (out < -32768) out = -32768;
-   if (out >  32767) out =  32767;
+   if      (out < -32768) out = -32768;
+   else if (out >  32767) out =  32767;
 
    return out;
 }
@@ -982,8 +981,8 @@ static INLINE int32 Reverb2244(const int16 *src)
    out >>= 14;
 
    /* Saturate to signed 16-bit. Same role as Reverb4422 above. */
-   if (out < -32768) out = -32768;
-   if (out >  32767) out =  32767;
+   if      (out < -32768) out = -32768;
+   else if (out >  32767) out =  32767;
 
    return out;
 }
@@ -1382,10 +1381,10 @@ static INLINE void SPU_RunNoise(void)
        * signed 16-bit before feeding it to the reverb block. PS1
        * silicon clamps at this stage because the reverb engine
        * works on int16 samples internally. */
-      if (accum_fv[0] < -32768) accum_fv[0] = -32768;
-      if (accum_fv[0] >  32767) accum_fv[0] =  32767;
-      if (accum_fv[1] < -32768) accum_fv[1] = -32768;
-      if (accum_fv[1] >  32767) accum_fv[1] =  32767;
+      if      (accum_fv[0] < -32768) accum_fv[0] = -32768;
+      else if (accum_fv[0] >  32767) accum_fv[0] =  32767;
+      if      (accum_fv[1] < -32768) accum_fv[1] = -32768;
+      else if (accum_fv[1] >  32767) accum_fv[1] =  32767;
 
       SPU_RunReverb(accum_fv, reverb);
 
@@ -1413,8 +1412,8 @@ static INLINE void SPU_RunNoise(void)
       {
          accum[lr] += ((reverb[lr] * ReverbVol[lr]) >> 15);
          /* Saturate post-reverb mix to signed 16-bit. */
-         if (accum[lr] < -32768) accum[lr] = -32768;
-         if (accum[lr] >  32767) accum[lr] =  32767;
+         if      (accum[lr] < -32768) accum[lr] = -32768;
+         else if (accum[lr] >  32767) accum[lr] =  32767;
       }
 
       if (IntermediateBufferPos < 4096) /* Overflow might occur in some debugger use cases. */
@@ -1423,8 +1422,8 @@ static INLINE void SPU_RunNoise(void)
          {
             int32 out = (accum[lr] * SPU_Sweep_ReadVolume(&GlobalSweep[lr])) >> 15;
             /* Saturate final output sample to signed 16-bit. */
-            if (out < -32768) out = -32768;
-            if (out >  32767) out =  32767;
+            if      (out < -32768) out = -32768;
+            else if (out >  32767) out =  32767;
             /* 75% attenuation for resampling headroom. */
             IntermediateBuffer[IntermediateBufferPos][lr] = (out * 3 + 2) >> 2;
          }

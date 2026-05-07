@@ -61,33 +61,3 @@ CDAccess *cdaccess_open_image(bool *success, const char *path,
    /* Caller is responsible for destroying cda when *success is false. */
    return cda;
 }
-
-/* ------------------------------------------------------------------
- * Public dispatch wrappers - vtable invocations.
- *
- * Read_Raw_PW falls back to Read_Raw_Sector + 96-byte memcpy if a
- * backend doesn't supply a specialised implementation.  This is the
- * default that the old C++ CDAccess base class implemented; backends
- * that want the cheap subchannel-only path (CCD, CHD) override it.
- * ------------------------------------------------------------------ */
-
-bool CDAccess_Read_Raw_Sector(CDAccess *cda, uint8_t *buf,
-      int32_t lba)
-{
-   return cda->Read_Raw_Sector(cda, buf, lba);
-}
-
-bool CDAccess_Read_Raw_PW(CDAccess *cda, uint8_t *buf,
-      int32_t lba)
-{
-   if (cda->Read_Raw_PW)
-      return cda->Read_Raw_PW(cda, buf, lba);
-   else
-   {
-      uint8_t tmpbuf[2352 + 96];
-      if (!cda->Read_Raw_Sector(cda, tmpbuf, lba))
-         return false;
-      memcpy(buf, tmpbuf + 2352, 96);
-      return true;
-   }
-}

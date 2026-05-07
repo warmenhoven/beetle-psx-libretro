@@ -18,7 +18,13 @@ extern retro_log_printf_t log_cb;
 #ifdef VERBOSE_TEXTURE_TRACKING
 #define TT_LOG_VERBOSE(...) TT_LOG(__VA_ARGS__)
 #else
-#define TT_LOG_VERBOSE(...) do {} while (0)
+/* No-op variant must still consume its arguments at the syntactic
+ * level, otherwise locals only used in the verbose branch trip
+ * -Wunused-but-set-variable.  The "(void)0," prefix lets sizeof
+ * accept a 1-arg invocation through the comma operator; sizeof
+ * itself is unevaluated, so each arg is read by the type system
+ * without generating runtime code. */
+#define TT_LOG_VERBOSE(...) ((void)sizeof(((void)0, __VA_ARGS__)))
 #endif
 
 namespace PSX {
