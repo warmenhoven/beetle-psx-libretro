@@ -68,7 +68,7 @@ ImageView::~ImageView()
 		if (srgb_view != VK_NULL_HANDLE)
 			device->destroy_image_view_nolock(srgb_view);
 
-		for (auto &view : render_target_views)
+		for (VkImageView &view : render_target_views)
 			device->destroy_image_view_nolock(view);
 	}
 	else
@@ -83,7 +83,7 @@ ImageView::~ImageView()
 		if (srgb_view != VK_NULL_HANDLE)
 			device->destroy_image_view(srgb_view);
 
-		for (auto &view : render_target_views)
+		for (VkImageView &view : render_target_views)
 			device->destroy_image_view(view);
 	}
 }

@@ -86,7 +86,7 @@ VkCommandBuffer CommandPool::request_secondary_command_buffer()
 {
 	if (secondary_index < secondary_buffers.size())
 	{
-		auto ret = secondary_buffers[secondary_index++];
+		VkCommandBuffer ret = secondary_buffers[secondary_index++];
 #ifdef VULKAN_DEBUG
 		VK_ASSERT(in_flight.find(ret) == end(in_flight));
 		in_flight.insert(ret);
@@ -116,7 +116,7 @@ VkCommandBuffer CommandPool::request_command_buffer()
 {
 	if (index < buffers.size())
 	{
-		auto ret = buffers[index++];
+		VkCommandBuffer ret = buffers[index++];
 #ifdef VULKAN_DEBUG
 		VK_ASSERT(in_flight.find(ret) == end(in_flight));
 		in_flight.insert(ret);

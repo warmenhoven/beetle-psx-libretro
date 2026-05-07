@@ -40,7 +40,7 @@ DescriptorSetAllocator::DescriptorSetAllocator(Hash hash, Device *device, const 
 	vector<VkDescriptorSetLayoutBinding> bindings;
 	for (unsigned i = 0; i < VULKAN_NUM_BINDINGS; i++)
 	{
-		auto stages = stages_for_binds[i];
+		uint32_t stages = stages_for_binds[i];
 		if (stages == 0)
 			continue;
 
@@ -126,20 +126,20 @@ DescriptorSetAllocator::DescriptorSetAllocator(Hash hash, Device *device, const 
 
 void DescriptorSetAllocator::begin_frame()
 {
-	for (auto &thr : per_thread)
+	for (std::unique_ptr<PerThread> &thr : per_thread)
 		thr->should_begin = true;
 }
 
 pair<VkDescriptorSet, bool> DescriptorSetAllocator::find(unsigned thread_index, Hash hash)
 {
-	auto &state = *per_thread[thread_index];
+	PerThread &state = *per_thread[thread_index];
 	if (state.should_begin)
 	{
 		state.set_nodes.begin_frame();
 		state.should_begin = false;
 	}
 
-	auto *node = state.set_nodes.request(hash);
+	DescriptorSetNode *node = state.set_nodes.request(hash);
 	if (node)
 		return { node->set, true };
 
@@ -172,7 +172,7 @@ pair<VkDescriptorSet, bool> DescriptorSetAllocator::find(unsigned thread_index, 
 		LOGE("Failed to allocate descriptor sets.\n");
 	state.pools.push_back(pool);
 
-	for (auto set : sets)
+	for (VkDescriptorSet set : sets)
 		state.set_nodes.make_vacant(set);
 
 	return { state.set_nodes.request_vacant(hash)->set, false };
@@ -180,10 +180,10 @@ pair<VkDescriptorSet, bool> DescriptorSetAllocator::find(unsigned thread_index, 
 
 void DescriptorSetAllocator::clear()
 {
-	for (auto &thr : per_thread)
+	for (std::unique_ptr<PerThread> &thr : per_thread)
 	{
 		thr->set_nodes.clear();
-		for (auto &pool : thr->pools)
+		for (VkDescriptorPool &pool : thr->pools)
 		{
 			vkResetDescriptorPool(device->get_device(), pool, 0);
 			vkDestroyDescriptorPool(device->get_device(), pool, nullptr);

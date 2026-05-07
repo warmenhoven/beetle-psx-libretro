@@ -42,7 +42,7 @@ QueryPool::QueryPool(Device *device)
 
 QueryPool::~QueryPool()
 {
-	for (auto &pool : pools)
+	for (Pool &pool : pools)
 		vkDestroyQueryPool(device->get_device(), pool.pool, nullptr);
 }
 
@@ -53,7 +53,7 @@ void QueryPool::begin()
 		if (i >= pools.size())
 			continue;
 
-		auto &pool = pools[pool_index];
+		Pool &pool = pools[pool_index];
 		if (pool.index == 0)
 			continue;
 
@@ -69,7 +69,7 @@ void QueryPool::begin()
 	}
 
 	pool_index = 0;
-	for (auto &pool : pools)
+	for (Pool &pool : pools)
 		pool.index = 0;
 }
 
@@ -103,9 +103,9 @@ QueryPoolHandle QueryPool::write_timestamp(VkCommandBuffer cmd, VkPipelineStageF
 	if (pool_index >= pools.size())
 		add_pool();
 
-	auto &pool = pools[pool_index];
+	Pool &pool = pools[pool_index];
 
-	auto cookie = QueryPoolHandle(device->handle_pool.query.allocate(device));
+	QueryPoolHandle cookie = QueryPoolHandle(device->handle_pool.query.allocate(device));
 	pool.cookies[pool.index] = cookie;
 
 	vkCmdResetQueryPool(cmd, pool.pool, pool.index, 1);

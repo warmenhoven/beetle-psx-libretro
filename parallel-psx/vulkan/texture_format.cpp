@@ -465,9 +465,9 @@ void TextureFormatLayout::build_buffer_image_copies(std::vector<VkBufferImageCop
 	copies.resize(mip_levels);
 	for (unsigned level = 0; level < mip_levels; level++)
 	{
-		const auto &mip_info = mips[level];
+		const MipInfo &mip_info = mips[level];
 
-		auto &blit = copies[level];
+		VkBufferImageCopy &blit = copies[level];
 		blit = {};
 		blit.bufferOffset = mip_info.offset;
 		blit.bufferRowLength = mip_info.row_length;
