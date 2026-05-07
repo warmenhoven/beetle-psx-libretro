@@ -295,20 +295,14 @@ static void InputDevice_ResetTS(InputDevice *self_)
 
 }
 
-static void InputDevice_SetAMCT(InputDevice *self_, bool)
-{
-   (void)self_;
-
-
-}
+static void InputDevice_SetAMCT(InputDevice *self_, bool a) { }
 
 static void InputDevice_SetCrosshairsCursor(InputDevice *self_, int cursor)
 {
    InputDevice *self = self_;
 
-	if ( cursor >= 0 && cursor < SETTING_GUN_CROSSHAIR_LAST ) {
-		self->chair_cursor = cursor;
-	}
+   if ( cursor >= 0 && cursor < SETTING_GUN_CROSSHAIR_LAST )
+      self->chair_cursor = cursor;
 }
 
 static void InputDevice_SetCrosshairsColor(InputDevice *self_, uint32_t color)
