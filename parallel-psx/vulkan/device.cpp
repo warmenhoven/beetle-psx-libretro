@@ -495,16 +495,11 @@ void Device::flush_pipeline_cache()
 
 void Device::init_workarounds()
 {
-#if 0
-	workarounds.wsi_acquire_barrier_is_expensive = true;
-	workarounds.optimize_all_graphics_barrier = true;
-#else
 	// UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL stalls, so need to acquire async.
 	workarounds.wsi_acquire_barrier_is_expensive = gpu_props.vendorID == VENDOR_ID_ARM;
 
 	// srcStageMask = ALL_GRAPHICS_BIT causes some weird stalls compared to waiting for fragment only.
 	workarounds.optimize_all_graphics_barrier = gpu_props.vendorID == VENDOR_ID_ARM;
-#endif
 }
 
 void Device::set_context(const Context &context)

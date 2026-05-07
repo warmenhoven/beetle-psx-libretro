@@ -11,18 +11,6 @@
 #define FPS_PAL_INTERLACED     50.000
 #define FPS_PAL_NONINTERLACED  49.761
 
-/* Note: It is possible for the PlayStation GPU to output NTSC
- * on PAL GPU clock and vice versa, but this is unsupported in
- * Mednafen/Beetle PSX. The values below are provided for
- * completion but are not guaranteed to be correct.
- */
-#if 0
-#define FPS_NTSC_ON_PAL_INTERLACED    59.393
-#define FPS_NTSC_ON_PAL_NONINTERLACED 59.280
-#define FPS_PAL_ON_NTSC_INTERLACED    50.460
-#define FPS_PAL_ON_NTSC_NONINTERLACED 50.219
-#endif
-
 enum rsx_renderer_type
 {
    RSX_SOFTWARE = 0,

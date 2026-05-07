@@ -736,11 +736,6 @@ ImageHandle Renderer::scanout_vram_to_texture(bool scaled)
 
 	atlas.flush_render_pass();
 
-#if 0
-	if (last_scanout)
-		return last_scanout;
-#endif
-
 	Rect vram_rect = {0, 0, FB_WIDTH, FB_HEIGHT};
 
 	if (scaled)
@@ -773,21 +768,9 @@ ImageHandle Renderer::scanout_vram_to_texture(bool scaled)
 			FB_HEIGHT * render_scale,
 			VK_FORMAT_A1R5G5B5_UNORM_PACK16); // Default to 15bit color for now
 
-#if 0
-	if (!reuseable_scanout ||
-			reuseable_scanout->get_create_info().width != info.width ||
-			reuseable_scanout->get_create_info().height != info.height ||
-			reuseable_scanout->get_create_info().format != info.format)
-	{
-		info.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-		info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		reuseable_scanout = device.create_image(info);
-	}
-#else
 	info.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 	info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	reuseable_scanout = device.create_image(info);
-#endif
 
 	RenderPassInfo rp;
 	rp.color_attachments[0] = &reuseable_scanout->get_view();
@@ -1703,13 +1686,8 @@ void Renderer::draw_triangle(const Vertex *vertices)
 												 offset_uv });
 
 		// We've hit the dragon path, we'll need programmable blending for this render pass.
-
-		// render_pass_is_feedback enables self dependency in renderpass which is necessary for barriers between draws
-		// hence getting rid of the condition
-#if 0
-		if (render_state.mask_test && render_state.semi_transparent != SemiTransparentMode::None)
-#endif
-			render_pass_is_feedback = true;
+		// render_pass_is_feedback enables self dependency in renderpass which is necessary for barriers between draws.
+		render_pass_is_feedback = true;
 	}
 }
 
@@ -1769,10 +1747,7 @@ void Renderer::draw_quad(const Vertex *vertices)
 		queue.semi_transparent_state.push_back(state);
 
 		// We've hit the dragon path, we'll need programmable blending for this render pass.
-#if 0
-		if (render_state.mask_test && render_state.semi_transparent != SemiTransparentMode::None)
-#endif
-			render_pass_is_feedback = true;
+		render_pass_is_feedback = true;
 	}
 }
 

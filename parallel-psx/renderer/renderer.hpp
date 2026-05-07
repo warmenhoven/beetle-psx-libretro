@@ -5,10 +5,6 @@
 #include "../vulkan/vulkan.hpp"
 #include "../custom-textures/texture_tracker.hpp"
 
-#ifdef VULKAN_WSI
-#include "wsi.hpp"
-#endif
-
 #include <string.h>
 
 namespace PSX

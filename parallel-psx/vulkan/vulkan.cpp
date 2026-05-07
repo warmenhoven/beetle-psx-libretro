@@ -214,16 +214,6 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_messenger_cb(
 			LOGE("[Vulkan]: Other Warning: %s\n", pCallbackData->pMessage);
 		break;
 
-#if 0
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-		if (messageType == VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
-			LOGI("[Vulkan]: Validation Info: %s\n", pCallbackData->pMessage);
-		else
-			LOGI("[Vulkan]: Other Info: %s\n", pCallbackData->pMessage);
-		break;
-#endif
-
 	default:
 		return VK_FALSE;
 	}

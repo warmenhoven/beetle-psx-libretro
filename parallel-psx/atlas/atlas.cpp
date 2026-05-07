@@ -48,17 +48,7 @@ bool FBAtlas::texture_rendered(const Rect &rect)
 
 Domain FBAtlas::blit_vram(const Rect &dst, const Rect &src)
 {
-#if 0
-	auto src_domain = find_suitable_domain(src);
-	auto dst_domain = find_suitable_domain(dst);
-	Domain domain;
-	if (src_domain != dst_domain)
-		domain = Domain::Unscaled;
-	else
-		domain = src_domain;
-#else
 	auto domain = find_suitable_domain(src);
-#endif
 
 	sync_domain(domain, src);
 	sync_domain(domain, dst);

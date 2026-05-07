@@ -749,13 +749,6 @@ void rsx_vulkan_finalize_frame(const void *fb, unsigned width,
 
    prev_frame_width = scanout->get_width();
    prev_frame_height = scanout ->get_height();
-
-#if 0
-   printf("%d %d\n", scanout->get_width(), scanout->get_height());
-
-   fprintf(stderr, "Render passes: %u, Readback: %u, Writeout: %u\n",
-         renderer->counters.render_passes, renderer->counters.fragment_readback_pixels, renderer->counters.fragment_writeout_pixels);
-#endif
 }
 
 /* Draw commands */
