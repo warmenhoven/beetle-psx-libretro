@@ -137,12 +137,12 @@ Shader::Shader(Hash hash, Device *device, const uint32_t *data, size_t size)
 
 	Compiler compiler(data, size / sizeof(uint32_t));
 
-	auto resources = compiler.get_shader_resources();
-	for (auto &image : resources.sampled_images)
+	ShaderResources resources = compiler.get_shader_resources();
+	for (Resource &image : resources.sampled_images)
 	{
-		auto set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
-		auto binding = compiler.get_decoration(image.id, spv::DecorationBinding);
-		auto &type = compiler.get_type(image.base_type_id);
+		uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
+		uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
+		const SPIRType &type = compiler.get_type(image.base_type_id);
 		if (type.image.dim == spv::DimBuffer)
 			layout.sets[set].sampled_buffer_mask |= 1u << binding;
 		else
@@ -165,23 +165,23 @@ Shader::Shader(Hash hash, Device *device, const uint32_t *data, size_t size)
 		}
 	}
 
-	for (auto &image : resources.subpass_inputs)
+	for (Resource &image : resources.subpass_inputs)
 	{
-		auto set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
-		auto binding = compiler.get_decoration(image.id, spv::DecorationBinding);
+		uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
+		uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
 		layout.sets[set].input_attachment_mask |= 1u << binding;
 
-		auto &type = compiler.get_type(image.base_type_id);
+		const SPIRType &type = compiler.get_type(image.base_type_id);
 		if (compiler.get_type(type.image.type).basetype == SPIRType::BaseType::Float)
 			layout.sets[set].fp_mask |= 1u << binding;
 	}
 
-	for (auto &image : resources.separate_images)
+	for (Resource &image : resources.separate_images)
 	{
-		auto set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
-		auto binding = compiler.get_decoration(image.id, spv::DecorationBinding);
+		uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
+		uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
 
-		auto &type = compiler.get_type(image.base_type_id);
+		const SPIRType &type = compiler.get_type(image.base_type_id);
 		if (compiler.get_type(type.image.type).basetype == SPIRType::BaseType::Float)
 			layout.sets[set].fp_mask |= 1u << binding;
 
@@ -191,10 +191,10 @@ Shader::Shader(Hash hash, Device *device, const uint32_t *data, size_t size)
 			layout.sets[set].separate_image_mask |= 1u << binding;
 	}
 
-	for (auto &image : resources.separate_samplers)
+	for (Resource &image : resources.separate_samplers)
 	{
-		auto set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
-		auto binding = compiler.get_decoration(image.id, spv::DecorationBinding);
+		uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
+		uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
 		layout.sets[set].sampler_mask |= 1u << binding;
 
 		const string &name = image.name;
@@ -211,40 +211,40 @@ Shader::Shader(Hash hash, Device *device, const uint32_t *data, size_t size)
 		}
 	}
 
-	for (auto &image : resources.storage_images)
+	for (Resource &image : resources.storage_images)
 	{
-		auto set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
-		auto binding = compiler.get_decoration(image.id, spv::DecorationBinding);
+		uint32_t set = compiler.get_decoration(image.id, spv::DecorationDescriptorSet);
+		uint32_t binding = compiler.get_decoration(image.id, spv::DecorationBinding);
 		layout.sets[set].storage_image_mask |= 1u << binding;
 
-		auto &type = compiler.get_type(image.base_type_id);
+		const SPIRType &type = compiler.get_type(image.base_type_id);
 		if (compiler.get_type(type.image.type).basetype == SPIRType::BaseType::Float)
 			layout.sets[set].fp_mask |= 1u << binding;
 	}
 
-	for (auto &buffer : resources.uniform_buffers)
+	for (Resource &buffer : resources.uniform_buffers)
 	{
-		auto set = compiler.get_decoration(buffer.id, spv::DecorationDescriptorSet);
-		auto binding = compiler.get_decoration(buffer.id, spv::DecorationBinding);
+		uint32_t set = compiler.get_decoration(buffer.id, spv::DecorationDescriptorSet);
+		uint32_t binding = compiler.get_decoration(buffer.id, spv::DecorationBinding);
 		layout.sets[set].uniform_buffer_mask |= 1u << binding;
 	}
 
-	for (auto &buffer : resources.storage_buffers)
+	for (Resource &buffer : resources.storage_buffers)
 	{
-		auto set = compiler.get_decoration(buffer.id, spv::DecorationDescriptorSet);
-		auto binding = compiler.get_decoration(buffer.id, spv::DecorationBinding);
+		uint32_t set = compiler.get_decoration(buffer.id, spv::DecorationDescriptorSet);
+		uint32_t binding = compiler.get_decoration(buffer.id, spv::DecorationBinding);
 		layout.sets[set].storage_buffer_mask |= 1u << binding;
 	}
 
-	for (auto &attrib : resources.stage_inputs)
+	for (Resource &attrib : resources.stage_inputs)
 	{
-		auto location = compiler.get_decoration(attrib.id, spv::DecorationLocation);
+		uint32_t location = compiler.get_decoration(attrib.id, spv::DecorationLocation);
 		layout.input_mask |= 1u << location;
 	}
 
-	for (auto &attrib : resources.stage_outputs)
+	for (Resource &attrib : resources.stage_outputs)
 	{
-		auto location = compiler.get_decoration(attrib.id, spv::DecorationLocation);
+		uint32_t location = compiler.get_decoration(attrib.id, spv::DecorationLocation);
 		layout.output_mask |= 1u << location;
 	}
 
@@ -258,8 +258,8 @@ Shader::Shader(Hash hash, Device *device, const uint32_t *data, size_t size)
 		    compiler.get_declared_struct_size(compiler.get_type(resources.push_constant_buffers.front().base_type_id));
 	}
 
-	auto spec_constants = compiler.get_specialization_constants();
-	for (auto &c : spec_constants)
+	std::vector<SpecializationConstant> spec_constants = compiler.get_specialization_constants();
+	for (SpecializationConstant &c : spec_constants)
 	{
 		if (c.constant_id >= VULKAN_NUM_SPEC_CONSTANTS)
 		{
@@ -299,7 +299,7 @@ Program::Program(Device *device, Shader *compute)
 
 VkPipeline Program::get_pipeline(Hash hash) const
 {
-	auto *ret = pipelines.find(hash);
+	IntrusivePODWrapper<VkPipeline> *ret = pipelines.find(hash);
 	return ret ? ret->get() : VK_NULL_HANDLE;
 }
 
@@ -310,7 +310,7 @@ VkPipeline Program::add_pipeline(Hash hash, VkPipeline pipeline)
 
 Program::~Program()
 {
-	for (auto &pipe : pipelines)
+	for (IntrusivePODWrapper<VkPipeline> &pipe : pipelines)
 	{
 		if (internal_sync)
 			device->destroy_pipeline_nolock(pipe.get());
