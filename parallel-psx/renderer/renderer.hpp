@@ -284,10 +284,7 @@ public:
 		render_state.dither_native_resolution = enable;
 	}
 
-	void set_scanout_semaphore(Vulkan::Semaphore semaphore);
 	void scanout();
-	Vulkan::BufferHandle scanout_to_buffer(bool draw_area, unsigned &width, unsigned &height);
-	Vulkan::BufferHandle scanout_vram_to_buffer(unsigned &width, unsigned &height);
 	Vulkan::ImageHandle scanout_vram_to_texture(bool scaled = true);
 	Vulkan::ImageHandle scanout_to_texture();
 
@@ -455,7 +452,6 @@ private:
 	Vulkan::ImageHandle bias_framebuffer;
 	Vulkan::ImageHandle framebuffer;
 	Vulkan::ImageHandle framebuffer_ssaa;
-	Vulkan::Semaphore scanout_semaphore;
 	std::vector<Vulkan::ImageViewHandle> scaled_views;
 	FBAtlas atlas;
 	bool texture_tracking_enabled = false;

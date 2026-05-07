@@ -201,11 +201,6 @@ Renderer::Renderer(Device &device, unsigned scaling_, unsigned msaa_, const Save
 	valid = true;
 }
 
-void Renderer::set_scanout_semaphore(Semaphore semaphore)
-{
-	scanout_semaphore = semaphore;
-}
-
 Renderer::SaveState Renderer::save_vram_state()
 {
 	BufferCreateInfo buffer_create_info;
@@ -418,47 +413,6 @@ void Renderer::set_texture_window(const TextureWindow &window)
 	render_state.cached_window_rect = compute_window_rect(window);
 }
 
-BufferHandle Renderer::scanout_vram_to_buffer(unsigned &width, unsigned &height)
-{
-	atlas.read_transfer(Domain::Scaled, { 0, 0, FB_WIDTH, FB_HEIGHT });
-	ensure_command_buffer();
-
-	if (msaa > 1)
-	{
-		VkImageSubresourceLayers subres = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-		VkOffset3D offset = { 0, 0, 0 };
-		VkExtent3D extent = { FB_WIDTH * scaling, FB_HEIGHT * scaling, 1 };
-		VkImageResolve region = { subres, offset, subres, offset, extent };
-		vkCmdResolveImage(cmd->get_command_buffer(),
-			scaled_framebuffer_msaa->get_image(), VK_IMAGE_LAYOUT_GENERAL,
-			scaled_framebuffer->get_image(), VK_IMAGE_LAYOUT_GENERAL,
-			1, &region);
-
-		cmd->barrier(
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-	}
-
-	BufferCreateInfo buffer_create_info;
-	buffer_create_info.domain = BufferDomain::CachedHost;
-	buffer_create_info.size = scaling * scaling * FB_WIDTH * FB_HEIGHT * 4;
-	buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-	auto buffer = device.create_buffer(buffer_create_info, nullptr);
-	cmd->copy_image_to_buffer(*buffer, *scaled_framebuffer, 0, { 0, 0, 0 },
-	                          { scaling * FB_WIDTH, scaling * FB_HEIGHT, 1 }, 0, 0,
-	                          { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 });
-
-	cmd->barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_HOST_BIT,
-	             VK_ACCESS_HOST_READ_BIT);
-
-	flush();
-	device.wait_idle();
-	width = FB_WIDTH * scaling;
-	height = FB_HEIGHT * scaling;
-	return buffer;
-}
-
 void Renderer::copy_vram_to_cpu_synchronous(const Rect &rect, uint16_t *vram)
 {
 	bool wrap_x = rect.x + rect.width > FB_WIDTH;
@@ -518,64 +472,6 @@ void Renderer::copy_vram_to_cpu_synchronous(const Rect &rect, uint16_t *vram)
 	}
 
 	device.unmap_host_buffer(*buffer, MEMORY_ACCESS_READ_BIT);
-}
-
-BufferHandle Renderer::scanout_to_buffer(bool draw_area, unsigned &width, unsigned &height)
-{
-	render_state.display_fb_rect = compute_vram_framebuffer_rect();
-	auto &rect = draw_area ? render_state.draw_rect : render_state.display_fb_rect;
-	if (rect.width == 0 || rect.height == 0 || !render_state.display_on)
-		return BufferHandle(nullptr);
-
-	atlas.flush_render_pass();
-
-	atlas.read_transfer(Domain::Scaled, rect);
-	ensure_command_buffer();
-
-	if (msaa > 1)
-	{
-		VkImageSubresourceLayers subres = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-		VkOffset3D offset = { int(scaling * rect.x), int(scaling * rect.y), 0 };
-		VkExtent3D extent = { scaling * rect.width, scaling * rect.height, 1 };
-		if (rect.x + rect.width > FB_WIDTH)
-		{
-			offset.x = 0;
-			extent.width = FB_WIDTH * scaling;
-		}
-		if (rect.y + rect.height > FB_HEIGHT)
-		{
-			offset.y = 0;
-			extent.height = FB_HEIGHT * scaling;
-		}
-		VkImageResolve region = { subres, offset, subres, offset, extent };
-		vkCmdResolveImage(cmd->get_command_buffer(),
-			scaled_framebuffer_msaa->get_image(), VK_IMAGE_LAYOUT_GENERAL,
-			scaled_framebuffer->get_image(), VK_IMAGE_LAYOUT_GENERAL,
-			1, &region);
-
-		cmd->barrier(
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-	}
-
-	BufferCreateInfo buffer_create_info;
-	buffer_create_info.domain = BufferDomain::CachedHost;
-	buffer_create_info.size = scaling * scaling * rect.width * rect.height * 4;
-	buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-	auto buffer = device.create_buffer(buffer_create_info, nullptr);
-	cmd->copy_image_to_buffer(*buffer, *scaled_framebuffer, 0, { int(scaling * rect.x), int(scaling * rect.y), 0 },
-	                          { scaling * rect.width, scaling * rect.height, 1 }, 0, 0,
-	                          { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 });
-
-	cmd->barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_HOST_BIT,
-	             VK_ACCESS_HOST_READ_BIT);
-
-	flush();
-	device.wait_idle();
-	width = scaling * rect.width;
-	height = scaling * rect.height;
-	return buffer;
 }
 
 void Renderer::mipmap_framebuffer()
@@ -854,15 +750,6 @@ ImageHandle Renderer::scanout_vram_to_texture(bool scaled)
 
 	ensure_command_buffer();
 
-	if (scanout_semaphore)
-	{
-		flush();
-		device.add_wait_semaphore(CommandBuffer::Type::Generic, scanout_semaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, true);
-		scanout_semaphore.reset();
-	}
-
-	ensure_command_buffer();
-
 	if (scaled && msaa > 1)
 	{
 		VkImageSubresourceLayers subres = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
@@ -1072,14 +959,6 @@ ImageHandle Renderer::scanout_to_texture()
 
 	if (render_state.adaptive_smoothing && !bpp24 && !ssaa && scaling != 1)
 		mipmap_framebuffer();
-
-	if (scanout_semaphore)
-	{
-		flush();
-		// We only need to wait in the scanout pass.
-		device.add_wait_semaphore(CommandBuffer::Type::Generic, scanout_semaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, true);
-		scanout_semaphore.reset();
-	}
 
 	ensure_command_buffer();
 
