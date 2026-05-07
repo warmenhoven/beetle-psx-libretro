@@ -82,7 +82,7 @@ public:
 
 	Block()
 	{
-		for (auto &v : free_blocks)
+		for (uint32_t &v : free_blocks)
 			v = AllFree;
 		longest_run = 32;
 	}
@@ -279,14 +279,14 @@ public:
 
 	void set_memory_type(uint32_t memory_type)
 	{
-		for (auto &sub : classes)
+		for (ClassAllocator &sub : classes)
 			sub.set_memory_type(memory_type);
 		this->memory_type = memory_type;
 	}
 
 	void set_global_allocator(DeviceAllocator *allocator)
 	{
-		for (auto &sub : classes)
+		for (ClassAllocator &sub : classes)
 			sub.set_global_allocator(allocator);
 		global_allocator = allocator;
 	}

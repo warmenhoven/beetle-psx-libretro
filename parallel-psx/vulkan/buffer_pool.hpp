@@ -49,10 +49,10 @@ struct BufferBlock
 
 	BufferBlockAllocation allocate(VkDeviceSize allocate_size)
 	{
-		auto aligned_offset = (offset + alignment - 1) & ~(alignment - 1);
+		VkDeviceSize aligned_offset = (offset + alignment - 1) & ~(alignment - 1);
 		if (aligned_offset + allocate_size <= size)
 		{
-			auto *ret = mapped + aligned_offset;
+			uint8_t *ret = mapped + aligned_offset;
 			offset = aligned_offset + allocate_size;
 			return { ret, aligned_offset };
 		}

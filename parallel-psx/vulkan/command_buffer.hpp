@@ -642,7 +642,7 @@ private:
 
 	CommandBufferDirtyFlags get_and_clear(CommandBufferDirtyFlags flags)
 	{
-		auto mask = dirty & flags;
+		CommandBufferDirtyFlags mask = dirty & flags;
 		dirty &= ~flags;
 		return mask;
 	}
