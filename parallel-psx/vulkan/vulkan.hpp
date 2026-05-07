@@ -32,8 +32,6 @@
 
 #include "util.hpp"
 #include <memory>
-#include <functional>
-#include "util.hpp"
 
 #define V_S(x) #x
 #define V_S_(x) V_S(x)
@@ -180,7 +178,7 @@ public:
 	static const VkApplicationInfo &get_application_info(bool supports_vulkan_11);
 
 	void notify_validation_error(const char *msg);
-	void set_notification_callback(std::function<void (const char *)> func);
+	void set_notification_callback(void (*func)(const char *));
 
 	/* True iff the constructor finished successfully. The Context
 	 * constructors do not throw; on failure they leave the object in
@@ -217,7 +215,7 @@ private:
 	VkDebugReportCallbackEXT debug_callback = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
 #endif
-	std::function<void (const char *)> message_callback;
+	void (*message_callback)(const char *) = nullptr;
 
 	void destroy();
 };

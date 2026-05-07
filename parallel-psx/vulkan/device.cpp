@@ -842,8 +842,6 @@ void Device::submit_empty_inner(CommandBuffer::Type type, VkFence *fence,
 	}
 
 	VkFence cleared_fence = fence ? managers.fence.request_cleared_fence() : VK_NULL_HANDLE;
-	if (queue_lock_callback)
-		queue_lock_callback();
 #if defined(VULKAN_DEBUG) && defined(SUBMIT_DEBUG)
 	if (cleared_fence)
 		LOGI("Signalling Fence: %llx\n", reinterpret_cast<unsigned long long>(cleared_fence));
@@ -851,8 +849,6 @@ void Device::submit_empty_inner(CommandBuffer::Type type, VkFence *fence,
 	VkResult result = vkQueueSubmit(queue, 1, &submit, cleared_fence);
 	if (ImplementationQuirks::get().queue_wait_on_submission)
 		vkQueueWaitIdle(queue);
-	if (queue_unlock_callback)
-		queue_unlock_callback();
 
 	if (result != VK_SUCCESS)
 		LOGE("vkQueueSubmit failed (code: %d).\n", int(result));
@@ -1135,8 +1131,6 @@ void Device::submit_queue(CommandBuffer::Type type, VkFence *fence,
 		break;
 	}
 
-	if (queue_lock_callback)
-		queue_lock_callback();
 #if defined(VULKAN_DEBUG) && defined(SUBMIT_DEBUG)
 	if (cleared_fence)
 		LOGI("Signalling fence: %llx\n", reinterpret_cast<unsigned long long>(cleared_fence));
@@ -1144,8 +1138,6 @@ void Device::submit_queue(CommandBuffer::Type type, VkFence *fence,
 	VkResult result = vkQueueSubmit(queue, submits.size(), submits.data(), cleared_fence);
 	if (ImplementationQuirks::get().queue_wait_on_submission)
 		vkQueueWaitIdle(queue);
-	if (queue_unlock_callback)
-		queue_unlock_callback();
 	if (result != VK_SUCCESS)
 		LOGE("vkQueueSubmit failed (code: %d).\n", int(result));
 	submissions.clear();
@@ -1734,13 +1726,7 @@ void Device::wait_idle_nolock()
 		end_frame_nolock();
 
 	if (device != VK_NULL_HANDLE)
-	{
-		if (queue_lock_callback)
-			queue_lock_callback();
 		vkDeviceWaitIdle(device);
-		if (queue_unlock_callback)
-			queue_unlock_callback();
-	}
 
 	clear_wait_semaphores();
 
@@ -3263,12 +3249,6 @@ RenderPassInfo Device::get_swapchain_render_pass(SwapchainRenderPass style)
 		break;
 	}
 	return info;
-}
-
-void Device::set_queue_lock(std::function<void()> lock_callback, std::function<void()> unlock_callback)
-{
-	queue_lock_callback = move(lock_callback);
-	queue_unlock_callback = move(unlock_callback);
 }
 
 void Device::set_name(const Buffer &buffer, const char *name)

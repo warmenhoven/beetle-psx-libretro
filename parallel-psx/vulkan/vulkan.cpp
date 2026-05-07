@@ -181,9 +181,9 @@ void Context::notify_validation_error(const char *msg)
 		message_callback(msg);
 }
 
-void Context::set_notification_callback(function<void(const char *)> func)
+void Context::set_notification_callback(void (*func)(const char *))
 {
-	message_callback = move(func);
+	message_callback = func;
 }
 
 #ifdef VULKAN_DEBUG

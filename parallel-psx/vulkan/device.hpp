@@ -39,7 +39,6 @@
 #include "buffer_pool.hpp"
 #include <memory>
 #include <vector>
-#include <functional>
 #include <unordered_map>
 
 
@@ -240,11 +239,6 @@ public:
 	const Sampler &get_stock_sampler(StockSampler sampler) const;
 
 
-	// For some platforms, the device and queue might be shared, possibly across threads, so need some mechanism to
-	// lock the global device and queue.
-	void set_queue_lock(std::function<void ()> lock_callback,
-	                    std::function<void ()> unlock_callback);
-
 	const ImplementationWorkarounds &get_workarounds() const
 	{
 		return workarounds;
@@ -435,8 +429,6 @@ private:
 	void clear_wait_semaphores();
 	void submit_staging(CommandBufferHandle &cmd, VkBufferUsageFlags usage, bool flush);
 
-	std::function<void ()> queue_lock_callback;
-	std::function<void ()> queue_unlock_callback;
 	void flush_frame(CommandBuffer::Type type);
 	void sync_buffer_blocks();
 	void submit_empty_inner(CommandBuffer::Type type, VkFence *fence,
