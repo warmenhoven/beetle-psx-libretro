@@ -6,6 +6,7 @@
 
 #include "rsx/rsx_intf.h" //FPS and audio sample rate macros
 #include "rsx/rsx_defer.h"
+#include "rsx/tt_trace.h"
 #include "parallel-psx/renderer/renderer.hpp"
 #include "libretro_vulkan.h"
 
@@ -196,6 +197,9 @@ static void vk_context_reset(void)
       return;
    }
 
+   tt_log_startup("vk renderer init: scaling=%u msaa=%u has_software_fb=%d\n",
+         (unsigned)scaling, (unsigned)msaa, (int)has_software_fb);
+
    /* Replay any rsx_vulkan_* state-sets / VRAM uploads that arrived
     * between rsx_vulkan_open's SET_HW_RENDER and this context_reset
     * firing. By this point `renderer` is non-null so each call lands
@@ -351,6 +355,9 @@ void rsx_vulkan_refresh_variables(void)
       /* If 'BEETLE_OPT(renderer_software_fb)' option is not found, then
        * we are running in software mode */
       has_software_fb = true;
+
+   tt_log_startup("rsx_vulkan_refresh_variables: has_software_fb=%d\n",
+         (int)has_software_fb);
 
    unsigned old_scaling = scaling;
    unsigned old_msaa = msaa;
@@ -676,6 +683,10 @@ static Renderer::ScanoutMode get_scanout_mode(bool bpp24)
 void rsx_vulkan_finalize_frame(const void *fb, unsigned width,
                                unsigned height, unsigned pitch)
 {
+   tt_log("vk finalize_frame display=%ux%u\n",
+         (unsigned)width, (unsigned)height);
+   tt_frame_advance();
+
    if (frame_duping_enabled && !GPU_get_display_change_count())
    {
       /* Any visual core option changes will be deferred to next non-duped frame */
@@ -758,7 +769,11 @@ void rsx_vulkan_set_tex_window(uint8_t tww, uint8_t twh,
    uint8_t tex_y_or   = (twy & twh) << 3;
 
    if (renderer)
+   {
       renderer->set_texture_window({ tex_x_mask, tex_y_mask, tex_x_or, tex_y_or });
+      tt_log("vk set_tex_window tww=%u twh=%u twx=%u twy=%u\n",
+            (unsigned)tww, (unsigned)twh, (unsigned)twx, (unsigned)twy);
+   }
    else
       rsx_defer_push_set_tex_window(&defer, tww, twh, twx, twy);
 }
@@ -783,7 +798,11 @@ void rsx_vulkan_set_draw_area(uint16_t x0, uint16_t y0,
    height = min(height, int(FB_HEIGHT - y0));
 
    if (renderer)
+   {
       renderer->set_draw_rect({ x0, y0, unsigned(width), unsigned(height) });
+      tt_log("vk set_draw_area top_left=(%u,%u) bot_right_inclusive=(%u,%u)\n",
+            (unsigned)x0, (unsigned)y0, (unsigned)x1, (unsigned)y1);
+   }
    else
       /* Defer the raw inputs (x0,y0,x1,y1); the dispatcher re-enters
        * this entry point which redoes the width/height clamp on top of
@@ -1057,6 +1076,10 @@ void rsx_vulkan_load_image(
       return;
    }
 
+   tt_log("vk load_image rect=(%u,%u %ux%u) mask_test=%d set_mask=%d\n",
+         (unsigned)x, (unsigned)y, (unsigned)w, (unsigned)h,
+         (int)mask_test, (int)set_mask);
+
    renderer->notify_texture_upload(PSX::Rect { x, y, w, h }, vram);
    bool dual_copy = x + w > FB_WIDTH; // Check if we need to handle wrap-around in X.
    renderer->set_mask_test(mask_test);
@@ -1095,6 +1118,9 @@ bool rsx_vulkan_read_vram(uint16_t x, uint16_t y,
    if (!renderer)
       return false;
 
+   tt_log("vk read_vram rect=(%u,%u %ux%u)\n",
+         (unsigned)x, (unsigned)y, (unsigned)w, (unsigned)h);
+
    renderer->copy_vram_to_cpu_synchronous({ x, y, w, h }, vram);
    return true;
 }
@@ -1104,7 +1130,12 @@ void rsx_vulkan_fill_rect(uint32_t color,
                           uint16_t w, uint16_t h)
 {
    if (renderer)
+   {
+      tt_log("vk fill_rect rect=(%u,%u %ux%u) color=0x%06x\n",
+            (unsigned)x, (unsigned)y, (unsigned)w, (unsigned)h,
+            (unsigned)(color & 0xFFFFFFu));
       renderer->clear_rect({ x, y, w, h }, color);
+   }
 }
 
 void rsx_vulkan_copy_rect(uint16_t src_x, uint16_t src_y,
@@ -1114,6 +1145,12 @@ void rsx_vulkan_copy_rect(uint16_t src_x, uint16_t src_y,
 {
    if (!renderer)
       return;
+
+   tt_log("vk copy_rect src=(%u,%u) dst=(%u,%u) %ux%u mask_test=%d set_mask=%d\n",
+         (unsigned)src_x, (unsigned)src_y,
+         (unsigned)dst_x, (unsigned)dst_y,
+         (unsigned)w, (unsigned)h,
+         (int)mask_test, (int)set_mask);
 
    renderer->set_mask_test(mask_test);
    renderer->set_force_mask_bit(set_mask);
