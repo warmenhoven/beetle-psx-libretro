@@ -755,6 +755,11 @@ bool rsx_intf_read_vram(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t
          return rsx_vulkan_read_vram(x, y, w, h, vram);
 #endif
          break;
+      case RSX_OPENGL:
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
+         return rsx_gl_read_vram(x, y, w, h, vram);
+#endif
+         break;
       default:
          break;
    }

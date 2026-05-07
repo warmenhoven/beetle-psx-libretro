@@ -4149,6 +4149,303 @@ void rsx_gl_load_image(
    glDeleteFramebuffers(1, &_fb.id);
 }
 
+/* GP0 0xC0 (FBRead / Image Store): VRAM-to-CPU transfer.  The PS1
+ * GPU returns the contents of a VRAM rectangle to the CPU bus.  In
+ * Beetle the per-frame copy lives in `g->vram`; when the SW renderer
+ * is disabled and we're on a hardware backend, the SW path doesn't
+ * keep that buffer in sync with what the GPU has actually rendered,
+ * so games that use FBRead (early titles like King's Field that
+ * assemble UI sprites by reading back portions of VRAM) see stale
+ * or all-zero data and draw broken / invisible sprites.
+ *
+ * The Vulkan backend implements this via a synchronous device->host
+ * copy.  This is the GL equivalent: read the requested rectangle out
+ * of `fb_out`, with nearest-neighbour sampling, and deposit it into
+ * the caller's `vram` buffer in the same 5/5/5/1 layout the SW path
+ * uses.
+ *
+ * Coordinate convention: `(x, y, w, h)` are PS1-native units
+ * (x in 0..1023, y in 0..511).  `vram` is the engine's upscale-sized
+ * buffer of dimension (1024 << upscale_shift) x (512 << upscale_shift).
+ * For each PS1-native pixel read from `fb_out`, the SW renderer's
+ * `texel_put` duplicates it as an `upscale x upscale` block in `vram`
+ * so that subsequent `texel_fetch` reads return the correct value.
+ *
+ * Limitations addressed by `return false` (caller keeps prior data):
+ *   - 32bpp internal color depth (`internal_color_depth == 32`).
+ *     `fb_out` is GL_RGBA8 in that mode and we'd need RGBA8 ->
+ *     RGBA1555 conversion; the default depth is 16bpp which is what
+ *     King's Field uses, so leave 32bpp for a follow-up.
+ *   - VRAM seam wrap-around (x+w>1024 or y+h>512).  Pre-existing
+ *     limitation shared with `gl_texture_set_sub_image_window`.
+ *   - Upscale > 1 with no glBlitFramebuffer extension.  All modern
+ *     desktop / GLES3 drivers expose it, so this is a fallback rather
+ *     than a hot path.
+ */
+bool rsx_gl_read_vram(uint16_t x, uint16_t y,
+                      uint16_t w, uint16_t h,
+                      uint16_t *vram)
+{
+   gl_renderer *renderer;
+   GLuint   read_fbo    = 0;
+   GLuint   scratch_tex = 0;
+   GLuint   scratch_fbo = 0;
+   unsigned upscale;
+   GLint    prev_pack_alignment  = 4;
+   GLint    prev_pack_row_length = 0;
+   GLint    prev_read_fbo = 0;
+   GLint    prev_draw_fbo = 0;
+   GLboolean scissor_was_enabled;
+   GLenum   err;
+   bool     ok = false;
+   uint16_t *scratch_pixels = NULL;
+   size_t   row;
+
+   if (static_renderer.state == GL_STATE_INVALID)
+      return false;
+   renderer = static_renderer.state_data;
+   if (!renderer)
+      return false;
+   if (vram == NULL)
+      return false;
+
+   /* Wrap-around FBReads aren't supported here. */
+   if ((unsigned)x + (unsigned)w > VRAM_WIDTH_PIXELS)
+      return false;
+   if ((unsigned)y + (unsigned)h > VRAM_HEIGHT)
+      return false;
+   if (w == 0 || h == 0)
+      return true;
+
+   /* 32bpp -> 1555 conversion is a follow-up. */
+   if (renderer->internal_color_depth != 16)
+      return false;
+
+   upscale = renderer->internal_upscaling;
+   if (upscale == 0)
+      upscale = 1;
+   if (upscale > 1 && !gl_caps.fp_glBlitFramebuffer)
+      return false;
+
+   /* Make sure all queued draws have actually landed in fb_out before
+    * we read it back. */
+   if (!gl_draw_buffer_is_empty(renderer->command_buffer))
+      gl_renderer_draw(renderer);
+
+   /* Save state we're about to clobber. */
+   glGetIntegerv(GL_PACK_ALIGNMENT,           &prev_pack_alignment);
+#ifdef GL_PACK_ROW_LENGTH
+   glGetIntegerv(GL_PACK_ROW_LENGTH,          &prev_pack_row_length);
+#endif
+   glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
+   glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw_fbo);
+   scissor_was_enabled = glIsEnabled(GL_SCISSOR_TEST);
+   if (scissor_was_enabled)
+      glDisable(GL_SCISSOR_TEST);
+
+   glPixelStorei(GL_PACK_ALIGNMENT, 1);
+#ifdef GL_PACK_ROW_LENGTH
+   glPixelStorei(GL_PACK_ROW_LENGTH, 0); /* tightly packed scratch */
+#endif
+
+   /* Allocate a tightly-packed `w x h` scratch buffer that holds the
+    * PS1-native readback.  We then expand it into the caller's vram
+    * with the right upscale-factor block duplication. */
+   scratch_pixels = (uint16_t *)malloc((size_t)w * (size_t)h * sizeof(uint16_t));
+   if (!scratch_pixels)
+      goto cleanup;
+
+   if (upscale == 1)
+   {
+      /* Native res: read straight from fb_out into scratch.
+       *
+       * fb_out is rasterised with PS1-y -> GL-y mapping that flips
+       * vertically (the vertex shader maps PS1 y=0 to GL y=-1, see
+       * command_vertex.glsl).  glReadPixels uses GL convention
+       * (origin at bottom-left), so the GL y of PS1 row Y is
+       * (VRAM_HEIGHT - Y - 1).  For a rect (x, y, w, h) in PS1
+       * coords, the read region is (x, VRAM_HEIGHT - y - h, w, h)
+       * in GL coords, and the returned scanlines come out
+       * bottom-to-top - we flip them on the way into the caller's
+       * `vram`. */
+      glGenFramebuffers(1, &read_fbo);
+      glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
+#ifdef HAVE_OPENGLES3
+      glFramebufferTexture2D(GL_READ_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+            renderer->fb_out.id, 0);
+#else
+      glFramebufferTexture(GL_READ_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0, renderer->fb_out.id, 0);
+#endif
+      glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+      if (glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) ==
+            GL_FRAMEBUFFER_COMPLETE)
+      {
+         GLint gl_y = (GLint)VRAM_HEIGHT - (GLint)y - (GLint)h;
+         glReadPixels(
+               (GLint) x, gl_y,
+               (GLsizei) w, (GLsizei) h,
+               GL_RGBA,
+#ifdef HAVE_OPENGLES3
+               GL_UNSIGNED_SHORT_5_5_5_1,
+#else
+               GL_UNSIGNED_SHORT_1_5_5_5_REV,
+#endif
+               scratch_pixels);
+         ok = (glGetError() == GL_NO_ERROR);
+      }
+   }
+   else
+   {
+      /* Upscaled: use glBlitFramebuffer with a Y-flip to land the
+       * rect right-side-up in a 1x scratch RGB5_A1 texture.
+       * Blit accepts inverted source/dest rectangles and will flip
+       * automatically when the y bounds run opposite directions. */
+      glGenTextures(1, &scratch_tex);
+      glBindTexture(GL_TEXTURE_2D, scratch_tex);
+      glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB5_A1,
+            (GLsizei) w, (GLsizei) h);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+      glGenFramebuffers(1, &read_fbo);
+      glGenFramebuffers(1, &scratch_fbo);
+
+      glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
+#ifdef HAVE_OPENGLES3
+      glFramebufferTexture2D(GL_READ_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+            renderer->fb_out.id, 0);
+#else
+      glFramebufferTexture(GL_READ_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0, renderer->fb_out.id, 0);
+#endif
+      glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, scratch_fbo);
+#ifdef HAVE_OPENGLES3
+      glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+            scratch_tex, 0);
+#else
+      glFramebufferTexture(GL_DRAW_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0, scratch_tex, 0);
+#endif
+
+      if (   glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE
+          && glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+      {
+         /* Source rect in fb_out (GL bottom-up coords): the PS1
+          * rectangle (x, y, w, h) lives at GL y = VRAM_HEIGHT - y - h
+          * .. VRAM_HEIGHT - y, all multiplied by upscale.  Blit
+          * straight (no Y flip on the dest); the splat below
+          * mirror-flips rows to convert from GL bottom-up (== PS1
+          * bottom-first) to PS1 top-first. */
+         GLint sx0 = (GLint) x        * (GLint) upscale;
+         GLint sx1 = (GLint)(x + w)   * (GLint) upscale;
+         GLint sy0 = ((GLint)VRAM_HEIGHT - (GLint)y - (GLint)h) * (GLint) upscale;
+         GLint sy1 = ((GLint)VRAM_HEIGHT - (GLint)y          ) * (GLint) upscale;
+
+         gl_caps.fp_glBlitFramebuffer(
+               sx0, sy0, sx1, sy1,
+               0,   0,   (GLint) w, (GLint) h,
+               GL_COLOR_BUFFER_BIT,
+               GL_NEAREST);
+
+         glBindFramebuffer(GL_READ_FRAMEBUFFER, scratch_fbo);
+         glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+         glReadPixels(
+               0, 0,
+               (GLsizei) w, (GLsizei) h,
+               GL_RGBA,
+#ifdef HAVE_OPENGLES3
+               GL_UNSIGNED_SHORT_5_5_5_1,
+#else
+               GL_UNSIGNED_SHORT_1_5_5_5_REV,
+#endif
+               scratch_pixels);
+         ok = (glGetError() == GL_NO_ERROR);
+      }
+   }
+
+   if (ok)
+   {
+      /* Splat scratch pixels into the caller's upscale-sized vram
+       * buffer.  scratch_pixels is in GL order (bottom-to-top from
+       * the initial readback).  PS1 vram is top-to-bottom, so each
+       * scratch row maps to its mirror PS1 row. */
+      const size_t  vram_stride = (size_t)VRAM_WIDTH_PIXELS * upscale;
+      const size_t  ux          = (size_t)x * upscale;
+      const size_t  uy          = (size_t)y * upscale;
+
+      if (upscale == 1)
+      {
+         for (row = 0; row < h; row++)
+         {
+            /* scratch row 0 == GL bottom == PS1 row (y + h - 1).
+             * scratch row r == PS1 row (y + h - 1 - r). */
+            size_t ps1_row = uy + (h - 1 - row);
+            memcpy(&vram[ps1_row * vram_stride + ux],
+                   &scratch_pixels[row * w],
+                   (size_t)w * sizeof(uint16_t));
+         }
+      }
+      else
+      {
+         /* Upscaled: each PS1 pixel becomes an upscale x upscale
+          * block.  Flip rows the same way. */
+         size_t i, j, dx, dy;
+         for (i = 0; i < h; i++)
+         {
+            size_t ps1_i = h - 1 - i;
+            for (j = 0; j < w; j++)
+            {
+               uint16_t v = scratch_pixels[i * w + j];
+               for (dy = 0; dy < upscale; dy++)
+               {
+                  size_t  drow = uy + ps1_i * upscale + dy;
+                  uint16_t *dst = &vram[drow * vram_stride + ux + j * upscale];
+                  for (dx = 0; dx < upscale; dx++)
+                     dst[dx] = v;
+               }
+            }
+         }
+      }
+   }
+
+cleanup:
+   if (scratch_pixels)
+      free(scratch_pixels);
+
+#ifdef GL_PACK_ROW_LENGTH
+   glPixelStorei(GL_PACK_ROW_LENGTH, prev_pack_row_length);
+#endif
+   glPixelStorei(GL_PACK_ALIGNMENT,  prev_pack_alignment);
+
+   glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read_fbo);
+   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw_fbo);
+
+   if (read_fbo)
+      glDeleteFramebuffers(1, &read_fbo);
+   if (scratch_fbo)
+      glDeleteFramebuffers(1, &scratch_fbo);
+   if (scratch_tex)
+      glDeleteTextures(1, &scratch_tex);
+
+   if (scissor_was_enabled)
+      glEnable(GL_SCISSOR_TEST);
+
+   /* Drain any GL errors caused by the dance so they don't leak into
+    * the next caller's get_error(). */
+   while ((err = glGetError()) != GL_NO_ERROR)
+      (void)err;
+
+   return ok;
+}
+
 
 void rsx_gl_fill_rect(
       uint32_t color,
