@@ -1,8 +1,5 @@
 #include "renderer.hpp"
 #include "renderer_pipelines.hpp"
-#ifndef NDEBUG
-#include "timer.hpp"
-#endif
 #include <algorithm>
 #include <math.h>
 #include <string.h>
@@ -464,13 +461,6 @@ BufferHandle Renderer::scanout_vram_to_buffer(unsigned &width, unsigned &height)
 
 void Renderer::copy_vram_to_cpu_synchronous(const Rect &rect, uint16_t *vram)
 {
-#ifndef NDEBUG
-	Util::Timer timer;
-	timer.start();
-	TT_LOG_VERBOSE(RETRO_LOG_DEBUG,
-		"copy_vram_to_cpu_synchronous(rect={%i, %i, %i x %i}).\n", rect.x, rect.y, rect.width, rect.height
-	);
-#endif
 	bool wrap_x = rect.x + rect.width > FB_WIDTH;
 	bool wrap_y = rect.y + rect.height > FB_HEIGHT;
 	Rect copy_rect = rect;
@@ -528,12 +518,6 @@ void Renderer::copy_vram_to_cpu_synchronous(const Rect &rect, uint16_t *vram)
 	}
 
 	device.unmap_host_buffer(*buffer, MEMORY_ACCESS_READ_BIT);
-
-#ifndef NDEBUG
-	double readback_time = timer.end();
-	LOGI("copy_vram_to_cpu_synchronous() took %.3f ms!\n",
-			readback_time * 1e3);
-#endif
 }
 
 BufferHandle Renderer::scanout_to_buffer(bool draw_area, unsigned &width, unsigned &height)
