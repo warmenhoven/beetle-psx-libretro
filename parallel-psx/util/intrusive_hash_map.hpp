@@ -108,19 +108,6 @@ public:
 		return nullptr;
 	}
 
-	template <typename P>
-	bool find_and_consume_pod(Hash hash, P &p) const
-	{
-		T *t = find(hash);
-		if (t)
-		{
-			p = t->get();
-			return true;
-		}
-		else
-			return false;
-	}
-
 	// Inserts, if value already exists, insertion does not happen.
 	// Return value is the data which is not part of the hashmap.
 	// It should be deleted or similar.
@@ -204,11 +191,6 @@ public:
 			masked = (masked + 1) & hash_mask;
 		}
 		return nullptr;
-	}
-
-	void erase(T *value)
-	{
-		erase(get_hash(value));
 	}
 
 	void clear()
@@ -339,26 +321,6 @@ public:
 		return hashmap.find(hash);
 	}
 
-	T &operator[](Hash hash)
-	{
-		auto *t = find(hash);
-		if (!t)
-			t = emplace_yield(hash);
-		return *t;
-	}
-
-	template <typename P>
-	bool find_and_consume_pod(Hash hash, P &p) const
-	{
-		return hashmap.find_and_consume_pod(hash, p);
-	}
-
-	void erase(T *value)
-	{
-		hashmap.erase(value);
-		pool.free(value);
-	}
-
 	void erase(Hash hash)
 	{
 		auto *value = hashmap.erase(hash);
@@ -419,17 +381,9 @@ public:
 		return hashmap.end();
 	}
 
-	IntrusiveHashMap &get_thread_unsafe()
-	{
-		return *this;
-	}
-
 private:
 	IntrusiveHashMapHolder<T> hashmap;
 	ObjectPool<T> pool;
 };
-
-template <typename T>
-using IntrusiveHashMapWrapper = IntrusiveHashMap<IntrusivePODWrapper<T>>;
 
 }
