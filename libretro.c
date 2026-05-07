@@ -1867,6 +1867,15 @@ static void SetDiscWrapper(const bool CD_TrayOpen) {
       PS_CDC_SetDisc(PSX_CDC, CD_TrayOpen, cdif, disc_id);
 }
 
+/* PSX memory region sizes - these are used unconditionally below (e.g. for
+ * MultiAccessSizeMem_New() in the non-lightrec path), so they must NOT be
+ * gated on HAVE_LIGHTREC. */
+#define RAM_SIZE     0x200000
+#define BIOS_SIZE    0x80000
+#define SCRATCH_SIZE 0x400
+#define SHM_SIZE     (RAM_SIZE + BIOS_SIZE + SCRATCH_SIZE)
+#define PIO_SIZE     (65536)
+
 #ifdef HAVE_LIGHTREC
 /* MAP_FIXED_NOREPLACE allows base 0 to work if "sysctl vm.mmap_min_addr = 0"
  was used. Base 0 will perform better by directly mapping emulated addresses
@@ -1908,12 +1917,6 @@ static const uintptr_t supported_io_bases[] = {
 	(uintptr_t)(0x900000000),
 #endif
 };
-
-#define RAM_SIZE 0x200000
-#define BIOS_SIZE 0x80000
-#define SCRATCH_SIZE 0x400
-#define SHM_SIZE RAM_SIZE+BIOS_SIZE+SCRATCH_SIZE
-#define PIO_SIZE     (65536)
 
 #ifdef HAVE_WIN_SHM
 #define MAP(addr, size, fd, offset) \
@@ -3413,7 +3416,7 @@ void retro_reset(void)
    DoSimpleCommand(MDFN_MSC_RESET);
 }
 
-bool retro_load_game_special(unsigned, const struct retro_game_info *, size_t)
+bool retro_load_game_special(unsigned game_type, const struct retro_game_info *info, size_t num_info)
 {
    return false;
 }
