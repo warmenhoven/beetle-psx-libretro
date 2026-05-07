@@ -1,7 +1,6 @@
 #include "texture_tracker.hpp"
 #include "../renderer/renderer.hpp"
 #include "libretro.h"
-#include <iostream>
 #include <fstream>
 #include <sstream>
 #include "libretro-common/include/retro_dirent.h"
@@ -293,19 +292,13 @@ void TextureTracker::dump_image(TextureUpload &upload, UsedMode &mode) {
     suffixs << dump_path() << std::hex << hash;
 
     uint16_t *palette = nullptr;
-    uint32_t palette_hash = 0;
     if (mode.mode == TextureMode::Palette4bpp || mode.mode == TextureMode::Palette8bpp) {
         Rect palette_rect(mode.palette_offset_x, mode.palette_offset_y, mode.mode == TextureMode::Palette8bpp ? 256 : 16, 1);
         Palette p = get_palette(palette_rect);
         if (p.data != nullptr) {
             palette = p.data;
             suffixs << "-" << std::hex << p.hash;
-            palette_hash = p.hash;
         }
-    }
-
-    if (dump_log != nullptr) {
-        dump_log->dump(frame, hash, palette_hash, mode.mode);
     }
 
     if (palette != nullptr) {
@@ -407,9 +400,6 @@ std::set<HdTextureId> read_texture_directory(const char *path) {
 
 TextureTracker::TextureTracker()
 {
-    // blit_log = std::unique_ptr<BlitLog>(new BlitLog);
-    // dump_log = std::unique_ptr<DumpLog>(new DumpLog);
-
     known_files = read_texture_directory(replacements_path().c_str());
     TT_LOG(RETRO_LOG_INFO, "num hd textures: %d\n", known_files.size());
 
@@ -467,9 +457,6 @@ void TextureTracker::clear_palette_cache(Rect rect) {
 }
 
 void TextureTracker::clearRegion(Rect rect) {
-    if (blit_log != nullptr) {
-        blit_log->clear(rect);
-    }
     if (rect.width == 0 || rect.height == 0) {
         // Some games do this, apparently.
         return;
@@ -498,9 +485,6 @@ bool imageMatches(TextureUpload &upload, Rect rect, uint16_t *vram) {
 }
 
 void TextureTracker::blit(Rect dst, Rect src) {
-    if (blit_log != nullptr) {
-        blit_log->blit(dst, src);
-    }
     tracker.blit(toSRect(dst), toSRect(src));
     fused_pages.mark_dirty(dst);
     fused_pages.rebuild_dirty(tracker, uploader);
@@ -643,13 +627,6 @@ void TextureTracker::upload(Rect rect, uint16_t *vram) {
         } else {
             preexisting = true;
         }
-    }
-    
-    if (blit_log != nullptr) {
-        blit_log->upload(rect, upload->hash);
-    }
-    if (dump_log != nullptr) {
-        dump_log->upload(frame, rect, upload->hash);
     }
 
     RestorableRect *restore = nullptr;
@@ -962,10 +939,6 @@ void TextureTracker::endFrame() {
         handle_cache.dbg_misses = 0;
     }
 
-    if (blit_log != nullptr) {
-        blit_log->set_frame(frame);
-    }
-
     if (frame_dump != nullptr) {
         *frame_dump << "]}\n";
         delete frame_dump;
@@ -1053,95 +1026,6 @@ void TextureTracker::reload_textures_from_disk() {
     for (uint32_t hash : hashes) {
         load_hd_texture(hash);
     }
-}
-
-// DumpLog
-std::ostream& operator<<(std::ostream &o, const Rect &rect) {
-    o << std::dec << rect.x << "," << rect.y << " " << rect.width << "x" << rect.height;
-    return o;
-}
-std::ostream& operator<<(std::ostream &o, const TextureMode &mode) {
-    switch(mode) {
-        case TextureMode::Palette4bpp:
-            o << "Palette4bpp";
-            break;
-        case TextureMode::Palette8bpp:
-            o << "Palette8bpp";
-            break;
-        case TextureMode::ABGR1555:
-            o << "ABGR1555";
-            break;
-        case TextureMode::None:
-            o << "None";
-            break;
-    }
-    return o;
-}
-
-DumpLog::DumpLog() {
-    dump_stream = std::ofstream(dump_path() + "dump.log");
-}
-void DumpLog::upload(uint64_t frame, Rect rect, uint32_t hash) {
-    dump_stream << "[" << std::dec << frame << "] Upload: " << std::hex << hash << " @ " << rect <<  "\n";
-}
-void DumpLog::dump(uint64_t frame, uint32_t hash, uint32_t palette_hash, TextureMode mode) {
-    dump_stream << "[" << std::dec << frame << "] Dumped: " << std::hex << hash << " with palette " << std::hex << palette_hash << " in mode " << mode << "\n";
-}
-
-// BlitLog
-
-/*
-    type Rect = { x: number, y: number, width: number, height: number };
-    type BlitEvent
-        = { type: "upload", rect: Rect, hash: number, frame: number }
-        | { type: "blit", dst: Rect, src: Rect, frame: number }
-        | { type: "clear", rect: Rect, frame: number }
-        ;
-    BlitEvent[]
-*/
-
-BlitLog::BlitLog() {
-    dump_stream = std::ofstream(dump_path() + "blit_log.json");
-    dump_stream << "[\n";
-}
-BlitLog::~BlitLog() {
-    dump_stream << "]";
-}
-
-void BlitLog::set_frame(uint32_t frame) {
-    this->frame = frame;
-}
-
-void BlitLog::comma() {
-    if (need_comma) {
-        dump_stream << ",";
-    } else {
-        need_comma = true;
-    }
-}
-
-void BlitLog::upload(Rect rect, uint32_t hash) {
-    comma();
-    dump_stream << " { \"type\": \"upload\", \"rect\": ";
-    output_rect_json(dump_stream, rect);
-    dump_stream << ", \"hash\": " << hash;
-    dump_stream << ", \"frame\": " << frame << " }\n";
-}
-
-void BlitLog::blit(Rect dst, Rect src) {
-    comma();
-    dump_stream << " { \"type\": \"blit\", \"dst\": ";
-    output_rect_json(dump_stream, dst);
-    dump_stream << ", \"src\": ";
-    output_rect_json(dump_stream, src);
-    dump_stream << ", \"frame\": " << frame << " }\n";
-}
-
-void BlitLog::clear(Rect rect) {
-    comma();
-    dump_stream << " { \"type\": \"clear\", \"rect\": ";
-    output_rect_json(dump_stream, rect);
-    dump_stream << ", \"frame\": " << frame << " }\n";
 }
 
 // RectTracker

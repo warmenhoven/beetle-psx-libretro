@@ -29,30 +29,6 @@ extern retro_log_printf_t log_cb;
 
 namespace PSX {
 
-class DumpLog {
-public:
-    DumpLog();
-    void upload(uint64_t frame, Rect rect, uint32_t hash);
-    void dump(uint64_t frame, uint32_t hash, uint32_t palette_hash, TextureMode mode);
-private:
-    std::ofstream dump_stream;
-};
-
-class BlitLog {
-public:
-    BlitLog();
-    ~BlitLog();
-    void upload(Rect rect, uint32_t hash);
-    void blit(Rect dst, Rect src);
-    void clear(Rect rect);
-    void set_frame(uint32_t frame);
-private:
-    void comma();
-    uint32_t frame = 0;
-    bool need_comma = false;
-    std::ofstream dump_stream;
-};
-
 struct HdTextureId {
     uint32_t hash;
     uint32_t palette_hash;
@@ -482,9 +458,6 @@ private:
     DbgHotkey frame_dump_key = RETROK_LEFTBRACKET; // disgusting
     std::ofstream *frame_dump = nullptr;
     bool frame_dump_need_comma = false;
-
-    std::unique_ptr<BlitLog> blit_log;
-    std::unique_ptr<DumpLog> dump_log;
 
     DbgHotkey hd_toggle_key = RETROK_RIGHTBRACKET;
 
