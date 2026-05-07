@@ -4,7 +4,6 @@ HAVE_OPENGL = 0
 GLES = 0
 GLES3 = 0 # HW renderer now supported on GLES3
 HAVE_VULKAN = 0
-HAVE_JIT = 0
 HAVE_CHD = 1
 HAVE_CDROM = 0
 HAVE_LIGHTREC = 1
@@ -594,10 +593,6 @@ endif
 
 ifeq ($(HAVE_VULKAN),1)
    FLAGS += -DHAVE_VULKAN
-endif
-
-ifeq ($(HAVE_JIT),1)
-   LDFLAGS += -ljit
 endif
 
 CXXFLAGS += $(FLAGS)

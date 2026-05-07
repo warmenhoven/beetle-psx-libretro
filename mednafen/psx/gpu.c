@@ -439,8 +439,11 @@ static void Command_FBRead(PS_GPU* g, const uint32 *cb)
 
    if (!rsx_intf_has_software_renderer())
    {
-       /* Need a hard readback from GPU renderer. */
-       bool supported = rsx_intf_read_vram(
+       /* Need a hard readback from GPU renderer.  Return value
+        * is intentionally discarded here - on Vulkan-renderer
+        * failure or non-Vulkan hardware the call is a no-op and
+        * g->vram keeps its prior contents. */
+       (void)rsx_intf_read_vram(
                g->FBRW_X, g->FBRW_Y,
                g->FBRW_W, g->FBRW_H,
                g->vram);

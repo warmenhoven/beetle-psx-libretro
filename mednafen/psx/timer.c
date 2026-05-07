@@ -209,10 +209,6 @@ static bool MDFN_FASTCALL TimerOverflow(unsigned i)
 
 static void MDFN_FASTCALL ClockTimer(int i, uint32_t clocks)
 {
-   int32_t before = Timers[i].Counter;
-   int32_t target = 0x10000;
-   bool zero_tm = false;
-
    if(Timers[i].DoZeCounting <= 0)
       clocks = 0;
 

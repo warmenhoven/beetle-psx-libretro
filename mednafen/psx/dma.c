@@ -81,8 +81,6 @@ typedef struct
 static Channel DMACH[7];
 static int32_t lastts;
 
-static const char *PrettyChannelNames[7] = { "MDEC IN", "MDEC OUT", "GPU", "CDC", "SPU", "PIO", "OTC" };
-
 static INLINE void RecalcIRQOut(void)
 {
    bool irqo = (bool)DMAIntStatus;

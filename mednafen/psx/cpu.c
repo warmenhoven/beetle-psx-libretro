@@ -104,7 +104,14 @@ static uint32_t          cpu_IPCache;
 static uint32_t          cpu_BIU;
 static bool              cpu_Halted;
 static CPU_CP0           cpu_CP0;
+#ifdef HAVE_LIGHTREC
+/* cache_buf shadows the first 64KB of MainRAM while the cache-isolated
+ * (CP0 SR bit 16) bit is set, so reads return from the cache snapshot
+ * and writes are confined.  Only the lightrec dispatcher honours this
+ * MIPS-quirk - the interpreter doesn't model cache isolation - so the
+ * shadow only exists when HAVE_LIGHTREC is on. */
 static char              cpu_cache_buf[64 * 1024];
+#endif
 
 /* Aliases for every PS_CPU instance field used inside this file.
  * Lets the body of methods reference fields by their original bare

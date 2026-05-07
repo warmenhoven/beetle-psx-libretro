@@ -1685,7 +1685,6 @@ static void InputDevice_DualAnalog_UpdateInput(InputDevice *self_, const void *d
    {
       for (axis = 0; axis < 2; axis++)
       {
-         const uint8* aba = &d8[2] + stick * 8 + axis * 4;
          int32 tmp;
 
          /* revert to 0.9.33, should be fixed on libretro side instead */
@@ -1928,7 +1927,6 @@ static void InputDevice_DualShock_SetAMCT(InputDevice *self_, bool enabled)
 {
    InputDevice_DualShock *self = (InputDevice_DualShock *)self_;
 
-   bool amct_prev_info = self->amct_enabled;
    self->amct_enabled = enabled;
    if(self->amct_enabled)
       self->analog_mode = setting_apply_analog_default;
@@ -2081,7 +2079,6 @@ static void InputDevice_DualShock_UpdateInput(InputDevice *self_, const void *da
    InputDevice_DualShock *self = (InputDevice_DualShock *)self_;
 
    uint8 *d8 = (uint8 *)data;
-   uint8* const rumb_dp = &d8[3 + 16];
 
    self->buttons[0] = d8[0];
    self->buttons[1] = d8[1];
@@ -2091,7 +2088,6 @@ static void InputDevice_DualShock_UpdateInput(InputDevice *self_, const void *da
    {
       for (axis = 0; axis < 2; axis++)
       {
-         const uint8* aba = &d8[3] + stick * 8 + axis * 4;
          int32 tmp;
 
          /* revert to 0.9.33, should be fixed on libretro side instead */

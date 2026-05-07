@@ -1188,10 +1188,6 @@ static INLINE void TransformXY(int64_t h_div_sz, float precise_h_div_sz, float p
       float fofx       = ((float)OFX / (float)(1 << 16));
       float fofy       = ((float)OFY / (float)(1 << 16));
 
-      /* Project X and Y onto the plane */
-      int64_t screen_x = (int64_t)OFX + IR1 * h_div_sz * ((widescreen_hack) ? widescreen_hack_aspect_ratio : 1.00);
-      int64_t screen_y = (int64_t)OFY + IR2 * h_div_sz;
-
       /* Increased precision calculation (sub-pixel precision) */
       float precise_x  = fofx + ((float)IR1 * precise_h_div_sz) * ((widescreen_hack) ? widescreen_hack_aspect_ratio : 1.00);
       float precise_y  = fofy + ((float)IR2 * precise_h_div_sz);
@@ -1287,7 +1283,6 @@ static int32_t NCS(uint32_t instr)
 
 static int32_t NCT(uint32_t instr)
 {
-   unsigned i;
    const uint32_t sf = (instr & (1 << 19)) ? 12 : 0;
    const int      lm = (instr >> 10) & 1;
 
