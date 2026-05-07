@@ -125,7 +125,17 @@ enum rsx_renderer_type rsx_intf_is_type(void)
    return rsx_type;
 }
 
-inline void rsx_intf_dump_init(void)
+/* `static inline` (rather than the original plain `inline`) so that
+ * unoptimised builds link. With -O3 (release) every call site got
+ * inlined and no out-of-line definition was needed; under DEBUG=1
+ * (-O0) the inliner doesn't fire, and per C99/C11 semantics a plain
+ * `inline` definition without a matching `extern` declaration does
+ * not emit a symbol either - producing the link-time
+ *   undefined reference to `rsx_intf_dump_init'
+ * from every call site in this file. `static inline` keeps the
+ * intent (compiler may inline) and guarantees a TU-local symbol when
+ * inlining is suppressed. */
+static inline void rsx_intf_dump_init(void)
 {
 #if defined(RSX_DUMP)
    {

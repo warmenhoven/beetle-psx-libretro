@@ -295,7 +295,28 @@ void CPU_Power(PS_CPU *self)
    unsigned i;
 
    (void)self;
-   assert(sizeof(s_cpu.ic.ICache) == sizeof(s_cpu.ic.ICache_Bulk));
+
+   /* Compile-time check that the ICache union's two arms cover the
+    * same byte range. This used to be a runtime assert spelled
+    *
+    *     assert(sizeof(s_cpu.ic.ICache) == sizeof(s_cpu.ic.ICache_Bulk));
+    *
+    * but `ICache` and `ICache_Bulk` are file-static macros that expand
+    * to `s_cpu.ic.ICache` / `s_cpu.ic.ICache_Bulk` (see the #define
+    * block above), so under DEBUG=1 (where assert() is live and the
+    * macros aren't gated out) the expression became
+    *
+    *     sizeof(s_cpu.ic.s_cpu.ic.ICache) ...
+    *
+    * which fails to compile with `'union <anonymous>' has no member
+    * named 's_cpu'`. The release build masked it because -DNDEBUG
+    * stripped the assert before macro expansion.
+    *
+    * Using the underlying types here sidesteps the macros entirely
+    * and gets us a stronger check (compile-time, runs in every
+    * build) for free. */
+   _Static_assert(sizeof(CPU_ICache[1024]) == sizeof(uint32_t[2048]),
+                  "ICache union arms must cover the same bytes");
 
    memset(GPR, 0, 32 * sizeof(uint32_t));
    memset(&cpu_CP0, 0, sizeof(cpu_CP0));
