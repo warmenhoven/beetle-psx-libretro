@@ -161,24 +161,14 @@ enum StatusFlag
 };
 using StatusFlags = uint16_t;
 
-class HazardListener
-{
-public:
-	virtual ~HazardListener() = default;
-	virtual void hazard(StatusFlags flags) = 0;
-	virtual void resolve(Domain target_domain, unsigned x, unsigned y) = 0;
-	virtual void flush_render_pass(const Rect &rect) = 0;
-	virtual void discard_render_pass() = 0;
-	virtual void clear_quad(const Rect &rect, FBColor color, bool clear_candidate) = 0;
-	virtual void set_scissored_invariant(bool invariant) = 0;
-};
+class Renderer;
 
 class FBAtlas
 {
 public:
 	FBAtlas();
 
-	void set_hazard_listener(HazardListener *hazard)
+	void set_hazard_listener(Renderer *hazard)
 	{
 		listener = hazard;
 	}
@@ -221,7 +211,7 @@ public:
 
 private:
 	StatusFlags fb_info[NUM_BLOCKS_X * NUM_BLOCKS_Y];
-	HazardListener *listener = nullptr;
+	Renderer *listener = nullptr;
 
 	void read_domain(Domain domain, Stage stage, const Rect &rect);
 	bool write_domain(Domain domain, Stage stage, const Rect &rect);

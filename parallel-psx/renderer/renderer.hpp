@@ -47,7 +47,7 @@ enum class PrimitiveType
 	May_Be_2D_Polygon
 };
 
-class Renderer : private HazardListener, private TextureUploader
+class Renderer
 {
 public:
 	enum class ScanoutMode
@@ -175,7 +175,7 @@ public:
 		render_state.draw_offset_y = y;
 	}
 
-	inline void set_scissored_invariant(bool invariant) override
+	inline void set_scissored_invariant(bool invariant)
 	{
 		queue.scissor_invariant = invariant;
 	}
@@ -471,18 +471,20 @@ private:
 
 	Vulkan::CommandBufferHandle cmd;
 
-	// HazardListener
-	void hazard(StatusFlags flags) override;
-	void resolve(Domain target_domain, unsigned x, unsigned y) override;
-	void flush_render_pass(const Rect &rect) override;
-	void discard_render_pass() override;
-	void clear_quad(const Rect &rect, FBColor color, bool candidate) override;
+public:
+	// Called by FBAtlas (formerly via HazardListener interface).
+	void hazard(StatusFlags flags);
+	void resolve(Domain target_domain, unsigned x, unsigned y);
+	void flush_render_pass(const Rect &rect);
+	void discard_render_pass();
+	void clear_quad(const Rect &rect, FBColor color, bool candidate);
 
-	// TextureUploader
-	Vulkan::ImageHandle upload_texture(std::vector<LoadedImage> &image) override;
-	Vulkan::ImageHandle create_texture(int width, int height, int levels) override;
-	Vulkan::CommandBufferHandle &command_buffer_hack_fixme() override;
+	// Called by TextureTracker (formerly via TextureUploader interface).
+	Vulkan::ImageHandle upload_texture(std::vector<LoadedImage> &image);
+	Vulkan::ImageHandle create_texture(int width, int height, int levels);
+	Vulkan::CommandBufferHandle &command_buffer_hack_fixme();
 
+private:
 	void hd_texture_uniforms(HdTextureHandle hd_texture_index);
 	HdTextureHandle get_hd_texture_index(const Rect &uvlimits, bool &fastpath_capable_out, bool &cache_hit_out);
 

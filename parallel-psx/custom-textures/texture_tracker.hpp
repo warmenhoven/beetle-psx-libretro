@@ -196,14 +196,7 @@ struct LoadedImage {
     int height;
 };
 
-class TextureUploader
-{
-public:
-	virtual ~TextureUploader() = default;
-	virtual Vulkan::ImageHandle upload_texture(std::vector<LoadedImage> &image) = 0;
-    virtual Vulkan::ImageHandle create_texture(int width, int height, int levels) = 0;
-    virtual Vulkan::CommandBufferHandle &command_buffer_hack_fixme() = 0;
-};
+class Renderer;
 
 struct IORequest {
     virtual ~IORequest() = default; // Need some virtual method for dynamic_cast
@@ -370,11 +363,11 @@ struct FusedPage {
 
 class FusedPages {
 public:
-    HdTextureHandle get_or_make(Rect page_rect, uint32_t palette, RectTracker &tracker, TextureUploader *uploader);
+    HdTextureHandle get_or_make(Rect page_rect, uint32_t palette, RectTracker &tracker, Renderer *uploader);
     HdTexture get_from_handle(HdTextureHandle handle, Vulkan::ImageHandle &default_hd_texture);
     void mark_dirty(Rect rect); // For blit dst, upload, and hd texture load
     void mark_dead(Rect rect); // For clear
-    void rebuild_dirty(RectTracker &tracker, TextureUploader *uploader);
+    void rebuild_dirty(RectTracker &tracker, Renderer *uploader);
     void remove_dead();
 
     void dbg_print_info();
@@ -459,28 +452,13 @@ public:
     void endFrame();
     void on_queues_reset();
 
-	void set_texture_uploader(TextureUploader *t)
-	{
-		uploader = t;
-        std::vector<LoadedImage> default_levels;
-
-        LoadedImage default_image;
-        default_image.width = 1;
-        default_image.height = 1;
-        default_image.owned_data.push_back(0);
-        default_image.owned_data.push_back(0);
-        default_image.owned_data.push_back(0);
-        default_image.owned_data.push_back(0);
-        default_levels.push_back(std::move(default_image));
-        
-        default_hd_texture = uploader->upload_texture(default_levels);
-	}
+	void set_texture_uploader(Renderer *t);
 
     bool dump_enabled = false;
     bool hd_textures_enabled = false;
 private:
     IOThread iothread;
-    TextureUploader *uploader;
+    Renderer *uploader;
 
     Vulkan::ImageHandle default_hd_texture;
 

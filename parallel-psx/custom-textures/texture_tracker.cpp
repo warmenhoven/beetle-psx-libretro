@@ -1,4 +1,5 @@
 #include "texture_tracker.hpp"
+#include "../renderer/renderer.hpp"
 #include "libretro.h"
 #include <iostream>
 #include <fstream>
@@ -1009,6 +1010,22 @@ void TextureTracker::endFrame() {
     }
 }
 
+void TextureTracker::set_texture_uploader(Renderer *t) {
+    uploader = t;
+    std::vector<LoadedImage> default_levels;
+
+    LoadedImage default_image;
+    default_image.width = 1;
+    default_image.height = 1;
+    default_image.owned_data.push_back(0);
+    default_image.owned_data.push_back(0);
+    default_image.owned_data.push_back(0);
+    default_image.owned_data.push_back(0);
+    default_levels.push_back(std::move(default_image));
+
+    default_hd_texture = uploader->upload_texture(default_levels);
+}
+
 void TextureTracker::reload_textures_from_disk() {
     // Reload the directory listing
     known_files = read_texture_directory(replacements_path().c_str());
@@ -1425,7 +1442,7 @@ FusionRects fusion_rects(Rect full_page_rect, uint32_t palette_hash, RectTracker
     return f;
 }
 
-void rebuild_page(FusedPage &page, RectTracker &tracker, TextureUploader *uploader) {
+void rebuild_page(FusedPage &page, RectTracker &tracker, Renderer *uploader) {
     TT_LOG_VERBOSE(RETRO_LOG_INFO, "Rebuilding page for %x, %d,%d %dx%d\n",
         page.palette,
         page.fusion.vram_rect.x,
@@ -1613,7 +1630,7 @@ HdTexture FusedPages::get_from_handle(HdTextureHandle handle, Vulkan::ImageHandl
     };
 }
 
-HdTextureHandle FusedPages::get_or_make(Rect page_rect, uint32_t palette, RectTracker &tracker, TextureUploader *uploader) {
+HdTextureHandle FusedPages::get_or_make(Rect page_rect, uint32_t palette, RectTracker &tracker, Renderer *uploader) {
     for (int x = 0; x < pages.size(); x++) {
         FusedPage &page = pages[x];
         if (!page.dead && page.palette == palette && page.full_page_rect == page_rect) {
@@ -1647,7 +1664,7 @@ void FusedPages::mark_dead(Rect rect) {
         }
     }
 }
-void FusedPages::rebuild_dirty(RectTracker &tracker, TextureUploader *uploader) {
+void FusedPages::rebuild_dirty(RectTracker &tracker, Renderer *uploader) {
     bool changed = false;
     for (FusedPage &page : pages) {
         if (!page.dead && page.dirty) {
