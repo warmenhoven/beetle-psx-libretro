@@ -4154,9 +4154,8 @@ void rsx_gl_load_image(
  * Beetle the per-frame copy lives in `g->vram`; when the SW renderer
  * is disabled and we're on a hardware backend, the SW path doesn't
  * keep that buffer in sync with what the GPU has actually rendered,
- * so games that use FBRead (early titles like King's Field that
- * assemble UI sprites by reading back portions of VRAM) see stale
- * or all-zero data and draw broken / invisible sprites.
+ * so games that use FBRead see stale or all-zero data and draw 
+ * broken / invisible sprites.
  *
  * The Vulkan backend implements this via a synchronous device->host
  * copy.  This is the GL equivalent: read the requested rectangle out
@@ -4174,8 +4173,8 @@ void rsx_gl_load_image(
  * Limitations addressed by `return false` (caller keeps prior data):
  *   - 32bpp internal color depth (`internal_color_depth == 32`).
  *     `fb_out` is GL_RGBA8 in that mode and we'd need RGBA8 ->
- *     RGBA1555 conversion; the default depth is 16bpp which is what
- *     King's Field uses, so leave 32bpp for a follow-up.
+ *     RGBA1555 conversion; the default depth is 16bpp,
+ *     so leave 32bpp for a follow-up.
  *   - VRAM seam wrap-around (x+w>1024 or y+h>512).  Pre-existing
  *     limitation shared with `gl_texture_set_sub_image_window`.
  *   - Upscale > 1 with no glBlitFramebuffer extension.  All modern
