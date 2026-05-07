@@ -15,6 +15,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include <compat/strl.h>
+
 #include "psx_events.h"
 #include "irq.h"
 #include "frontio.h"
@@ -1887,7 +1889,7 @@ static void InputDevice_DualShock_Ctor(InputDevice *self_, const char *name)
 {
    InputDevice_DualShock *self = (InputDevice_DualShock *)self_;
 
-   snprintf(self->gp_name, sizeof(self->gp_name), "%s", name);
+   strlcpy(self->gp_name, name, sizeof(self->gp_name));
    InputDevice_DualShock_Power(self_);
    self->am_prev_info = self->analog_mode;
    self->aml_prev_info = self->analog_mode_locked;
@@ -3398,7 +3400,7 @@ static void InputDevice_neGconRumble_Ctor(InputDevice *self_, const char *name)
 {
    InputDevice_neGconRumble *self = (InputDevice_neGconRumble *)self_;
 
-   snprintf(self->gp_name, sizeof(self->gp_name), "%s", name);
+   strlcpy(self->gp_name, name, sizeof(self->gp_name));
    InputDevice_neGconRumble_Power(self_);
    self->am_prev_info = self->analog_mode;
    self->aml_prev_info = self->analog_mode_locked;

@@ -1913,6 +1913,7 @@ static const uintptr_t supported_io_bases[] = {
 #define BIOS_SIZE 0x80000
 #define SCRATCH_SIZE 0x400
 #define SHM_SIZE RAM_SIZE+BIOS_SIZE+SCRATCH_SIZE
+#define PIO_SIZE     (65536)
 
 #ifdef HAVE_WIN_SHM
 #define MAP(addr, size, fd, offset) \
@@ -2282,11 +2283,6 @@ static void InitCommon(const bool EmulateMemcards, const bool WantPIOMem)
    }
    else
       SetDiscWrapper(CD_TrayOpen);
-
-#define RAM_SIZE     (2048 * 1024)
-#define SCRATCH_SIZE (1024)
-#define BIOS_SIZE    (512 * 1024)
-#define PIO_SIZE     (65536)
 
 #ifdef HAVE_LIGHTREC
    psx_mmap = lightrec_init_mmap();
