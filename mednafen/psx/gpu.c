@@ -115,6 +115,53 @@ static uint32  TexCache_Tag[256];
 static uint16  TexCache_Data[256][4];
 static uint16_t *vram_new = NULL;
 
+/*
+ * Deferred SW-renderer scanout records.
+ *
+ * The per-scanline path that writes VRAM to the SW surface
+ * (rsx_intf_is_type() == RSX_SOFTWARE) interleaves with polygon
+ * rasterisation; if the rasteriser writes to the same VRAM rows
+ * that the scanout is reading - which it does in 480i double-
+ * buffered titles when dfe-based field gating is bypassed
+ * (psx_gpu_rasterize_both_fields) - the surface ends up with mid-
+ * frame torn content where polygons drawn for the new frame
+ * appear beneath polygons that were already scanned out from the
+ * old frame.
+ *
+ * The fix is to capture the scanout parameters per visible
+ * scanline as the GPU emulation runs, but defer the actual VRAM
+ * read until after the rasteriser is fully done for the frame.
+ * Once flushed, the SW surface mirrors the VRAM contents that the
+ * frame settled on; on the next frame the rasteriser overwrites
+ * VRAM and the cycle repeats with no torn intermediates.
+ *
+ * Sized to MEDNAFEN_CORE_GEOMETRY_MAX_H (576) records so PAL 480i
+ * fits without bounds checking.  Written by the per-scanline
+ * block in Update(); read and cleared by GPU_FlushDeferredScanout
+ * which libretro.c calls right after CPU_Run returns and before
+ * the deinterlacer / surface presentation runs.
+ *
+ * Only used when both psx_gpu_rasterize_both_fields and the SW
+ * renderer are active; other paths keep the original immediate
+ * scanout to avoid introducing latency or memory traffic.
+ */
+typedef struct
+{
+   int32_t  dest_line;
+   int32_t  dest_line_other; /* opposite-field surface row to also write */
+   int32_t  vram_y_native;   /* native VRAM row to read into dest_line */
+   int32_t  vram_y_other;    /* native VRAM row to read into dest_line_other */
+   int32_t  dx_start;
+   int32_t  dx_end;
+   int32_t  fb_x;
+   int32_t  dmw;
+   bool     rgb24;
+} GPU_DeferredScanline;
+
+#define DEFERRED_SCANOUT_MAX 576
+static GPU_DeferredScanline deferred_scanouts[DEFERRED_SCANOUT_MAX];
+static unsigned              deferred_scanout_count = 0;
+
 static INLINE void InvalidateTexCache(PS_GPU *gpu)
 {
    unsigned i;
@@ -302,7 +349,8 @@ static void Command_FBFill(PS_GPU* gpu, const uint32 *cb)
       if(LineSkipTest(gpu, d_y))
          continue;
 
-      gpu->DrawTimeAvail -= (width >> 3) + 9;
+      if (!DfeWouldSkip(gpu, d_y))
+         gpu->DrawTimeAvail -= (width >> 3) + 9;
 
       /* Only execute the per-pixel software writes when a software
        * renderer is actually consuming GPU.vram - the trailing
@@ -1824,34 +1872,93 @@ int32_t GPU_Update(const int32_t sys_timestamp)
                   int32 ufb_x       = fb_x     << GPU.upscale_shift;
                   unsigned _upscale = UPSCALE(&GPU);
 
-                  for (uint32_t i = 0; i < _upscale; i++)
+                  if (psx_gpu_rasterize_both_fields
+                        && (GPU.DisplayMode & 0x24) == 0x24
+                        && GPU.espec->InterlaceOn)
                   {
-                     const uint16_t *src = GPU.vram +
-                        ((y + i) << (10 + GPU.upscale_shift));
-
-                     dest = GPU.surface->pixels +
-                        ((dest_line << GPU.upscale_shift) + i) * GPU.surface->pitch32;
-                     memset(dest, 0, udx_start * sizeof(int32));
-
-                     ReorderRGB_Var(
-                           RED_SHIFT,
-                           GREEN_SHIFT,
-                           BLUE_SHIFT,
-                           GPU.DisplayMode & DISP_RGB24,
-                           src,
-                           dest,
-                           udx_start,
-                           udx_end,
-                           ufb_x,
-                           GPU.upscale_shift,
-                           _upscale);
-
-                     for(x = udx_end; x < udmw; x++)
-                        dest[x] = 0;
+                     /* "Off" deinterlace mode in 480i: defer the
+                      * VRAM read until end-of-frame so it doesn't
+                      * race with polygon rasterisation in titles
+                      * that double-buffer through dfe field
+                      * gating.
+                      *
+                      * We also record the opposite field's
+                      * VRAM-y / dest_line so the flush populates
+                      * BOTH halves of the surface from current-
+                      * frame VRAM contents (the LineSkipTest
+                      * bypass guarantees both halves of VRAM are
+                      * fresh).  This mirrors what the HW renderer
+                      * does at scanout: a single contiguous
+                      * rectangle read, no temporal split between
+                      * fields, no comb on motion.
+                      *
+                      * Deliberately gated on InterlaceOn here -
+                      * the opposite-field VRAM/dest math below
+                      * (`<< 1`, `field_ram_readout`) is only
+                      * meaningful in 480i.  In 240p the user-
+                      * selected "Off" still flips the global flag
+                      * (it's harmless for the rasteriser since
+                      * LineSkipTest already short-circuits when
+                      * the 0x24 bit isn't set) but the per-line
+                      * scanout falls back to the immediate path
+                      * to avoid writing corrupted opposite-field
+                      * rows. */
+                     if (deferred_scanout_count < DEFERRED_SCANOUT_MAX)
+                     {
+                        GPU_DeferredScanline *r =
+                           &deferred_scanouts[deferred_scanout_count++];
+                        const uint32_t opp_y = (GPU.DisplayFB_YStart
+                              + (GPU.DisplayFB_CurYOffset << 1)
+                              + (GPU.InVBlank ? 0 : !GPU.field_ram_readout))
+                           & 0x1FF;
+                        r->dest_line       = dest_line;
+                        r->dest_line_other = dest_line ^ 1;
+                        r->vram_y_native   = GPU.DisplayFB_CurLineYReadout;
+                        r->vram_y_other    = opp_y;
+                        r->dx_start        = dx_start;
+                        r->dx_end          = dx_end;
+                        r->fb_x            = fb_x;
+                        r->dmw             = dmw;
+                        r->rgb24           = (GPU.DisplayMode & DISP_RGB24) != 0;
+                     }
+                     /* dest stays NULL; FrontIO_GPULineHook below
+                      * will receive NULL pixels and skip the per-
+                      * scanline lightgun colour sample for this
+                      * frame.  Lightguns at upscale > 1x in 480i
+                      * with OFF mode is a corner case that we
+                      * accept as a known limitation. */
                   }
+                  else
+                  {
+                     for (uint32_t i = 0; i < _upscale; i++)
+                     {
+                        const uint16_t *src = GPU.vram +
+                           ((y + i) << (10 + GPU.upscale_shift));
 
-                  /*reset dest back to i=0 for PSX_GPULineHook call */
-                  dest = GPU.surface->pixels + ((dest_line << GPU.upscale_shift) * GPU.surface->pitch32);
+                        dest = GPU.surface->pixels +
+                           ((dest_line << GPU.upscale_shift) + i) * GPU.surface->pitch32;
+                        memset(dest, 0, udx_start * sizeof(int32));
+
+                        ReorderRGB_Var(
+                              RED_SHIFT,
+                              GREEN_SHIFT,
+                              BLUE_SHIFT,
+                              GPU.DisplayMode & DISP_RGB24,
+                              src,
+                              dest,
+                              udx_start,
+                              udx_end,
+                              ufb_x,
+                              GPU.upscale_shift,
+                              _upscale);
+
+                        for(x = udx_end; x < udmw; x++)
+                           dest[x] = 0;
+                     }
+
+                     /*reset dest back to i=0 for PSX_GPULineHook call */
+                     dest = GPU.surface->pixels + ((dest_line << GPU.upscale_shift) * GPU.surface->pitch32);
+                  }
                }
 
                dmw_width = dmw;
@@ -1917,6 +2024,86 @@ void GPU_StartFrame(EmulateSpecStruct *espec_arg)
    GPU.surface         = GPU.espec->surface;
    GPU.DisplayRect     = &GPU.espec->DisplayRect;
    GPU.LineWidths      = GPU.espec->LineWidths;
+
+   /* Discard any deferred-scanout records left over from a
+    * previous frame.  Start of a fresh frame, fresh records. */
+   deferred_scanout_count = 0;
+}
+
+/*
+ * Process the per-frame deferred-scanout records collected during
+ * Update().  Called from libretro.c's retro_run() right after
+ * CPU_Run() returns, i.e. after the rasteriser is done for this
+ * frame.  At that point VRAM holds the settled frame contents and
+ * the recorded VRAM-y addresses can be safely read into the
+ * surface without racing the rasteriser.
+ *
+ * No-op when no records are pending (which is the common case -
+ * the immediate-scanout path in Update() is what runs unless
+ * psx_gpu_rasterize_both_fields is set + SW renderer + 480i).
+ */
+void GPU_FlushDeferredScanout(void)
+{
+   const unsigned s = GPU.upscale_shift;
+   const unsigned up = 1u << s;
+   const int32_t pitch_pix = GPU.surface->pitch32;
+   uint32_t *pixels = GPU.surface->pixels;
+   unsigned r;
+
+   for (r = 0; r < deferred_scanout_count; r++)
+   {
+      const GPU_DeferredScanline *rec = &deferred_scanouts[r];
+      const uint32_t udmw      = (uint32_t)rec->dmw      << s;
+      const int32_t  udx_start = rec->dx_start << s;
+      const int32_t  udx_end   = rec->dx_end   << s;
+      const int32_t  ufb_x     = rec->fb_x     << s;
+      int field;
+
+      /* Two passes: this-field row, then opposite-field row.
+       * Both populate the surface from CURRENT-frame VRAM, so the
+       * displayed image is a single-instant snapshot rather than
+       * a temporal interleave between the two fields. */
+      for (field = 0; field < 2; field++)
+      {
+         const int32_t  dest_line = field ? rec->dest_line_other : rec->dest_line;
+         const uint32_t y_up      = (uint32_t)(field ? rec->vram_y_other
+                                                     : rec->vram_y_native) << s;
+         unsigned i;
+
+         for (i = 0; i < up; i++)
+         {
+            const uint16_t *src = GPU.vram +
+               ((y_up + i) << (10 + s));
+            uint32_t *dest = pixels +
+               (size_t)(((dest_line << s) + i)) * pitch_pix;
+            uint32_t x;
+
+            memset(dest, 0, udx_start * sizeof(uint32_t));
+
+            ReorderRGB_Var(
+                  RED_SHIFT,
+                  GREEN_SHIFT,
+                  BLUE_SHIFT,
+                  rec->rgb24,
+                  src,
+                  dest,
+                  udx_start,
+                  udx_end,
+                  ufb_x,
+                  s,
+                  up);
+
+            for (x = (uint32_t)udx_end; x < udmw; x++)
+               dest[x] = 0;
+         }
+      }
+
+      /* Make sure both rows in LineWidths report the same width
+       * (the per-scanline path only set LineWidths[dest_line]). */
+      GPU.LineWidths[rec->dest_line_other] = rec->dmw;
+   }
+
+   deferred_scanout_count = 0;
 }
 
 

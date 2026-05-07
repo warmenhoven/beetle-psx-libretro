@@ -288,6 +288,13 @@ void Deinterlacer_Process(Deinterlacer *d, MDFN_Surface *surface,
 
    switch (d->DeintType)
    {
+      case DEINT_OFF:
+         /* The combless presentation is achieved upstream in
+          * gpu.c (LineSkipTest bypass + deferred end-of-frame
+          * scanout).  Nothing to do here beyond the LineWidths[0]
+          * fixup that runs ahead of the switch for all modes. */
+         break;
+
       case DEINT_WEAVE:
          (void)deint_weave(d, pixels, pitch_pix, DisplayRect,
                LineWidths, field, s);

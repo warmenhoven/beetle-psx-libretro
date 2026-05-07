@@ -87,7 +87,8 @@ static void DrawSprite_##SUFFIX(PS_GPU *gpu, int32_t x_arg, int32_t y_arg, int32
          u_r = u; \
       if (!LineSkipTest(gpu, y)) \
       { \
-         if (y_bound > y_start && x_bound > x_start) \
+         if (y_bound > y_start && x_bound > x_start \
+               && !DfeWouldSkip(gpu, y)) \
          { \
             /* Note(TODO): From tests on a PS1, even a 0-width sprite */ \
             /* takes up time to "draw" proportional to its height. */ \

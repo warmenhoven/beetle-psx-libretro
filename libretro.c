@@ -4335,8 +4335,12 @@ static void check_variables(bool startup)
    {
       if (strcmp(var.value, "bob") == 0)
          Deinterlacer_SetType(&deint, DEINT_BOB);
+      else if (strcmp(var.value, "off") == 0)
+         Deinterlacer_SetType(&deint, DEINT_OFF);
       else
          Deinterlacer_SetType(&deint, DEINT_WEAVE);
+
+      psx_gpu_rasterize_both_fields = (Deinterlacer_GetType(&deint) == DEINT_OFF);
    }
 }
 
@@ -5074,6 +5078,13 @@ void retro_run(void)
    assert(timestamp);
 
    ForceEventUpdates(timestamp);
+
+   /* Drain any deferred SW-renderer scanout records collected
+    * during this frame's emulation.  See GPU_FlushDeferredScanout
+    * and psx_gpu_rasterize_both_fields - this is the safe point
+    * to read VRAM since rasterisation for this frame is finished
+    * and the frontend hasn't yet read the surface for display. */
+   GPU_FlushDeferredScanout();
 
    espec->SoundBufSize = IntermediateBufferPos;
    IntermediateBufferPos = 0;

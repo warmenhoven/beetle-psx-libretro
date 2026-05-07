@@ -394,9 +394,37 @@ DEFINE_GetTexel(TM2, 2)
  * in stage 5; callers now reference the right GetTexel_TM<n>
  * specialisation by mangled name. */
 
+/* See psx_gpu_rasterize_both_fields in beetle_psx_globals.h. */
+extern bool psx_gpu_rasterize_both_fields;
+
+/*
+ * Returns true if the real PS1 GPU's dfe-skip would have rejected
+ * native-row y for the current display mode.  Identical to
+ * LineSkipTest when psx_gpu_rasterize_both_fields is false; when
+ * the bypass is active, it still reports what the real hardware
+ * would have done so DrawTimeAvail bookkeeping in the rasteriser
+ * stays anchored to the half-density real-PSX cost rather than the
+ * full-density cost we actually pay.  Without this, complex 480i
+ * scenes drop polygons mid-frame because DrawTimeAvail underflows.
+ */
+static INLINE bool DfeWouldSkip(PS_GPU *g, unsigned y)
+{
+   if ((g->DisplayMode & 0x24) != 0x24)
+      return false;
+   if (g->dfe)
+      return false;
+   return (y & 1) == ((g->DisplayFB_YStart + g->field_ram_readout) & 1);
+}
+
 static INLINE bool LineSkipTest(PS_GPU* g, unsigned y)
 {
    if((g->DisplayMode & 0x24) != 0x24)
+      return false;
+
+   /* "Off" deinterlace mode: rasterise polygons to every VRAM line
+    * regardless of the game's dfe flag.  The SW path uses deferred
+    * scanout (see GPU_FlushDeferredScanout) so this can't tear. */
+   if (psx_gpu_rasterize_both_fields)
       return false;
 
    if(!g->dfe && ((y & 1) == ((g->DisplayFB_YStart + g->field_ram_readout) & 1))/* && !DisplayOff*/) //&& (y >> 1) >= DisplayFB_YStart && (y >> 1) < (DisplayFB_YStart + (VertEnd - VertStart)))

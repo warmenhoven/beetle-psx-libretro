@@ -31,7 +31,9 @@ enum
 {
    DEINT_BOB_OFFSET = 0, /* fallback default when state is reset */
    DEINT_BOB,
-   DEINT_WEAVE
+   DEINT_WEAVE,
+   DEINT_OFF             /* SW renderer matches HW: bypass dfe and
+                          * use deferred end-of-frame scanout */
 };
 
 /*

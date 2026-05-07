@@ -221,9 +221,15 @@ static INLINE void DrawSpan_##SUFFIX(PS_GPU *gpu, int y, const int32 x_start, co
    /*printf("%d %d %d %d\n", x, w, ClipX0, ClipX1);*/ \
    AddIDeltas_DX_g##GOURAUD_LIT##_t##TEXTURED_LIT(&ig, idl, x_ig_adjust); \
    AddIDeltas_DY_g##GOURAUD_LIT##_t##TEXTURED_LIT(&ig, idl, y); \
-   /* Only compute timings for one every `upscale_shift` lines so that */ \
-   /* we don't end up "slower" than 1x */ \
-   if ((y & ((1UL << gpu->upscale_shift) - 1)) == 0) { \
+   /* Only compute timings for one every `upscale_shift` lines so that we */ \
+   /* don't end up "slower" than 1x.  Also skip the charge for native rows */ \
+   /* that LineSkipTest would have rejected when dfe-skip is in effect; */ \
+   /* psx_gpu_rasterize_both_fields draws those rows anyway but we still */ \
+   /* want the rasteriser budget consumption to match real-PSX behaviour, */ \
+   /* otherwise complex 480i scenes drop polygons when DrawTimeAvail */ \
+   /* hits zero halfway through the frame. */ \
+   if ((y & ((1UL << gpu->upscale_shift) - 1)) == 0 \
+         && !DfeWouldSkip(gpu, y >> gpu->upscale_shift)) { \
       if ((GOURAUD_LIT) || (TEXTURED_LIT)) \
          gpu->DrawTimeAvail -= (w * 2) >> gpu->upscale_shift; \
       else if (((BM_VAL) >= 0) || (ME_LIT)) \

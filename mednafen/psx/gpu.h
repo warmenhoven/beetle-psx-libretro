@@ -259,6 +259,7 @@ void GPU_Write(const int32_t timestamp, uint32_t A, uint32_t V);
 uint32_t GPU_Read(const int32_t timestamp, uint32_t A);
 
 void GPU_StartFrame(EmulateSpecStruct *espec_arg);
+void GPU_FlushDeferredScanout(void);
 
 int GPU_StateAction(StateMem *sm, int load, int data_only);
 

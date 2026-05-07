@@ -1247,12 +1247,13 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       BEETLE_OPT(deinterlacer),
       "Deinterlace Method",
       NULL,
-      "'Weave' shows both fields on the same frame for full high resolution still image, 'Bob' sacrificies resolution clarity for motion clarity.",
+      "'Weave' shows both fields on the same frame for full high resolution still image, 'Bob' sacrificies resolution clarity for motion clarity. 'Off' makes the software renderer match the hardware (Vulkan/OpenGL) renderer behaviour by rasterising to all VRAM lines every frame and deferring scanout to the end of the frame, eliminating comb-on-motion in interlaced games.",
       NULL,
       "video",
       {
          { "weave", "Weave" },
          { "bob",   "Bob" },
+         { "off",   "Off" },
          { NULL, NULL },
       },
       "weave"
