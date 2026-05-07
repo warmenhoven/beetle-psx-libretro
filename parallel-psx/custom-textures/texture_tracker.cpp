@@ -200,7 +200,7 @@ void io_thread(void *user_data) {
         if (channel->done) {
             finished = true;
         }
-        std::vector<std::unique_ptr<IORequest>> requests = std::move(channel->requests); // Take all requests
+        std::vector<IORequest> requests = std::move(channel->requests); // Take all requests
         channel->requests.clear();
         slock_unlock(channel->lock);
 
@@ -208,10 +208,10 @@ void io_thread(void *user_data) {
             break;
         }
 
-        for (std::unique_ptr<IORequest> &owned : requests) {
-            if (LoadRequest *request = dynamic_cast<LoadRequest*>(owned.get())) {
-                uint32_t hash = request->hash;
-                uint32_t palette_hash = request->palette_hash;
+        for (IORequest &request : requests) {
+            if (request.kind == IORequestKind::Load) {
+                uint32_t hash = request.hash;
+                uint32_t palette_hash = request.palette_hash;
                 // TT_LOG_VERBOSE(RETRO_LOG_INFO, "io thread sees: %x-%x\n", hash, palette_hash);
 
                 // Read in texture
@@ -232,11 +232,11 @@ void io_thread(void *user_data) {
                 } else {
                     TT_LOG(RETRO_LOG_ERROR, "failed to load: %s\n", path.c_str());
                 }
-            } else if (DumpRequest *dump = dynamic_cast<DumpRequest*>(owned.get())) {
-                // TT_LOG_VERBOSE(RETRO_LOG_INFO, "io thread dumping: %s\n", dump->path.c_str());
-                int success = write_image(dump->path.c_str(), dump->width, dump->height, dump->bytes.data());
+            } else if (request.kind == IORequestKind::Dump) {
+                // TT_LOG_VERBOSE(RETRO_LOG_INFO, "io thread dumping: %s\n", request.path.c_str());
+                int success = write_image(request.path.c_str(), request.width, request.height, request.bytes.data());
                 if (success == 0) {
-                    TT_LOG(RETRO_LOG_ERROR, "failed to write to: %s\n", dump->path.c_str());
+                    TT_LOG(RETRO_LOG_ERROR, "failed to write to: %s\n", request.path.c_str());
                 }
             }
         }
@@ -367,12 +367,13 @@ void TextureTracker::dump_image(TextureUpload &upload, UsedMode &mode) {
 
     //stbi_write_png(path.c_str(), upload.width * ppp, upload.height, 4, bytes.data(), 4 * upload.width * ppp);
     TT_LOG_VERBOSE(RETRO_LOG_INFO, "requesting dump: %s\n", path.c_str());
-    std::unique_ptr<DumpRequest> dump = std::unique_ptr<DumpRequest>(new DumpRequest);
-    dump->path = path;
-    dump->width = upload.width * ppp;
-    dump->height = upload.height;
-    dump->bytes = std::move(bytes);
-    
+    IORequest dump;
+    dump.kind = IORequestKind::Dump;
+    dump.path = path;
+    dump.width = upload.width * ppp;
+    dump.height = upload.height;
+    dump.bytes = std::move(bytes);
+
     slock_lock(iothread.channel->lock);
     iothread.channel->requests.push_back(std::move(dump));
     slock_unlock(iothread.channel->lock);
@@ -681,9 +682,10 @@ void TextureTracker::load_hd_texture(uint32_t hash) {
         slock_lock(iothread.channel->lock);
         for (auto it = it_low; it != it_high; it++) {
             TT_LOG_VERBOSE(RETRO_LOG_INFO, "requesting texture: %x-%x\n", hash, it->palette_hash);
-            std::unique_ptr<LoadRequest> load = std::unique_ptr<LoadRequest>(new LoadRequest);
-            load->hash = hash;
-            load->palette_hash = it->palette_hash;
+            IORequest load;
+            load.kind = IORequestKind::Load;
+            load.hash = hash;
+            load.palette_hash = it->palette_hash;
             iothread.channel->requests.push_back(std::move(load));
         }
         slock_unlock(iothread.channel->lock);

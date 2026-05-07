@@ -198,19 +198,21 @@ struct LoadedImage {
 
 class Renderer;
 
-struct IORequest {
-    virtual ~IORequest() = default; // Need some virtual method for dynamic_cast
+enum class IORequestKind {
+    Load,
+    Dump,
 };
 
-struct DumpRequest : IORequest {
+struct IORequest {
+    IORequestKind kind;
+    // Load payload (valid when kind == Load):
+    uint32_t hash;
+    uint32_t palette_hash;
+    // Dump payload (valid when kind == Dump):
     std::string path;
     int width;
     int height;
     std::vector<uint8_t> bytes;
-};
-struct LoadRequest : IORequest {
-    uint32_t hash;
-    uint32_t palette_hash;
 };
 
 const int ALPHA_FLAG_OPAQUE = 1;
@@ -230,7 +232,7 @@ public:
     ~IOChannel();
     slock_t *lock;
     scond_t *cond;
-    std::vector<std::unique_ptr<IORequest>> requests;
+    std::vector<IORequest> requests;
     std::vector<IOResponse> responses;
     bool done = false;
 private:
