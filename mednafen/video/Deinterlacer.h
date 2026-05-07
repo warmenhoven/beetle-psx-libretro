@@ -29,35 +29,47 @@ extern "C" {
 
 enum
 {
-   DEINT_BOB_OFFSET = 0, /* Code will fall-through to this case under certain conditions, too. */
+   DEINT_BOB_OFFSET = 0, /* fallback default when state is reset */
    DEINT_BOB,
    DEINT_WEAVE
 };
 
 /*
- * Plain-C deinterlacer state. Was a C++ class with a std::vector
- * member and a templated InternalProcess<T>; now a plain struct
- * with a manually-sized int32_t buffer. The template parameter
- * T was always uint32 in this build (the libretro core fixes
- * NEED_BPP=32, the WANT_16BPP path was never instantiated) and
- * has been collapsed to plain uint32_t throughout.
+ * Software-renderer deinterlacer state.
+ *
+ * The deinterlacer sees an MDFN_Surface that the GPU has just
+ * written one interlaced field of pixels into.  Output rows for
+ * that field are at upscaled-row blocks
+ *   [(2k + field) << s .. (2k + field) << s + up - 1]
+ * for k in [0, native_field_h); the opposite-parity row blocks
+ * still hold whatever was there from the previous Process() call.
+ *
+ * Three modes:
+ *   - WEAVE:      no-op; trusts the surface to already hold both
+ *                 fields' row blocks since the previous frame's
+ *                 opposite field was never overwritten.  Surface
+ *                 height presented to libretro is full interlaced
+ *                 height.
+ *   - BOB:        copies this field's row blocks into compact
+ *                 sequential rows, halving vertical resolution.
+ *                 Surface height presented to libretro is half.
+ *   - BOB_OFFSET: copies this field's row blocks down by one
+ *                 native row, leaving the originals in place so
+ *                 the surface ends up double-rowed at full height.
+ *
+ * The previous implementation kept a separate FieldBuffer surface
+ * and an LWBuffer line-widths array to support an out-of-place
+ * WEAVE scheme that copied this field out, then copied the previous
+ * field back in from the buffer.  The buffer round-trip was pure
+ * waste; both fields are already in the surface, just at different
+ * row-block stripes.  Dropped both members.
  */
 typedef struct
 {
-   MDFN_Surface *FieldBuffer;
-
-   /*
-    * Per-output-line width buffer. Sized to FieldBuffer->h on
-    * (re)allocation of FieldBuffer; written by the WEAVE path of
-    * the inner loop, read on the next call when the previously-
-    * stored field is woven into the current surface.
-    */
-   int32_t      *LWBuffer;
-   size_t        LWBuffer_size;       /* in entries */
-
-   bool          StateValid;
-   MDFN_Rect     PrevDRect;
-   unsigned      DeintType;
+   bool      StateValid;
+   int32_t   PrevDRect_h;
+   int32_t   PrevDRect_x;
+   unsigned  DeintType;
 } Deinterlacer;
 
 void     Deinterlacer_Init(Deinterlacer *d);
