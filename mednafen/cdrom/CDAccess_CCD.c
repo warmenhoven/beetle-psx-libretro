@@ -23,6 +23,7 @@
 
 #include <boolean.h>
 #include <compat/msvc.h>
+#include <compat/strl.h>
 
 #include "../mednafen.h"
 #include "../error.h"
@@ -90,12 +91,9 @@ static void ccd_kv_set(ccd_kv_list *kv, const char *section,
    if (kv->count >= CCD_MAX_ENTRIES)
       return;
    e = &kv->entries[kv->count++];
-   strncpy(e->section, section, sizeof(e->section) - 1);
-   e->section[sizeof(e->section) - 1] = 0;
-   strncpy(e->key, key, sizeof(e->key) - 1);
-   e->key[sizeof(e->key) - 1] = 0;
-   strncpy(e->value, value, sizeof(e->value) - 1);
-   e->value[sizeof(e->value) - 1] = 0;
+   strlcpy(e->section, section, sizeof(e->section));
+   strlcpy(e->key,     key,     sizeof(e->key));
+   strlcpy(e->value,   value,   sizeof(e->value));
 }
 
 /* CCD_ReadInt: parse an integer from a CCD section.
@@ -542,8 +540,17 @@ static bool CDAccess_CCD_Load(struct CDAccess_CCD *self, const char *path,
       struct FileStream  *str;
       int64_t             ss;
 
-      snprintf(image_basename, sizeof(image_basename), "%s.%s",
-            file_base, img_extsd);
+      /* image_basename = file_base + "." + img_extsd ("img", 3 chars).
+       * Reserve 5 bytes (".img\0") so an oversized file_base gets
+       * truncated rather than the extension. */
+      {
+         size_t cap  = sizeof(image_basename) - 5;
+         size_t blen = strlcpy(image_basename, file_base, cap);
+         if (blen >= cap)
+            blen = cap - 1;
+         image_basename[blen] = '.';
+         memcpy(image_basename + blen + 1, img_extsd, 4); /* 3 + NUL */
+      }
       MDFN_EvalFIP_c(dir_path, image_basename,
             image_path, sizeof(image_path));
 
@@ -593,8 +600,17 @@ static bool CDAccess_CCD_Load(struct CDAccess_CCD *self, const char *path,
       char                sub_path    [CCD_PATH_BUF];
       struct FileStream  *str;
 
-      snprintf(sub_basename, sizeof(sub_basename), "%s.%s",
-            file_base, sub_extsd);
+      /* sub_basename = file_base + "." + sub_extsd ("sub", 3 chars).
+       * Reserve 5 bytes (".sub\0") so an oversized file_base gets
+       * truncated rather than the extension. */
+      {
+         size_t cap  = sizeof(sub_basename) - 5;
+         size_t blen = strlcpy(sub_basename, file_base, cap);
+         if (blen >= cap)
+            blen = cap - 1;
+         sub_basename[blen] = '.';
+         memcpy(sub_basename + blen + 1, sub_extsd, 4); /* 3 + NUL */
+      }
       MDFN_EvalFIP_c(dir_path, sub_basename,
             sub_path, sizeof(sub_path));
 

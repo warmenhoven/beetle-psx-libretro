@@ -739,10 +739,10 @@ static void Command_DrawPolygon_##SUFFIX(PS_GPU *gpu, const uint32_t *cb) \
          /* set to non-pgxp value if difference is too great */ \
          if (PGXP_LIT && psx_pgxp_2d_tol >= 0) \
          { \
-            unsigned tol = (unsigned)psx_pgxp_2d_tol << gpu->upscale_shift; \
+            float tol = (float)((unsigned)psx_pgxp_2d_tol << gpu->upscale_shift); \
             if ( \
-               (unsigned)abs(vertices[v].precise[0] - vertices[v].x) > tol || \
-               (unsigned)abs(vertices[v].precise[1] - vertices[v].y) > tol \
+               fabsf(vertices[v].precise[0] - (float)vertices[v].x) > tol || \
+               fabsf(vertices[v].precise[1] - (float)vertices[v].y) > tol \
             ) \
             { \
                vertices[v].precise[0] = vertices[v].x; \
@@ -768,10 +768,10 @@ static void Command_DrawPolygon_##SUFFIX(PS_GPU *gpu, const uint32_t *cb) \
          { \
             if (PGXP_LIT && psx_pgxp_2d_tol >= 0) \
             { \
-               unsigned tol = (unsigned)psx_pgxp_2d_tol << gpu->upscale_shift; \
+               float tol = (float)((unsigned)psx_pgxp_2d_tol << gpu->upscale_shift); \
                if ( \
-                  (unsigned)abs(gpu->InQuad_F3Vertices[0].precise[0] - gpu->InQuad_F3Vertices[0].x) > tol || \
-                  (unsigned)abs(gpu->InQuad_F3Vertices[0].precise[1] - gpu->InQuad_F3Vertices[0].y) > tol \
+                  fabsf(gpu->InQuad_F3Vertices[0].precise[0] - (float)gpu->InQuad_F3Vertices[0].x) > tol || \
+                  fabsf(gpu->InQuad_F3Vertices[0].precise[1] - (float)gpu->InQuad_F3Vertices[0].y) > tol \
                ) \
                { \
                   gpu->InQuad_F3Vertices[0].precise[0] = gpu->InQuad_F3Vertices[0].x; \

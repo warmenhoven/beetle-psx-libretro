@@ -20,6 +20,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <boolean.h>
+#include <compat/strl.h>
 
 #include <streams/file_stream.h>
 #include <libretro.h>
@@ -288,11 +289,17 @@ static bool CDAccess_CHD_ImageOpen(struct CDAccess_CHD *self,
       }
    }
 
-   /* sbi_basename = file_base + "." + sbi_ext */
+   /* sbi_basename = file_base + "." + sbi_ext
+    * sbi_ext is always 3 chars (case-folded "sbi"); reserve room for
+    * ".sbi" + NUL (5 bytes) at the tail so that an oversized file_base
+    * gets truncated rather than the suffix. */
    {
-      size_t n = snprintf(sbi_basename, sizeof(sbi_basename),
-            "%s.%s", file_base, sbi_ext);
-      (void)n;
+      size_t cap  = sizeof(sbi_basename) - 5; /* room for ".sbi\0" */
+      size_t blen = strlcpy(sbi_basename, file_base, cap);
+      if (blen >= cap)
+         blen = cap - 1;
+      sbi_basename[blen]     = '.';
+      memcpy(sbi_basename + blen + 1, sbi_ext, 4); /* 3 chars + NUL */
    }
    MDFN_EvalFIP_c(base_dir, sbi_basename,
          self->sbi_path, sizeof(self->sbi_path));

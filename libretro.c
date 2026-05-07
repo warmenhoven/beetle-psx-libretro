@@ -4526,6 +4526,7 @@ static bool MDFNI_LoadCD(const char *devicename)
              * gives label room to add index and quiets gcc warnings */
             char image_name[4092];
             char image_label[4096];
+            char idx_suffix[16]; /* " #" + uint up to 10 digits + NUL */
 
             image_name[0]  = '\0';
             image_label[0] = '\0';
@@ -4534,9 +4535,13 @@ static bool MDFNI_LoadCD(const char *devicename)
              * multi-disk PBP files */
             sv_push(&disk_control_ext_info.image_paths, devicename);
 
-            /* Label is name+index */
+            /* Label is name+index. Build the suffix in a small fixed
+             * buffer first, then concatenate via strlcpy/strlcat so
+             * gcc can see no truncation is possible into image_label. */
             extract_basename(image_name, devicename, sizeof(image_name));
-            snprintf(image_label, sizeof(image_label), "%s #%u", image_name, i + 1);
+            snprintf(idx_suffix, sizeof(idx_suffix), " #%u", i + 1);
+            strlcpy(image_label, image_name, sizeof(image_label));
+            strlcat(image_label, idx_suffix, sizeof(image_label));
             sv_push(&disk_control_ext_info.image_labels, image_label);
          }
       }
