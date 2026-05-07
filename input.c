@@ -888,23 +888,23 @@ void input_update(bool libretro_supports_bitmasks, retro_input_state_t input_sta
                   float r = analog_radius(analog_right_x, analog_right_y);
 
                   /* We recalibrate when we find a new max value for the sticks */
-                  if ( l > analog_calibration->left )
+                  if ( l > calibration->left )
                   {
-                     analog_calibration->left = l;
+                     calibration->left = l;
                      log_cb(RETRO_LOG_DEBUG, "Recalibrating left stick, radius: %f\n", l);
                   }
 
-                  if ( r > analog_calibration->right )
+                  if ( r > calibration->right )
                   {
-                     analog_calibration->right = r;
+                     calibration->right = r;
                      log_cb(RETRO_LOG_DEBUG, "Recalibrating right stick, radius: %f\n", r);
                   }
 
                   /*  Now compute the scaling factor to apply to convert the */
                   /*  emulator's controller coordinates to a native DualShock's */
                   /*  ones */
-                  l_scaling = dualshock_analog_radius / analog_calibration->left;
-                  r_scaling = dualshock_analog_radius / analog_calibration->right;
+                  l_scaling = dualshock_analog_radius / calibration->left;
+                  r_scaling = dualshock_analog_radius / calibration->right;
 
                   l_left = analog_clamp_scale(l_left, l_scaling);
                   l_right = analog_clamp_scale(l_right, l_scaling);
@@ -921,8 +921,8 @@ void input_update(bool libretro_supports_bitmasks, retro_input_state_t input_sta
                   /*  Reset the calibration. Since we only increase the */
                   /*  calibration coordinates we can start with a reasonably */
                   /*  small value. */
-                  analog_calibration->left = 0.7;
-                  analog_calibration->right = 0.7;
+                  calibration->left = 0.7;
+                  calibration->right = 0.7;
                }
 
                p_input->u32[1] = r_right;
@@ -962,7 +962,7 @@ void input_update(bool libretro_supports_bitmasks, retro_input_state_t input_sta
 
             /*  Twist */
             {
-               struct analog_calibration *calibration;
+               struct analog_calibration *calibration = &analog_calibration[ iplayer ];
                float analog_left_x_amplitude;
                uint32_t twist_left, twist_right;
                int analog_left_x = input_state_cb( iplayer, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT,
@@ -985,7 +985,6 @@ void input_update(bool libretro_supports_bitmasks, retro_input_state_t input_sta
                /*  unplayable). Someone, however, must have thought it was a */
                /*  good idea at some point, so we'll leave the basic functionality */
                /*  in place... */
-               calibration = &analog_calibration[ iplayer ];
                if ( enable_analog_calibration )
                {
                   /* NOTE: This value was copied from the DualShock code. Needs confirmation. */
@@ -994,16 +993,16 @@ void input_update(bool libretro_supports_bitmasks, retro_input_state_t input_sta
                   float twist = fabsf(analog_left_x_amplitude);
                   float twist_scaling;
                   /* We recalibrate when we find a new max value for the sticks */
-                  if ( twist > analog_calibration->twist )
+                  if ( twist > calibration->twist )
                   {
-                     analog_calibration->twist = twist;
+                     calibration->twist = twist;
                      log_cb(RETRO_LOG_DEBUG, "Recalibrating twist, deflection: %f\n", twist);
                   }
 
 
                   /* Now compute the scaling factor to apply to convert the
                    * emulator's controller coordinates to a native neGcon range. */
-                  twist_scaling = neGcon_analog_deflection / analog_calibration->twist;
+                  twist_scaling = neGcon_analog_deflection / calibration->twist;
 
                   analog_left_x_amplitude = analog_left_x_amplitude * twist_scaling;
                }
@@ -1012,7 +1011,7 @@ void input_update(bool libretro_supports_bitmasks, retro_input_state_t input_sta
                   /*  Reset the calibration. Since we only increase the */
                   /*  calibration coordinates we can start with a reasonably */
                   /*  small value. */
-                  analog_calibration->twist = 0.7;
+                  calibration->twist = 0.7;
                }
 
                /*  Safety check */

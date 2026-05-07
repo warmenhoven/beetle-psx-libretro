@@ -1048,8 +1048,17 @@ int32_t FrontIO_Update(FrontIO *self_, int32_t timestamp)
                }
             }
 
-            rxd = (self->Ports[0])->vt->Clock((self->Ports[0]), txd, &self->dsr_pulse_delay[0]) & (self->Ports[1])->vt->Clock((self->Ports[1]), txd, &self->dsr_pulse_delay[1]) &
-               (self->MCPorts[0])->vt->Clock((self->MCPorts[0]), txd, &self->dsr_pulse_delay[2]) & (self->MCPorts[1])->vt->Clock((self->MCPorts[1]), txd, &self->dsr_pulse_delay[3]);
+            /* Clock all four ports unconditionally - each Clock() may
+             * mutate dsr_pulse_delay[i] via its int32_t* arg, so we
+             * cannot let && short-circuit. Bind each to a local first,
+             * then AND. */
+            {
+               bool rxd_p0  = (self->Ports[0])->vt->Clock((self->Ports[0]),     txd, &self->dsr_pulse_delay[0]);
+               bool rxd_p1  = (self->Ports[1])->vt->Clock((self->Ports[1]),     txd, &self->dsr_pulse_delay[1]);
+               bool rxd_mc0 = (self->MCPorts[0])->vt->Clock((self->MCPorts[0]), txd, &self->dsr_pulse_delay[2]);
+               bool rxd_mc1 = (self->MCPorts[1])->vt->Clock((self->MCPorts[1]), txd, &self->dsr_pulse_delay[3]);
+               rxd = rxd_p0 && rxd_p1 && rxd_mc0 && rxd_mc1;
+            }
 
             if(self->ReceiveInProgress)
             {

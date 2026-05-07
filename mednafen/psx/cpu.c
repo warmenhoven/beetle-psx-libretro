@@ -19,7 +19,9 @@
 ** 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC optimize ("unroll-loops")
+#endif
 
 #include <stdlib.h>
 #include <string.h>

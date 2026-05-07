@@ -186,7 +186,6 @@ static bool CDAccess_CCD_CheckSubQSanity(struct CDAccess_CCD *self)
     * case for some bad rips floating around on the Internet.
     * Allowing them through would cause emulation problems. */
    size_t   s;
-   size_t   checksum_pass_counter = 0;
    int      prev_lba   = INT_MAX;
    uint8_t  prev_track = 0;
 
@@ -254,7 +253,6 @@ static bool CDAccess_CCD_CheckSubQSanity(struct CDAccess_CCD *self)
          }
 
          prev_track = track;
-         checksum_pass_counter++;
       }
    }
 
