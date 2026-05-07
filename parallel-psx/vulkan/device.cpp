@@ -28,27 +28,12 @@
 #include <algorithm>
 #include <string.h>
 
-#ifdef GRANITE_VULKAN_MT
-#include "thread_group.hpp"
-#define LOCK() std::lock_guard<std::mutex> holder__{lock.lock}
-#define DRAIN_FRAME_LOCK() \
-	std::unique_lock<std::mutex> holder__{lock.lock}; \
-	lock.cond.wait(holder__, [&]() { \
-		return lock.counter == 0; \
-	})
-
-static inline unsigned get_current_thread_index()
-{
-	return Granite::ThreadGroup::get_current_thread_index();
-}
-#else
 #define LOCK() ((void)0)
 #define DRAIN_FRAME_LOCK() VK_ASSERT(lock.counter == 0)
 static inline unsigned get_current_thread_index()
 {
 	return 0;
 }
-#endif
 
 using namespace std;
 using namespace Util;
@@ -59,9 +44,6 @@ Device::Device()
     : framebuffer_allocator(this)
     , transient_allocator(this)
 {
-#ifdef GRANITE_VULKAN_MT
-	cookie.store(0);
-#endif
 }
 
 Semaphore Device::request_semaphore()
@@ -558,13 +540,10 @@ void Device::set_context(const Context &context)
 	managers.memory.set_supports_dedicated_allocation(ext.supports_dedicated);
 	managers.semaphore.init(device);
 	managers.fence.init(device);
-	managers.vbo.init(this, 4 * 1024, 16, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-	                  ImplementationQuirks::get().staging_need_device_local);
-	managers.ibo.init(this, 4 * 1024, 16, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-	                  ImplementationQuirks::get().staging_need_device_local);
+	managers.vbo.init(this, 4 * 1024, 16, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, false);
+	managers.ibo.init(this, 4 * 1024, 16, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, false);
 	managers.ubo.init(this, 256 * 1024, std::max<VkDeviceSize>(16u, gpu_props.limits.minUniformBufferOffsetAlignment),
-	                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	                  ImplementationQuirks::get().staging_need_device_local);
+	                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, false);
 	managers.staging.init(this, 64 * 1024, std::max<VkDeviceSize>(16u, gpu_props.limits.optimalBufferCopyOffsetAlignment),
 	                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 	                      false);
@@ -847,8 +826,6 @@ void Device::submit_empty_inner(CommandBuffer::Type type, VkFence *fence,
 		LOGI("Signalling Fence: %llx\n", reinterpret_cast<unsigned long long>(cleared_fence));
 #endif
 	VkResult result = vkQueueSubmit(queue, 1, &submit, cleared_fence);
-	if (ImplementationQuirks::get().queue_wait_on_submission)
-		vkQueueWaitIdle(queue);
 
 	if (result != VK_SUCCESS)
 		LOGE("vkQueueSubmit failed (code: %d).\n", int(result));
@@ -1136,8 +1113,6 @@ void Device::submit_queue(CommandBuffer::Type type, VkFence *fence,
 		LOGI("Signalling fence: %llx\n", reinterpret_cast<unsigned long long>(cleared_fence));
 #endif
 	VkResult result = vkQueueSubmit(queue, submits.size(), submits.data(), cleared_fence);
-	if (ImplementationQuirks::get().queue_wait_on_submission)
-		vkQueueWaitIdle(queue);
 	if (result != VK_SUCCESS)
 		LOGE("vkQueueSubmit failed (code: %d).\n", int(result));
 	submissions.clear();
@@ -1348,9 +1323,7 @@ CommandBufferHandle Device::request_command_buffer_for_thread(unsigned thread_in
 
 CommandBufferHandle Device::request_command_buffer_nolock(unsigned thread_index, CommandBuffer::Type type)
 {
-#ifndef GRANITE_VULKAN_MT
 	VK_ASSERT(thread_index == 0);
-#endif
 	auto cmd = get_command_pool(type, thread_index).request_command_buffer();
 
 	VkCommandBufferBeginInfo info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -1438,9 +1411,6 @@ bool Device::swapchain_touched() const
 
 Device::~Device()
 {
-#ifdef GRANITE_VULKAN_MT
-	Granite::Global::thread_group()->wait_idle();
-#endif
 	wait_idle();
 
 	wsi.acquire.reset();
@@ -1543,18 +1513,9 @@ Device::PerFrame::PerFrame(Device *device)
     , managers(device->managers)
     , query_pool(device)
 {
-#ifdef GRANITE_VULKAN_MT
-	unsigned count = Granite::Global::thread_group()->get_num_threads() + 1;
-#else
-	unsigned count = 1;
-#endif
-
-	for (unsigned i = 0; i < count; i++)
-	{
-		graphics_cmd_pool.emplace_back(device->get_device(), device->graphics_queue_family_index);
-		compute_cmd_pool.emplace_back(device->get_device(), device->compute_queue_family_index);
-		transfer_cmd_pool.emplace_back(device->get_device(), device->transfer_queue_family_index);
-	}
+	graphics_cmd_pool.emplace_back(device->get_device(), device->graphics_queue_family_index);
+	compute_cmd_pool.emplace_back(device->get_device(), device->compute_queue_family_index);
+	transfer_cmd_pool.emplace_back(device->get_device(), device->transfer_queue_family_index);
 }
 
 void Device::keep_handle_alive(ImageHandle handle)
@@ -1803,9 +1764,6 @@ void Device::decrement_frame_counter_nolock()
 {
 	VK_ASSERT(lock.counter > 0);
 	lock.counter--;
-#ifdef GRANITE_VULKAN_MT
-	lock.cond.notify_one();
-#endif
 }
 
 void Device::PerFrame::begin()
@@ -3096,12 +3054,8 @@ VkFormat Device::get_default_depth_format() const
 uint64_t Device::allocate_cookie()
 {
 	// Reserve lower bits for "special purposes".
-#ifdef GRANITE_VULKAN_MT
-	return cookie.fetch_add(16, memory_order_relaxed) + 16;
-#else
 	cookie += 16;
 	return cookie;
-#endif
 }
 
 const RenderPass &Device::request_render_pass(const RenderPassInfo &info, bool compatible)

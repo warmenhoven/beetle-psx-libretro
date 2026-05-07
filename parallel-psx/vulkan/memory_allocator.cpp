@@ -25,11 +25,7 @@
 
 using namespace std;
 
-#ifdef GRANITE_VULKAN_MT
-#define ALLOCATOR_LOCK() std::lock_guard<std::mutex> holder__{lock}
-#else
 #define ALLOCATOR_LOCK()
-#endif
 
 namespace Vulkan
 {

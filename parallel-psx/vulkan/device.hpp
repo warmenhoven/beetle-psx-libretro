@@ -41,15 +41,6 @@
 #include <vector>
 #include <unordered_map>
 
-
-#ifdef GRANITE_VULKAN_MT
-#include <atomic>
-#include <mutex>
-#include <condition_variable>
-#include "thread_group.hpp"
-#endif
-
-
 #include "quirks.hpp"
 
 namespace Vulkan
@@ -259,11 +250,7 @@ private:
 	VkQueue compute_queue = VK_NULL_HANDLE;
 	VkQueue transfer_queue = VK_NULL_HANDLE;
 
-#ifdef GRANITE_VULKAN_MT
-	std::atomic<uint64_t> cookie;
-#else
 	uint64_t cookie = 0;
-#endif
 
 	uint64_t allocate_cookie();
 	void bake_program(Program &program);
@@ -303,10 +290,6 @@ private:
 
 	struct
 	{
-#ifdef GRANITE_VULKAN_MT
-		std::mutex lock;
-		std::condition_variable cond;
-#endif
 		unsigned counter = 0;
 	} lock;
 	void add_frame_counter();

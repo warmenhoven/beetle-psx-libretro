@@ -24,10 +24,6 @@
 #include "device.hpp"
 #include <vector>
 
-#ifdef GRANITE_VULKAN_MT
-#include "thread_group.hpp"
-#endif
-
 using namespace std;
 using namespace Util;
 
@@ -37,13 +33,7 @@ DescriptorSetAllocator::DescriptorSetAllocator(Hash hash, Device *device, const 
 	: IntrusiveHashMapEnabled<DescriptorSetAllocator>(hash)
 	, device(device)
 {
-#ifdef GRANITE_VULKAN_MT
-	unsigned count = Granite::Global::thread_group()->get_num_threads() + 1;
-#else
-	unsigned count = 1;
-#endif
-	for (unsigned i = 0; i < count; i++)
-		per_thread.emplace_back(new PerThread);
+	per_thread.emplace_back(new PerThread);
 
 	VkDescriptorSetLayoutCreateInfo info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 

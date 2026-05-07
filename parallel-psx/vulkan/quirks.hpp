@@ -24,18 +24,6 @@
 
 namespace Vulkan
 {
-struct ImplementationQuirks
-{
-	bool queue_wait_on_submission = false;
-	bool staging_need_device_local = false;
-
-	static ImplementationQuirks &get()
-	{
-		static ImplementationQuirks quirks;
-		return quirks;
-	}
-};
-
 struct ImplementationWorkarounds
 {
 	bool wsi_acquire_barrier_is_expensive = false;

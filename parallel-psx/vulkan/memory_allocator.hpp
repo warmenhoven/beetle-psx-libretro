@@ -33,10 +33,6 @@
 #include <stdint.h>
 #include <vector>
 
-#ifdef GRANITE_VULKAN_MT
-#include <mutex>
-#endif
-
 namespace Vulkan
 {
 static inline uint32_t log2_integer(uint32_t v)
@@ -240,9 +236,6 @@ private:
 	uint32_t sub_block_size_log2 = 0;
 	uint32_t tiling_mask = ~0u;
 	uint32_t memory_type = 0;
-#ifdef GRANITE_VULKAN_MT
-	std::mutex lock;
-#endif
 	DeviceAllocator *global_allocator = nullptr;
 
 	void set_global_allocator(DeviceAllocator *allocator)
@@ -335,9 +328,6 @@ private:
 	VkDevice device = VK_NULL_HANDLE;
 	VkPhysicalDeviceMemoryProperties mem_props;
 	VkDeviceSize atom_alignment = 1;
-#ifdef GRANITE_VULKAN_MT
-	std::mutex lock;
-#endif
 	bool use_dedicated = false;
 
 	struct Allocation
