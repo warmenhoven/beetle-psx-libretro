@@ -637,6 +637,8 @@ private:
 	void render_opaque_texture_primitives();
 	void render_semi_transparent_opaque_texture_primitives();
 	void render_semi_transparent_primitives();
+	void semi_transparent_set_state(const SemiTransparentState &state);
+	void dispatch_set_scaled_read_texture(bool scaled_read, bool textured);
 	void reset_queue();
 
 	float allocate_depth(Domain domain, const Rect &rect);
@@ -663,6 +665,7 @@ private:
 
 	void flush_resolves();
 	void flush_blits();
+	void flush_blit(const std::vector<BlitInfo> &infos, Vulkan::Program &program, bool scaled);
 	void reset_scissor_queue();
 	const ClearCandidate *find_clear_candidate(const Rect &rect) const;
 

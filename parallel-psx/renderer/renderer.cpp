@@ -59,7 +59,7 @@ Renderer::Renderer(Device &device, unsigned scaling_, unsigned msaa_, const Save
 		return;
 	}
 
-	auto info = ImageCreateInfo::render_target(FB_WIDTH, FB_HEIGHT, VK_FORMAT_R32_UINT);
+	ImageCreateInfo info = ImageCreateInfo::render_target(FB_WIDTH, FB_HEIGHT, VK_FORMAT_R32_UINT);
 	info.initial_layout = VK_IMAGE_LAYOUT_GENERAL;
 	info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
 	             VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -101,7 +101,7 @@ Renderer::Renderer(Device &device, unsigned scaling_, unsigned msaa_, const Save
 	scaled_framebuffer->set_layout(Layout::General);
 
 	{
-		auto view_info = scaled_framebuffer->get_view().get_create_info();
+		ImageViewCreateInfo view_info = scaled_framebuffer->get_view().get_create_info();
 		for (unsigned i = 0; i < info.levels; i++)
 		{
 			view_info.base_level = i;
@@ -174,7 +174,7 @@ Renderer::Renderer(Device &device, unsigned scaling_, unsigned msaa_, const Save
 		cmd->clear_image(*framebuffer, {});
 	cmd->full_barrier();
 
-	auto dither_info = ImageCreateInfo::immutable_2d_image(4, 4, VK_FORMAT_R8_UNORM);
+	ImageCreateInfo dither_info = ImageCreateInfo::immutable_2d_image(4, 4, VK_FORMAT_R8_UNORM);
 	// This lut is biased with 4 to be able to use UNORM easily.
 	static const uint8_t dither_lut_data[16] = { 0, 4, 1, 5, 6, 2, 7, 3, 1, 5, 0, 4, 7, 3, 6, 2 };
 
@@ -208,7 +208,7 @@ Renderer::SaveState Renderer::save_vram_state()
 	buffer_create_info.size = FB_WIDTH * FB_HEIGHT * sizeof(uint32_t);
 	buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-	auto buffer = device.create_buffer(buffer_create_info, nullptr);
+	BufferHandle buffer = device.create_buffer(buffer_create_info, nullptr);
 	atlas.read_transfer(Domain::Unscaled, { 0, 0, FB_WIDTH, FB_HEIGHT });
 	ensure_command_buffer();
 	cmd->copy_image_to_buffer(*buffer, *framebuffer, 0, { 0, 0, 0 }, { FB_WIDTH, FB_HEIGHT, 1 }, 0, 0,
@@ -376,14 +376,15 @@ void Renderer::set_draw_rect(const Rect &rect)
 	atlas.set_draw_rect(rect);
 	render_state.draw_rect = rect;
 
-	const auto nequal = [this](const VkRect2D &a, const Rect &b) {
-		return (a.offset.x != int(b.x * scaling)) || (a.offset.y != int(b.y * scaling)) ||
-		       (a.extent.width != b.width * scaling) || (a.extent.height != b.height * scaling);
-	};
-
-	if (nequal(queue.scissors.back(), rect))
+	const VkRect2D &last = queue.scissors.back();
+	const int scaled_x = int(rect.x * scaling);
+	const int scaled_y = int(rect.y * scaling);
+	const unsigned scaled_w = rect.width * scaling;
+	const unsigned scaled_h = rect.height * scaling;
+	if (last.offset.x != scaled_x || last.offset.y != scaled_y ||
+	    last.extent.width != scaled_w || last.extent.height != scaled_h)
 		queue.scissors.push_back(
-		    { { int(rect.x * scaling), int(rect.y * scaling) }, { rect.width * scaling, rect.height * scaling } });
+		    { { scaled_x, scaled_y }, { scaled_w, scaled_h } });
 }
 
 void Renderer::clear_rect(const Rect &rect, FBColor color)
@@ -436,7 +437,7 @@ void Renderer::copy_vram_to_cpu_synchronous(const Rect &rect, uint16_t *vram)
 	buffer_create_info.size = copy_rect.width * copy_rect.height * 4;
 	buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-	auto buffer = device.create_buffer(buffer_create_info, nullptr);
+	BufferHandle buffer = device.create_buffer(buffer_create_info, nullptr);
 	cmd->copy_image_to_buffer(*buffer, *framebuffer, 0, { int(copy_rect.x), int(copy_rect.y), 0 },
 	                          { copy_rect.width, copy_rect.height, 1 }, 0, 0,
 	                          { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 });
@@ -444,10 +445,10 @@ void Renderer::copy_vram_to_cpu_synchronous(const Rect &rect, uint16_t *vram)
 	cmd->barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
 	             VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_HOST_READ_BIT);
 
-	auto fence = flush_and_signal();
+	Vulkan::Fence fence = flush_and_signal();
 	fence->wait();
 
-	auto *mapped = static_cast<const uint32_t *>(device.map_host_buffer(*buffer, MEMORY_ACCESS_READ_BIT));
+	const uint32_t *mapped = static_cast<const uint32_t *>(device.map_host_buffer(*buffer, MEMORY_ACCESS_READ_BIT));
 
 	if (!wrap)
 	{
@@ -477,7 +478,7 @@ void Renderer::copy_vram_to_cpu_synchronous(const Rect &rect, uint16_t *vram)
 void Renderer::mipmap_framebuffer()
 {
 	// render_state.display_fb_rect = compute_vram_framebuffer_rect();
-	auto rect = render_state.display_fb_rect;
+	Rect rect = render_state.display_fb_rect;
 	if (rect.x + rect.width > FB_WIDTH)
 	{
 		rect.x = 0;
@@ -570,7 +571,7 @@ void Renderer::mipmap_framebuffer()
 void Renderer::ssaa_framebuffer()
 {
 	// render_state.display_fb_rect = compute_vram_framebuffer_rect();
-	auto &rect = render_state.display_fb_rect;
+	Rect &rect = render_state.display_fb_rect;
 	unsigned left = rect.x / BLOCK_WIDTH;
 	unsigned top = rect.y / BLOCK_HEIGHT;
 	unsigned right = (rect.x + rect.width + BLOCK_WIDTH - 1) / BLOCK_WIDTH;
@@ -763,7 +764,7 @@ ImageHandle Renderer::scanout_vram_to_texture(bool scaled)
 
 	unsigned render_scale = scaled ? scaling : 1;
 
-	auto info = ImageCreateInfo::render_target(
+	ImageCreateInfo info = ImageCreateInfo::render_target(
 			FB_WIDTH * render_scale,
 			FB_HEIGHT * render_scale,
 			VK_FORMAT_A1R5G5B5_UNORM_PACK16); // Default to 15bit color for now
@@ -844,7 +845,7 @@ ImageHandle Renderer::scanout_to_texture()
 		return last_scanout;
 
 	render_state.display_fb_rect = compute_vram_framebuffer_rect();
-	auto &rect = render_state.display_fb_rect;
+	Rect &rect = render_state.display_fb_rect;
 
 	if (rect.width == 0 || rect.height == 0 || !render_state.display_on)
 	{
@@ -853,7 +854,7 @@ ImageHandle Renderer::scanout_to_texture()
 
 		ensure_command_buffer();
 
-		auto info = ImageCreateInfo::render_target(64u, 64u, VK_FORMAT_R8G8B8A8_UNORM);
+		ImageCreateInfo info = ImageCreateInfo::render_target(64u, 64u, VK_FORMAT_R8G8B8A8_UNORM);
 
 		info.initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 		info.usage =
@@ -885,7 +886,7 @@ ImageHandle Renderer::scanout_to_texture()
 	bool bpp24 = render_state.scanout_mode == ScanoutMode::BGR24;
 	bool ssaa = render_state.scanout_filter == ScanoutFilter::SSAA && scaling != 1;
 
-	auto read_rect = rect;
+	Rect read_rect = rect;
 	if (rect.x + rect.width > FB_WIDTH)
 	{
 		read_rect.x = 0;
@@ -898,7 +899,7 @@ ImageHandle Renderer::scanout_to_texture()
 	}
 	if (bpp24)
 	{
-		auto tmp = read_rect;
+		Rect tmp = read_rect;
 		if (bpp24)
 		{
 			tmp.width = (tmp.width * 3 + 1) / 2;
@@ -949,9 +950,9 @@ ImageHandle Renderer::scanout_to_texture()
 
 	unsigned render_scale = scaled ? scaling : 1;
 
-	auto display_rect = compute_display_rect();
+	DisplayRect display_rect = compute_display_rect();
 
-	auto info = ImageCreateInfo::render_target(
+	ImageCreateInfo info = ImageCreateInfo::render_target(
 			display_rect.width * render_scale,
 			display_rect.height * render_scale,
 			render_state.scanout_mode == ScanoutMode::ABGR1555_Dither ? VK_FORMAT_A1R5G5B5_UNORM_PACK16 : VK_FORMAT_R8G8B8A8_UNORM);
@@ -976,7 +977,7 @@ ImageHandle Renderer::scanout_to_texture()
 	cmd->begin_render_pass(rp);
 	cmd->set_quad_state();
 
-	auto old_vp = cmd->get_viewport();
+	VkViewport old_vp = cmd->get_viewport();
 	VkViewport new_vp = {display_rect.x * (float) render_scale,
 	                     display_rect.y * (float) render_scale,
 	                     rect.width * (float) render_scale,
@@ -1035,7 +1036,7 @@ ImageHandle Renderer::scanout_to_texture()
 			float dither_scale;
 			int32_t dither_shift;
 		};
-		auto *dither = cmd->allocate_typed_constant_data<DitherData>(0, 3, 1);
+		DitherData *dither = cmd->allocate_typed_constant_data<DitherData>(0, 3, 1);
 		dither->range = 31.0f;
 		dither->inv_range = 1.0f / 31.0f;
 		dither->dither_scale = 1.0f;
@@ -1093,7 +1094,7 @@ ImageHandle Renderer::scanout_to_texture()
 
 void Renderer::scanout()
 {
-	auto image = scanout_to_texture();
+	ImageHandle image = scanout_to_texture();
 
 	ensure_command_buffer();
 	cmd->begin_render_pass(device.get_swapchain_render_pass(SwapchainRenderPass::ColorOnly));
@@ -1354,7 +1355,7 @@ void Renderer::build_attribs(BufferVertex *output, const Vertex *vertices, unsig
 		else
 		{
 			// If we have a masked texture window, assume this is the true rect we should use.
-			auto effective_rect = render_state.cached_window_rect;
+			Rect effective_rect = render_state.cached_window_rect;
 			atlas.set_texture_window(
 			    { effective_rect.x >> shift, effective_rect.y, effective_rect.width >> shift, effective_rect.height });
 			hd_texture_vram = {
@@ -1544,7 +1545,7 @@ void Renderer::build_line_quad(Vertex *output, const Vertex *input)
 		output[3].x = input[1].x + 1.0f;
 		output[3].y = input[1].y + 1.0f;
 
-		auto c = input[0].color;
+		uint32_t c = input[0].color;
 		output[0].w = 1.0f;
 		output[0].color = c;
 		output[1].w = 1.0f;
@@ -1663,7 +1664,7 @@ void Renderer::draw_triangle(const Vertex *vertices)
 	bool offset_uv = false;
 	build_attribs(vert, vertices, 3, hd_texture_index, filtering, scaled_read, shift, offset_uv);
 	const int scissor_index = queue.scissor_invariant ? -1 : int(queue.scissors.size() - 1);
-	auto *out = select_pipeline(1, scissor_index, hd_texture_index, filtering, scaled_read, shift, offset_uv);
+	std::vector<BufferVertex> *out = select_pipeline(1, scissor_index, hd_texture_index, filtering, scaled_read, shift, offset_uv);
 	if (out)
 	{
 		for (unsigned i = 0; i < 3; i++)
@@ -1712,7 +1713,7 @@ void Renderer::draw_quad(const Vertex *vertices)
 	bool offset_uv = false;
 	build_attribs(vert, vertices, 4, hd_texture_index, filtering, scaled_read, shift, offset_uv);
 	const int scissor_index = queue.scissor_invariant ? -1 : int(queue.scissors.size() - 1);
-	auto *out = select_pipeline(2, scissor_index, hd_texture_index, filtering, scaled_read, shift, offset_uv);
+	std::vector<BufferVertex> *out = select_pipeline(2, scissor_index, hd_texture_index, filtering, scaled_read, shift, offset_uv);
 
 	if (out)
 	{
@@ -1754,7 +1755,7 @@ void Renderer::draw_quad(const Vertex *vertices)
 void Renderer::clear_quad(const Rect &rect, FBColor color, bool candidate)
 {
 	last_scanout.reset();
-	auto old = atlas.set_texture_mode(TextureMode::None);
+	TextureMode old = atlas.set_texture_mode(TextureMode::None);
 	float z = allocate_depth(Domain::Unscaled, rect);
 	atlas.set_texture_mode(old);
 
@@ -1779,7 +1780,7 @@ void Renderer::clear_quad(const Rect &rect, FBColor color, bool candidate)
 const Renderer::ClearCandidate *Renderer::find_clear_candidate(const Rect &rect) const
 {
 	const ClearCandidate *ret = nullptr;
-	for (auto &c : queue.clear_candidates)
+	for (const ClearCandidate &c : queue.clear_candidates)
 	{
 		if (c.rect == rect)
 			ret = &c;
@@ -1811,7 +1812,7 @@ void Renderer::flush_render_pass(const Rect &rect)
 	info.subpasses = &subpass;
 	subpass.num_color_attachments = 1;
 
-	auto *clear_candidate = find_clear_candidate(rect);
+	const ClearCandidate *clear_candidate = find_clear_candidate(rect);
 
 	subpass.color_attachments[0] = 0;
 	if (render_pass_is_feedback)
@@ -1861,6 +1862,30 @@ void Renderer::flush_render_pass(const Rect &rect)
 	reset_queue();
 }
 
+void Renderer::dispatch_set_scaled_read_texture(bool scaled_read, bool textured)
+{
+	if (scaled_read)
+	{
+		if (msaa > 1)
+			cmd->set_texture(0, 0, scaled_framebuffer_msaa->get_view(), StockSampler::NearestClamp);
+		else
+			cmd->set_texture(0, 0, *scaled_views[0], StockSampler::NearestClamp);
+	}
+	else
+		cmd->set_texture(0, 0, framebuffer->get_view(), StockSampler::NearestClamp);
+	if (textured)
+	{
+		if (scaled_read)
+			cmd->set_program(*pipelines.textured_scaled);
+		else
+			cmd->set_program(*pipelines.textured_unscaled);
+	}
+	else
+	{
+		cmd->set_program(*pipelines.flat);
+	}
+}
+
 void Renderer::dispatch(const vector<BufferVertex> &vertices, vector<PrimitiveInfo> &scissors, bool textured)
 {
 	sort(begin(scissors), end(scissors), [](const PrimitiveInfo &a, const PrimitiveInfo &b) {
@@ -1880,7 +1905,7 @@ void Renderer::dispatch(const vector<BufferVertex> &vertices, vector<PrimitiveIn
 	});
 
 	// Render flat-shaded primitives.
-	auto *vert = static_cast<BufferVertex *>(
+	BufferVertex *vert = static_cast<BufferVertex *>(
 	    cmd->allocate_vertex_data(0, vertices.size() * sizeof(BufferVertex), sizeof(BufferVertex)));
 
 	int scissor = scissors.front().scissor_index;
@@ -1898,29 +1923,7 @@ void Renderer::dispatch(const vector<BufferVertex> &vertices, vector<PrimitiveIn
 	cmd->set_specialization_constant(SpecConstIndex_FilterMode, filtering ? primitive_filter_mode : FilterMode::NearestNeighbor);
 	cmd->set_specialization_constant(SpecConstIndex_Shift, shift);
 	cmd->set_specialization_constant(SpecConstIndex_OffsetUV, (int)offset_uv);
-	auto set_scaled_read_texture = [&] {
-		if (scaled_read)
-		{
-			if (msaa > 1)
-				cmd->set_texture(0, 0, scaled_framebuffer_msaa->get_view(), StockSampler::NearestClamp);
-			else
-				cmd->set_texture(0, 0, *scaled_views[0], StockSampler::NearestClamp);
-		}
-		else
-			cmd->set_texture(0, 0, framebuffer->get_view(), StockSampler::NearestClamp);
-		if (textured)
-		{
-			if (scaled_read)
-				cmd->set_program(*pipelines.textured_scaled);
-			else
-				cmd->set_program(*pipelines.textured_unscaled);
-		}
-		else
-		{
-			cmd->set_program(*pipelines.flat);
-		}
-	};
-	set_scaled_read_texture();
+	dispatch_set_scaled_read_texture(scaled_read, textured);
 	memcpy(vert, vertices.data() + 3 * scissors.front().triangle_index, 3 * sizeof(BufferVertex));
 	vert += 3;
 
@@ -1950,7 +1953,7 @@ void Renderer::dispatch(const vector<BufferVertex> &vertices, vector<PrimitiveIn
 			}
 			if (scissors[i].scaled_read != scaled_read) {
 				scaled_read = scissors[i].scaled_read;
-				set_scaled_read_texture();
+				dispatch_set_scaled_read_texture(scaled_read, textured);
 			}
 			if (scissors[i].shift != shift) {
 				shift = scissors[i].shift;
@@ -1973,8 +1976,8 @@ void Renderer::dispatch(const vector<BufferVertex> &vertices, vector<PrimitiveIn
 
 void Renderer::render_opaque_primitives()
 {
-	auto &vertices = queue.opaque;
-	auto &scissors = queue.opaque_scissor;
+	std::vector<BufferVertex> &vertices = queue.opaque;
+	std::vector<PrimitiveInfo> &scissors = queue.opaque_scissor;
 	if (vertices.empty())
 		return;
 
@@ -2030,174 +2033,13 @@ void Renderer::render_semi_transparent_primitives()
 	cmd->set_vertex_attrib(4, 0, VK_FORMAT_R16G16B16A16_SINT, offsetof(BufferVertex, u));
 	cmd->set_vertex_attrib(5, 0, VK_FORMAT_R16G16B16A16_UINT, offsetof(BufferVertex, min_u));
 
-	auto size = queue.semi_transparent.size() * sizeof(BufferVertex);
+	size_t size = queue.semi_transparent.size() * sizeof(BufferVertex);
 	void *verts = cmd->allocate_vertex_data(0, size, sizeof(BufferVertex));
 	memcpy(verts, queue.semi_transparent.data(), size);
 
-	auto last_state = queue.semi_transparent_state[0];
+	SemiTransparentState last_state = queue.semi_transparent_state[0];
 
-	const auto set_state = [&](const SemiTransparentState &state) {
-		if (state.scaled_read)
-		{
-			if (msaa > 1)
-				cmd->set_texture(0, 0, scaled_framebuffer_msaa->get_view(), StockSampler::NearestClamp);
-			else
-				cmd->set_texture(0, 0, *scaled_views[0], StockSampler::NearestClamp);
-		}
-		else
-			cmd->set_texture(0, 0, framebuffer->get_view(), StockSampler::NearestClamp);
-		hd_texture_uniforms(state.hd_texture_index);
-		cmd->set_specialization_constant(SpecConstIndex_FilterMode, state.filtering ? primitive_filter_mode : FilterMode::NearestNeighbor);
-		cmd->set_specialization_constant(SpecConstIndex_Scaling, scaling);
-		cmd->set_specialization_constant(SpecConstIndex_Shift, state.shift);
-		cmd->set_specialization_constant(SpecConstIndex_OffsetUV, (int)state.offset_uv);
-
-		if (state.scissor_index < 0)
-			cmd->set_scissor(queue.default_scissor);
-		else
-			cmd->set_scissor(queue.scissors[state.scissor_index]);
-
-		auto &textured = state.textured ? state.scaled_read ?
-			*pipelines.textured_scaled : *pipelines.textured_unscaled : *pipelines.flat;
-		auto &textured_masked = state.textured ? state.scaled_read ?
-			*pipelines.textured_masked_scaled : *pipelines.textured_masked_unscaled : *pipelines.flat_masked;
-
-		switch (state.semi_transparent)
-		{
-		case SemiTransparentMode::None:
-		{
-			// For opaque primitives which are just masked, we can make use of fixed function blending.
-			cmd->set_blend_enable(true);
-			cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::Opaque);
-			cmd->set_program(textured);
-			cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
-			cmd->set_blend_factors(VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
-			                       VK_BLEND_FACTOR_DST_ALPHA, VK_BLEND_FACTOR_DST_ALPHA);
-			break;
-		}
-		case SemiTransparentMode::Add:
-		{
-			if (state.masked)
-			{
-				cmd->set_specialization_constant(SpecConstIndex_BlendMode, BlendMode::BlendAdd);
-				cmd->set_program(textured_masked);
-				cmd->pixel_barrier();
-				cmd->set_input_attachments(0, 3);
-				cmd->set_blend_enable(false);
-				if (msaa > 1)
-				{
-					// Need to blend per-sample.
-					cmd->set_multisample_state(false, false, true);
-				}
-				cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
-				cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
-				                       VK_BLEND_FACTOR_ONE);
-			}
-			else
-			{
-				cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::SemiTrans);
-				cmd->set_program(textured);
-				cmd->set_blend_enable(true);
-				cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
-				cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
-				                       VK_BLEND_FACTOR_ZERO);
-			}
-			break;
-		}
-		case SemiTransparentMode::Average:
-		{
-			if (state.masked)
-			{
-				cmd->set_specialization_constant(SpecConstIndex_BlendMode, BlendMode::BlendAvg);
-				cmd->set_program(textured_masked);
-				cmd->set_input_attachments(0, 3);
-				cmd->pixel_barrier();
-				cmd->set_blend_enable(false);
-				if (msaa > 1)
-				{
-					// Need to blend per-sample.
-					cmd->set_multisample_state(false, false, true);
-				}
-				cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
-				cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
-				                       VK_BLEND_FACTOR_ONE);
-			}
-			else
-			{
-				static const float rgba[4] = { 0.5f, 0.5f, 0.5f, 0.5f };
-				cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::SemiTrans);
-				cmd->set_program(textured);
-				cmd->set_blend_enable(true);
-				cmd->set_blend_constants(rgba);
-				cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
-				cmd->set_blend_factors(VK_BLEND_FACTOR_CONSTANT_COLOR, VK_BLEND_FACTOR_ONE,
-				                       VK_BLEND_FACTOR_CONSTANT_ALPHA, VK_BLEND_FACTOR_ZERO);
-			}
-			break;
-		}
-		case SemiTransparentMode::Sub:
-		{
-			if (state.masked)
-			{
-				cmd->set_specialization_constant(SpecConstIndex_BlendMode, BlendMode::BlendSub);
-				cmd->set_program(textured_masked);
-				cmd->set_input_attachments(0, 3);
-				cmd->pixel_barrier();
-				cmd->set_blend_enable(false);
-				if (msaa > 1)
-				{
-					// Need to blend per-sample.
-					cmd->set_multisample_state(false, false, true);
-				}
-				cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
-				cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
-				                       VK_BLEND_FACTOR_ONE);
-			}
-			else
-			{
-				cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::SemiTrans);
-				cmd->set_program(textured);
-				cmd->set_blend_enable(true);
-				cmd->set_blend_op(VK_BLEND_OP_REVERSE_SUBTRACT, VK_BLEND_OP_ADD);
-				cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
-				                       VK_BLEND_FACTOR_ZERO);
-			}
-			break;
-		}
-		case SemiTransparentMode::AddQuarter:
-		{
-			if (state.masked)
-			{
-				cmd->set_specialization_constant(SpecConstIndex_BlendMode, BlendMode::BlendAddQuarter);
-				cmd->set_program(textured_masked);
-				cmd->set_input_attachments(0, 3);
-				cmd->pixel_barrier();
-				cmd->set_blend_enable(false);
-				if (msaa > 1)
-				{
-					// Need to blend per-sample.
-					cmd->set_multisample_state(false, false, true);
-				}
-				cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
-				cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
-				                       VK_BLEND_FACTOR_ONE);
-			}
-			else
-			{
-				static const float rgba[4] = { 0.25f, 0.25f, 0.25f, 1.0f };
-				cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::SemiTrans);
-				cmd->set_program(textured);
-				cmd->set_blend_enable(true);
-				cmd->set_blend_constants(rgba);
-				cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
-				cmd->set_blend_factors(VK_BLEND_FACTOR_CONSTANT_COLOR, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
-				                       VK_BLEND_FACTOR_ZERO);
-			}
-			break;
-		}
-		}
-	};
-	set_state(last_state);
+	semi_transparent_set_state(last_state);
 
 	// These pixels are blended, so we have to render them in-order.
 	// Batch up as long as we can.
@@ -2230,7 +2072,7 @@ void Renderer::render_semi_transparent_primitives()
 			last_draw_offset = i;
 
 			last_state = queue.semi_transparent_state[i];
-			set_state(last_state);
+			semi_transparent_set_state(last_state);
 		}
 	}
 
@@ -2245,8 +2087,8 @@ void Renderer::render_semi_transparent_primitives()
 
 void Renderer::render_semi_transparent_opaque_texture_primitives()
 {
-	auto &vertices = queue.semi_transparent_opaque;
-	auto &scissors = queue.semi_transparent_opaque_scissor;
+	std::vector<BufferVertex> &vertices = queue.semi_transparent_opaque;
+	std::vector<PrimitiveInfo> &scissors = queue.semi_transparent_opaque_scissor;
 	if (vertices.empty())
 		return;
 
@@ -2268,8 +2110,8 @@ void Renderer::render_semi_transparent_opaque_texture_primitives()
 
 void Renderer::render_opaque_texture_primitives()
 {
-	auto &vertices = queue.opaque_textured;
-	auto &scissors = queue.opaque_textured_scissor;
+	std::vector<BufferVertex> &vertices = queue.opaque_textured;
+	std::vector<PrimitiveInfo> &scissors = queue.opaque_textured_scissor;
 	if (vertices.empty())
 		return;
 
@@ -2292,50 +2134,51 @@ void Renderer::render_opaque_texture_primitives()
 void Renderer::flush_blits()
 {
 	ensure_command_buffer();
-	const auto blit = [&](const std::vector<BlitInfo> &infos, Program &program, bool scaled) {
-		if (infos.empty())
-			return;
-
-		cmd->set_program(program);
-
-		if (scaled)
-		{
-			if (msaa > 1)
-			{
-				cmd->set_storage_texture(0, 0, scaled_framebuffer_msaa->get_view());
-				cmd->set_texture(0, 1, scaled_framebuffer_msaa->get_view(), StockSampler::NearestClamp);
-			}
-			else
-			{
-				cmd->set_storage_texture(0, 0, *scaled_views[0]);
-				cmd->set_texture(0, 1, *scaled_views[0], StockSampler::NearestClamp);
-			}
-		}
-		else
-		{
-			cmd->set_storage_texture(0, 0, framebuffer->get_view());
-			cmd->set_texture(0, 1, framebuffer->get_view(), StockSampler::NearestClamp);
-		}
-
-		unsigned size = infos.size();
-		unsigned scale = scaled ? scaling : 1u;
-		for (unsigned i = 0; i < size; i += 512)
-		{
-			unsigned to_blit = min(size - i, 512u);
-			void *ptr = cmd->allocate_constant_data(1, 0, to_blit * sizeof(BlitInfo));
-			memcpy(ptr, infos.data() + i, to_blit * sizeof(BlitInfo));
-			cmd->dispatch(scale, scale, to_blit);
-		}
-	};
-
-	blit(queue.scaled_blits, *pipelines.blit_vram_scaled, true);
-	blit(queue.scaled_masked_blits, *pipelines.blit_vram_scaled_masked, true);
-	blit(queue.unscaled_blits, *pipelines.blit_vram_unscaled, false);
-	blit(queue.unscaled_masked_blits, *pipelines.blit_vram_unscaled_masked, false);
+	flush_blit(queue.scaled_blits, *pipelines.blit_vram_scaled, true);
+	flush_blit(queue.scaled_masked_blits, *pipelines.blit_vram_scaled_masked, true);
+	flush_blit(queue.unscaled_blits, *pipelines.blit_vram_unscaled, false);
+	flush_blit(queue.unscaled_masked_blits, *pipelines.blit_vram_unscaled_masked, false);
 	queue.scaled_blits.clear();
 	queue.scaled_masked_blits.clear();
 	queue.unscaled_blits.clear();
 	queue.unscaled_masked_blits.clear();
+}
+
+void Renderer::flush_blit(const std::vector<BlitInfo> &infos, Program &program, bool scaled)
+{
+	if (infos.empty())
+		return;
+
+	cmd->set_program(program);
+
+	if (scaled)
+	{
+		if (msaa > 1)
+		{
+			cmd->set_storage_texture(0, 0, scaled_framebuffer_msaa->get_view());
+			cmd->set_texture(0, 1, scaled_framebuffer_msaa->get_view(), StockSampler::NearestClamp);
+		}
+		else
+		{
+			cmd->set_storage_texture(0, 0, *scaled_views[0]);
+			cmd->set_texture(0, 1, *scaled_views[0], StockSampler::NearestClamp);
+		}
+	}
+	else
+	{
+		cmd->set_storage_texture(0, 0, framebuffer->get_view());
+		cmd->set_texture(0, 1, framebuffer->get_view(), StockSampler::NearestClamp);
+	}
+
+	unsigned size = infos.size();
+	unsigned scale = scaled ? scaling : 1u;
+	for (unsigned i = 0; i < size; i += 512)
+	{
+		unsigned to_blit = min(size - i, 512u);
+		void *ptr = cmd->allocate_constant_data(1, 0, to_blit * sizeof(BlitInfo));
+		memcpy(ptr, infos.data() + i, to_blit * sizeof(BlitInfo));
+		cmd->dispatch(scale, scale, to_blit);
+	}
 }
 
 void Renderer::blit_vram(const Rect &dst, const Rect &src)
@@ -2356,7 +2199,7 @@ void Renderer::blit_vram(const Rect &dst, const Rect &src)
 	);
 #endif
 	last_scanout.reset();
-	auto domain = atlas.blit_vram(dst, src);
+	Domain domain = atlas.blit_vram(dst, src);
 
 	if (texture_tracking_enabled) {
 		tracker.blit(dst, src);
@@ -2415,7 +2258,7 @@ void Renderer::blit_vram(const Rect &dst, const Rect &src)
 	{
 		if (domain == Domain::Scaled)
 		{
-			auto &q = render_state.mask_test ? queue.scaled_masked_blits : queue.scaled_blits;
+			std::vector<BlitInfo> &q = render_state.mask_test ? queue.scaled_masked_blits : queue.scaled_blits;
 			unsigned width = dst.width;
 			unsigned height = dst.height;
 			for (unsigned y = 0; y < height; y += BLOCK_HEIGHT)
@@ -2430,7 +2273,7 @@ void Renderer::blit_vram(const Rect &dst, const Rect &src)
 		}
 		else
 		{
-			auto &q = render_state.mask_test ? queue.unscaled_masked_blits : queue.unscaled_blits;
+			std::vector<BlitInfo> &q = render_state.mask_test ? queue.unscaled_masked_blits : queue.unscaled_blits;
 			unsigned width = dst.width;
 			unsigned height = dst.height;
 			for (unsigned y = 0; y < height; y += BLOCK_HEIGHT)
@@ -2477,15 +2320,15 @@ Vulkan::ImageHandle Renderer::upload_texture(std::vector<LoadedImage> &levels) {
 		initial.push_back({ levels[i].owned_data.data() });
 	}
 
-	auto image = device.create_image(info, initial.data());
+	ImageHandle image = device.create_image(info, initial.data());
 	return image;
 }
 Vulkan::ImageHandle Renderer::create_texture(int width, int height, int levels) {
-	auto info = ImageCreateInfo::immutable_2d_image(width, height, VK_FORMAT_R8G8B8A8_UNORM, false);
+	ImageCreateInfo info = ImageCreateInfo::immutable_2d_image(width, height, VK_FORMAT_R8G8B8A8_UNORM, false);
 	info.levels = levels;
 	info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	info.initial_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	auto image = device.create_image(info, nullptr);
+	ImageHandle image = device.create_image(info, nullptr);
 	return image;
 }
 Vulkan::CommandBufferHandle &Renderer::command_buffer_hack_fixme() {
@@ -2529,7 +2372,7 @@ BufferHandle Renderer::copy_cpu_to_vram(const Rect &rect)
 	buffer_create_info.domain = BufferDomain::Host;
 	buffer_create_info.size = size;
 	buffer_create_info.usage = VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
-	auto buffer = device.create_buffer(buffer_create_info, nullptr);
+	BufferHandle buffer = device.create_buffer(buffer_create_info, nullptr);
 
 	BufferViewCreateInfo view_info = {};
 	view_info.buffer = buffer.get();
@@ -2554,7 +2397,7 @@ BufferHandle Renderer::copy_cpu_to_vram(const Rect &rect)
 			view_info.offset = y * rect.width * sizeof(uint16_t);
 			view_info.range = y_size * rect.width * sizeof(uint16_t);
 			view_info.format = VK_FORMAT_R16_UINT;
-			auto view = device.create_buffer_view(view_info);
+			BufferViewHandle view = device.create_buffer_view(view_info);
 
 			Rect small_rect = { rect.x, rect.y + y, rect.width, y_size };
 
@@ -2569,7 +2412,7 @@ BufferHandle Renderer::copy_cpu_to_vram(const Rect &rect)
 		view_info.offset = 0;
 		view_info.range = size;
 		view_info.format = VK_FORMAT_R16_UINT;
-		auto view = device.create_buffer_view(view_info);
+		BufferViewHandle view = device.create_buffer_view(view_info);
 
 		cmd->set_buffer_view(0, 1, *view);
 
@@ -2591,7 +2434,7 @@ Renderer::~Renderer()
 void Renderer::reset_scissor_queue()
 {
 	queue.scissors.clear();
-	auto &rect = render_state.draw_rect;
+	Rect &rect = render_state.draw_rect;
 	queue.scissors.push_back(
 	    { { int(rect.x * scaling), int(rect.y * scaling) }, { rect.width * scaling, rect.height * scaling } });
 }
@@ -2615,6 +2458,169 @@ void Renderer::reset_queue()
 
 	if (texture_tracking_enabled) {
 		tracker.on_queues_reset();
+	}
+}
+
+void Renderer::semi_transparent_set_state(const SemiTransparentState &state)
+{
+	if (state.scaled_read)
+	{
+		if (msaa > 1)
+			cmd->set_texture(0, 0, scaled_framebuffer_msaa->get_view(), StockSampler::NearestClamp);
+		else
+			cmd->set_texture(0, 0, *scaled_views[0], StockSampler::NearestClamp);
+	}
+	else
+		cmd->set_texture(0, 0, framebuffer->get_view(), StockSampler::NearestClamp);
+	hd_texture_uniforms(state.hd_texture_index);
+	cmd->set_specialization_constant(SpecConstIndex_FilterMode, state.filtering ? primitive_filter_mode : FilterMode::NearestNeighbor);
+	cmd->set_specialization_constant(SpecConstIndex_Scaling, scaling);
+	cmd->set_specialization_constant(SpecConstIndex_Shift, state.shift);
+	cmd->set_specialization_constant(SpecConstIndex_OffsetUV, (int)state.offset_uv);
+
+	if (state.scissor_index < 0)
+		cmd->set_scissor(queue.default_scissor);
+	else
+		cmd->set_scissor(queue.scissors[state.scissor_index]);
+
+	Program &textured = state.textured ? state.scaled_read ?
+		*pipelines.textured_scaled : *pipelines.textured_unscaled : *pipelines.flat;
+	Program &textured_masked = state.textured ? state.scaled_read ?
+		*pipelines.textured_masked_scaled : *pipelines.textured_masked_unscaled : *pipelines.flat_masked;
+
+	switch (state.semi_transparent)
+	{
+	case SemiTransparentMode::None:
+	{
+		// For opaque primitives which are just masked, we can make use of fixed function blending.
+		cmd->set_blend_enable(true);
+		cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::Opaque);
+		cmd->set_program(textured);
+		cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+		cmd->set_blend_factors(VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+		                       VK_BLEND_FACTOR_DST_ALPHA, VK_BLEND_FACTOR_DST_ALPHA);
+		break;
+	}
+	case SemiTransparentMode::Add:
+	{
+		if (state.masked)
+		{
+			cmd->set_specialization_constant(SpecConstIndex_BlendMode, BlendMode::BlendAdd);
+			cmd->set_program(textured_masked);
+			cmd->pixel_barrier();
+			cmd->set_input_attachments(0, 3);
+			cmd->set_blend_enable(false);
+			if (msaa > 1)
+			{
+				// Need to blend per-sample.
+				cmd->set_multisample_state(false, false, true);
+			}
+			cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+			cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
+			                       VK_BLEND_FACTOR_ONE);
+		}
+		else
+		{
+			cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::SemiTrans);
+			cmd->set_program(textured);
+			cmd->set_blend_enable(true);
+			cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+			cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
+			                       VK_BLEND_FACTOR_ZERO);
+		}
+		break;
+	}
+	case SemiTransparentMode::Average:
+	{
+		if (state.masked)
+		{
+			cmd->set_specialization_constant(SpecConstIndex_BlendMode, BlendMode::BlendAvg);
+			cmd->set_program(textured_masked);
+			cmd->set_input_attachments(0, 3);
+			cmd->pixel_barrier();
+			cmd->set_blend_enable(false);
+			if (msaa > 1)
+			{
+				// Need to blend per-sample.
+				cmd->set_multisample_state(false, false, true);
+			}
+			cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+			cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
+			                       VK_BLEND_FACTOR_ONE);
+		}
+		else
+		{
+			static const float rgba[4] = { 0.5f, 0.5f, 0.5f, 0.5f };
+			cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::SemiTrans);
+			cmd->set_program(textured);
+			cmd->set_blend_enable(true);
+			cmd->set_blend_constants(rgba);
+			cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+			cmd->set_blend_factors(VK_BLEND_FACTOR_CONSTANT_COLOR, VK_BLEND_FACTOR_ONE,
+			                       VK_BLEND_FACTOR_CONSTANT_ALPHA, VK_BLEND_FACTOR_ZERO);
+		}
+		break;
+	}
+	case SemiTransparentMode::Sub:
+	{
+		if (state.masked)
+		{
+			cmd->set_specialization_constant(SpecConstIndex_BlendMode, BlendMode::BlendSub);
+			cmd->set_program(textured_masked);
+			cmd->set_input_attachments(0, 3);
+			cmd->pixel_barrier();
+			cmd->set_blend_enable(false);
+			if (msaa > 1)
+			{
+				// Need to blend per-sample.
+				cmd->set_multisample_state(false, false, true);
+			}
+			cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+			cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
+			                       VK_BLEND_FACTOR_ONE);
+		}
+		else
+		{
+			cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::SemiTrans);
+			cmd->set_program(textured);
+			cmd->set_blend_enable(true);
+			cmd->set_blend_op(VK_BLEND_OP_REVERSE_SUBTRACT, VK_BLEND_OP_ADD);
+			cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
+			                       VK_BLEND_FACTOR_ZERO);
+		}
+		break;
+	}
+	case SemiTransparentMode::AddQuarter:
+	{
+		if (state.masked)
+		{
+			cmd->set_specialization_constant(SpecConstIndex_BlendMode, BlendMode::BlendAddQuarter);
+			cmd->set_program(textured_masked);
+			cmd->set_input_attachments(0, 3);
+			cmd->pixel_barrier();
+			cmd->set_blend_enable(false);
+			if (msaa > 1)
+			{
+				// Need to blend per-sample.
+				cmd->set_multisample_state(false, false, true);
+			}
+			cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+			cmd->set_blend_factors(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
+			                       VK_BLEND_FACTOR_ONE);
+		}
+		else
+		{
+			static const float rgba[4] = { 0.25f, 0.25f, 0.25f, 1.0f };
+			cmd->set_specialization_constant(SpecConstIndex_TransMode, TransMode::SemiTrans);
+			cmd->set_program(textured);
+			cmd->set_blend_enable(true);
+			cmd->set_blend_constants(rgba);
+			cmd->set_blend_op(VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+			cmd->set_blend_factors(VK_BLEND_FACTOR_CONSTANT_COLOR, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE,
+			                       VK_BLEND_FACTOR_ZERO);
+		}
+		break;
+	}
 	}
 }
 }
