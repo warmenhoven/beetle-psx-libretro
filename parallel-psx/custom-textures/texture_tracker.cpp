@@ -1055,10 +1055,10 @@ SRect bounds(int left, int right, int top, int bottom) {
     return SRect(left, top, right - left, bottom - top);
 }
 
-void split(SRect original, SRect remove, std::vector<SRect> &results) {
+void split(SRect original, SRect remove, SRect *results, unsigned &count) {
     std::pair<SRect, bool> intersectionResult = intersect(original, remove);
     if (!intersectionResult.second) {
-        results.push_back(original);
+        results[count++] = original;
         return;
     }
 
@@ -1066,42 +1066,42 @@ void split(SRect original, SRect remove, std::vector<SRect> &results) {
 
     // Top rect
     if (intersection.top() > original.top()) {
-        results.push_back(bounds(
+        results[count++] = bounds(
             original.left(),
             original.right(),
             original.top(),
             intersection.top()
-        ));
+        );
     }
 
     // Bottom rect
     if (intersection.bottom() < original.bottom()) {
-        results.push_back(bounds(
+        results[count++] = bounds(
             original.left(),
             original.right(),
             intersection.bottom(),
             original.bottom()
-        ));
+        );
     }
 
     // Left rect
     if (intersection.left() > original.left()) {
-        results.push_back(bounds(
+        results[count++] = bounds(
             original.left(),
             intersection.left(),
             intersection.top(),
             intersection.bottom()
-        ));
+        );
     }
 
     // Right rect
     if (intersection.right() < original.right()) {
-        results.push_back(bounds(
+        results[count++] = bounds(
             intersection.right(),
             original.right(),
             intersection.top(),
             intersection.bottom()
-        ));
+        );
     }
 }
 
@@ -1178,23 +1178,23 @@ TextureRect* RectTracker::get_index(RectIndex index) {
 }
 
 void RectTracker::clear_rect(SRect &rect) {
-    std::vector<SRect> splits;
-    splits.reserve(4);
+    SRect splits[4];
+    unsigned splits_count = 0;
 
     std::vector<TextureRect> newTextures;
     for (EnduringTextureRect &eold : textures) {
         if (eold.alive) {
             TextureRect &old = eold.texture_rect;
 
-            splits.clear();
-            split(old.vram_rect, rect, splits);
-            if (splits.size() == 1 && splits[0] == old.vram_rect) {
+            splits_count = 0;
+            split(old.vram_rect, rect, splits, splits_count);
+            if (splits_count == 1 && splits[0] == old.vram_rect) {
                 // The rect didn't split, do nothing
             } else {
                 // The rect split, mark this texture as dead and push its splits to be added
                 eold.alive = false;
-                for (SRect &vr : splits) {
-                    newTextures.push_back(subTexture(old, vr));
+                for (unsigned i = 0; i < splits_count; i++) {
+                    newTextures.push_back(subTexture(old, splits[i]));
                 }
             }
         }
