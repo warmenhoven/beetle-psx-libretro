@@ -875,7 +875,7 @@ Framebuffer::Framebuffer(Device *device, const RenderPass &rp, const RenderPassI
 		width = min(width, info.color_attachments[i]->get_image().get_width(lod));
 		height = min(height, info.color_attachments[i]->get_image().get_height(lod));
 		views[num_views++] = info.color_attachments[i]->get_render_target_view(info.layer);
-		attachments.push_back(info.color_attachments[i]);
+		attachments[num_attachments++] = info.color_attachments[i];
 	}
 
 	if (info.depth_stencil)
@@ -884,7 +884,7 @@ Framebuffer::Framebuffer(Device *device, const RenderPass &rp, const RenderPassI
 		width = min(width, info.depth_stencil->get_image().get_width(lod));
 		height = min(height, info.depth_stencil->get_image().get_height(lod));
 		views[num_views++] = info.depth_stencil->get_render_target_view(info.layer);
-		attachments.push_back(info.depth_stencil);
+		attachments[num_attachments++] = info.depth_stencil;
 	}
 
 	VkFramebufferCreateInfo fb_info = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };

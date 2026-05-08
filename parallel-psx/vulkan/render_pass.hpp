@@ -185,7 +185,7 @@ public:
 
 	ImageView *get_attachment(unsigned index) const
 	{
-		assert(index < attachments.size());
+		assert(index < num_attachments);
 		return attachments[index];
 	}
 
@@ -212,7 +212,8 @@ private:
 	uint32_t width = 0;
 	uint32_t height = 0;
 
-	std::vector<ImageView *> attachments;
+	ImageView *attachments[VULKAN_NUM_ATTACHMENTS + 1] = {};
+	unsigned num_attachments = 0;
 };
 
 static const unsigned VULKAN_FRAMEBUFFER_RING_SIZE = 8;
