@@ -25,7 +25,6 @@
 #include <memory>
 #include <vector>
 
-using namespace std;
 using namespace Util;
 
 namespace Vulkan
@@ -38,7 +37,7 @@ DescriptorSetAllocator::DescriptorSetAllocator(Hash hash, Device *device, const 
 
 	VkDescriptorSetLayoutCreateInfo info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 
-	vector<VkDescriptorSetLayoutBinding> bindings;
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
 	for (unsigned i = 0; i < VULKAN_NUM_BINDINGS; i++)
 	{
 		uint32_t stages = stages_for_binds[i];
@@ -131,7 +130,7 @@ void DescriptorSetAllocator::begin_frame()
 		thr->should_begin = true;
 }
 
-pair<VkDescriptorSet, bool> DescriptorSetAllocator::find(unsigned thread_index, Hash hash)
+std::pair<VkDescriptorSet, bool> DescriptorSetAllocator::find(unsigned thread_index, Hash hash)
 {
 	PerThread &state = *per_thread[thread_index];
 	if (state.should_begin)
@@ -162,7 +161,8 @@ pair<VkDescriptorSet, bool> DescriptorSetAllocator::find(unsigned thread_index, 
 
 	VkDescriptorSet sets[VULKAN_NUM_SETS_PER_POOL];
 	VkDescriptorSetLayout layouts[VULKAN_NUM_SETS_PER_POOL];
-	fill(begin(layouts), end(layouts), set_layout);
+	for (unsigned i = 0; i < VULKAN_NUM_SETS_PER_POOL; i++)
+		layouts[i] = set_layout;
 
 	VkDescriptorSetAllocateInfo alloc = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 	alloc.descriptorPool = pool;
