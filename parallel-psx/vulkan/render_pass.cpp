@@ -93,48 +93,6 @@ static VkAttachmentReference *rp_find_depth_stencil(std::vector<VkSubpassDescrip
 		return nullptr;
 }
 
-void RenderPass::setup_subpasses(const VkRenderPassCreateInfo &create_info)
-{
-	const VkAttachmentDescription *attachments = create_info.pAttachments;
-
-	// Store the important subpass information for later.
-	for (uint32_t i = 0; i < create_info.subpassCount; i++)
-	{
-		const VkSubpassDescription &subpass = create_info.pSubpasses[i];
-
-		SubpassInfo subpass_info = {};
-		subpass_info.num_color_attachments = subpass.colorAttachmentCount;
-		subpass_info.num_input_attachments = subpass.inputAttachmentCount;
-		subpass_info.depth_stencil_attachment = *subpass.pDepthStencilAttachment;
-		memcpy(subpass_info.color_attachments, subpass.pColorAttachments,
-		       subpass.colorAttachmentCount * sizeof(*subpass.pColorAttachments));
-		memcpy(subpass_info.input_attachments, subpass.pInputAttachments,
-		       subpass.inputAttachmentCount * sizeof(*subpass.pInputAttachments));
-
-		unsigned samples = 0;
-		for (unsigned i = 0; i < subpass_info.num_color_attachments; i++)
-		{
-			if (subpass_info.color_attachments[i].attachment == VK_ATTACHMENT_UNUSED)
-				continue;
-
-			unsigned samp = attachments[subpass_info.color_attachments[i].attachment].samples;
-			VK_ASSERT(!samples || samp == samples);
-			samples = samp;
-		}
-
-		if (subpass_info.depth_stencil_attachment.attachment != VK_ATTACHMENT_UNUSED)
-		{
-			unsigned samp = attachments[subpass_info.depth_stencil_attachment.attachment].samples;
-			VK_ASSERT(!samples || samp == samples);
-			samples = samp;
-		}
-
-		VK_ASSERT(samples > 0);
-		subpass_info.samples = samples;
-		this->subpasses.push_back(subpass_info);
-	}
-}
-
 RenderPass::RenderPass(Hash hash, Device *device, const RenderPassInfo &info)
 	: IntrusiveHashMapEnabled<RenderPass>(hash)
 	, device(device)
@@ -750,7 +708,41 @@ RenderPass::RenderPass(Hash hash, Device *device, const RenderPassInfo &info)
 	}
 
 	// Store the important subpass information for later.
-	setup_subpasses(rp_info);
+	for (uint32_t subpass_idx = 0; subpass_idx < rp_info.subpassCount; subpass_idx++)
+	{
+		const VkSubpassDescription &subpass = rp_info.pSubpasses[subpass_idx];
+
+		SubpassInfo subpass_info = {};
+		subpass_info.num_color_attachments = subpass.colorAttachmentCount;
+		subpass_info.num_input_attachments = subpass.inputAttachmentCount;
+		subpass_info.depth_stencil_attachment = *subpass.pDepthStencilAttachment;
+		memcpy(subpass_info.color_attachments, subpass.pColorAttachments,
+		       subpass.colorAttachmentCount * sizeof(*subpass.pColorAttachments));
+		memcpy(subpass_info.input_attachments, subpass.pInputAttachments,
+		       subpass.inputAttachmentCount * sizeof(*subpass.pInputAttachments));
+
+		unsigned samples = 0;
+		for (unsigned i = 0; i < subpass_info.num_color_attachments; i++)
+		{
+			if (subpass_info.color_attachments[i].attachment == VK_ATTACHMENT_UNUSED)
+				continue;
+
+			unsigned samp = attachments[subpass_info.color_attachments[i].attachment].samples;
+			VK_ASSERT(!samples || samp == samples);
+			samples = samp;
+		}
+
+		if (subpass_info.depth_stencil_attachment.attachment != VK_ATTACHMENT_UNUSED)
+		{
+			unsigned samp = attachments[subpass_info.depth_stencil_attachment.attachment].samples;
+			VK_ASSERT(!samples || samp == samples);
+			samples = samp;
+		}
+
+		VK_ASSERT(samples > 0);
+		subpass_info.samples = samples;
+		this->subpasses.push_back(subpass_info);
+	}
 
 
 	// Fixup after, we want the underlying render pass to be generic.
