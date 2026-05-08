@@ -689,8 +689,14 @@ void TextureTracker::dump_texture(std::shared_ptr<TextureUpload> &upload, UsedMo
         return;
     }
 
-    std::vector<DumpedMode>::iterator it = std::find(upload->dumped_modes.begin(), upload->dumped_modes.end(), dump_mode);
-    if (it == upload->dumped_modes.end()) {
+    bool already_dumped = false;
+    for (const DumpedMode &d : upload->dumped_modes) {
+        if (d == dump_mode) {
+            already_dumped = true;
+            break;
+        }
+    }
+    if (!already_dumped) {
         upload->dumped_modes.push_back(dump_mode);
         if (dump_enabled) {
             TT_LOG_VERBOSE(RETRO_LOG_INFO, "Dumping %x\n", upload->hash);
