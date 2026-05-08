@@ -2,7 +2,6 @@
 #include "../renderer/renderer.hpp"
 #include "libretro.h"
 #include <fstream>
-#include <sstream>
 #include <algorithm>
 #include "libretro-common/include/retro_dirent.h"
 #include <assert.h>
@@ -48,9 +47,9 @@ std::string replacements_path() {
 }
 
 std::string replacement_filename_from_hash(uint32_t hash, uint32_t palette_hash) {
-    std::ostringstream oss;
-    oss << replacements_path() << std::hex << hash << "-" << palette_hash << ".png";
-    return oss.str();
+    char tail[32];
+    snprintf(tail, sizeof(tail), "%x-%x.png", (unsigned)hash, (unsigned)palette_hash);
+    return replacements_path() + tail;
 }
 
 inline uint8_t *loaded_pixel(LoadedImage &image, int x, int y) {
@@ -289,8 +288,12 @@ void TextureTracker::dump_image(TextureUpload &upload, UsedMode &mode) {
             return; // Early out
     }
 
-    std::ostringstream suffixs;
-    suffixs << dump_path() << std::hex << hash;
+    std::string path = dump_path();
+    {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%x", (unsigned)hash);
+        path += buf;
+    }
 
     uint16_t *palette = nullptr;
     if (mode.mode == TextureMode::Palette4bpp || mode.mode == TextureMode::Palette8bpp) {
@@ -298,14 +301,16 @@ void TextureTracker::dump_image(TextureUpload &upload, UsedMode &mode) {
         Palette p = get_palette(palette_rect);
         if (p.data != nullptr) {
             palette = p.data;
-            suffixs << "-" << std::hex << p.hash;
+            char buf[16];
+            snprintf(buf, sizeof(buf), "-%x", (unsigned)p.hash);
+            path += buf;
         }
     }
 
     if (palette != nullptr) {
         TT_LOG_VERBOSE(RETRO_LOG_INFO, "Dumping palette %i, %i.\n", mode.palette_offset_x, mode.palette_offset_y);
     } else if (mode.mode != TextureMode::ABGR1555) {
-        suffixs << "-missing";
+        path += "-missing";
         TT_LOG_VERBOSE(RETRO_LOG_INFO, "MISSING palette %i, %i.\n", mode.palette_offset_x, mode.palette_offset_y);
     }
 
@@ -353,8 +358,7 @@ void TextureTracker::dump_image(TextureUpload &upload, UsedMode &mode) {
         }
     }
 
-    suffixs << ".png";
-    std::string path = suffixs.str();
+    path += ".png";
 
     TT_LOG_VERBOSE(RETRO_LOG_INFO, "Dump info: mode=%i, w=%i, h=%i, len=%i, bytesLen=%i\n", mode.mode, upload.width, upload.height, upload.image.size(), bytes.size());
     TT_LOG_VERBOSE(RETRO_LOG_INFO, "Dumping to %s.\n", path.c_str());
