@@ -22,6 +22,7 @@
 
 #include "descriptor_set.hpp"
 #include "device.hpp"
+#include <memory>
 #include <vector>
 
 using namespace std;

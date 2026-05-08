@@ -25,6 +25,7 @@
 #include "type_to_string.hpp"
 #include "quirks.hpp"
 #include <algorithm>
+#include <memory>
 #include <string.h>
 
 #define LOCK() ((void)0)

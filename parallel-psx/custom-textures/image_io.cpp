@@ -1,4 +1,5 @@
 #include "image_io.hpp"
+#include <memory>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../stb/stb_image_write.h"

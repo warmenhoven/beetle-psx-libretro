@@ -3,6 +3,7 @@
 #include "libretro.h"
 #include <fstream>
 #include <algorithm>
+#include <memory>
 #include "libretro-common/include/retro_dirent.h"
 #include <assert.h>
 #include "dbg_input_callback.h"
