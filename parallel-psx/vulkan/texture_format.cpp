@@ -23,13 +23,12 @@
 #include "texture_format.hpp"
 #include "format.hpp"
 
-using namespace std;
-
 namespace Vulkan
 {
 uint32_t TextureFormatLayout::num_miplevels(uint32_t width, uint32_t height, uint32_t depth)
 {
-	uint32_t size = unsigned(max(max(width, height), depth));
+	uint32_t wh = width > height ? width : height;
+	uint32_t size = wh > depth ? wh : depth;
 	uint32_t levels = 0;
 	while (size)
 	{
@@ -345,9 +344,12 @@ void TextureFormatLayout::fill_mipinfo(uint32_t width, uint32_t height, uint32_t
 
 		offset += mip_size;
 
-		width = max((width >> 1u), 1u);
-		height = max((height >> 1u), 1u);
-		depth = max((depth >> 1u), 1u);
+		uint32_t next_w = width >> 1u;
+		uint32_t next_h = height >> 1u;
+		uint32_t next_d = depth >> 1u;
+		width = next_w > 1u ? next_w : 1u;
+		height = next_h > 1u ? next_h : 1u;
+		depth = next_d > 1u ? next_d : 1u;
 	}
 
 	required_size = offset;
