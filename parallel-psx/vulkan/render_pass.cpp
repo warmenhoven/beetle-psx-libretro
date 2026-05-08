@@ -118,16 +118,14 @@ void RenderPass::setup_subpasses(const VkRenderPassCreateInfo &create_info)
 				continue;
 
 			unsigned samp = attachments[subpass_info.color_attachments[i].attachment].samples;
-			if (samples && (samp != samples))
-				VK_ASSERT(samp == samples);
+			VK_ASSERT(!samples || samp == samples);
 			samples = samp;
 		}
 
 		if (subpass_info.depth_stencil_attachment.attachment != VK_ATTACHMENT_UNUSED)
 		{
 			unsigned samp = attachments[subpass_info.depth_stencil_attachment.attachment].samples;
-			if (samples && (samp != samples))
-				VK_ASSERT(samp == samples);
+			VK_ASSERT(!samples || samp == samples);
 			samples = samp;
 		}
 
