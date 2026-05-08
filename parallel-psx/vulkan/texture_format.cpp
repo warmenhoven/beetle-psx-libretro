@@ -22,7 +22,6 @@
 
 #include "texture_format.hpp"
 #include "format.hpp"
-#include <algorithm>
 
 using namespace std;
 

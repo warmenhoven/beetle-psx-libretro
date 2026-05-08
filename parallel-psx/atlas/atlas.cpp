@@ -1,6 +1,5 @@
 #include "atlas.hpp"
 #include "../renderer/renderer.hpp"
-#include <algorithm>
 #include <assert.h>
 
 using namespace std;
