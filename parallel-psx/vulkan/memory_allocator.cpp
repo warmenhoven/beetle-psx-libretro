@@ -21,7 +21,6 @@
  */
 
 #include "memory_allocator.hpp"
-#include <algorithm>
 
 using namespace std;
 
@@ -488,17 +487,25 @@ bool DeviceAllocator::allocate(uint32_t size, uint32_t memory_type, VkDeviceMemo
 	Heap &heap = heaps[mem_props.memoryTypes[memory_type].heapIndex];
 
 	// Naive searching is fine here as vkAllocate blocks are *huge* and we won't have many of them.
-	std::vector<Allocation>::iterator itr = find_if(begin(heap.blocks), end(heap.blocks),
-	                   [=](const Allocation &alloc) { return size == alloc.size && memory_type == alloc.type; });
+	size_t found_idx = heap.blocks.size();
+	for (size_t i = 0; i < heap.blocks.size(); i++)
+	{
+		if (heap.blocks[i].size == size && heap.blocks[i].type == memory_type)
+		{
+			found_idx = i;
+			break;
+		}
+	}
 
 	bool host_visible = (mem_props.memoryTypes[memory_type].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
 
 	// Found previously used block.
-	if (itr != end(heap.blocks))
+	if (found_idx < heap.blocks.size())
 	{
-		*memory = itr->memory;
-		*host_memory = itr->host_memory;
-		heap.blocks.erase(itr);
+		Allocation &block = heap.blocks[found_idx];
+		*memory = block.memory;
+		*host_memory = block.host_memory;
+		heap.blocks.erase(heap.blocks.begin() + found_idx);
 		return true;
 	}
 
