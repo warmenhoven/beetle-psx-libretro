@@ -31,7 +31,6 @@
 #endif
 
 #include "util.hpp"
-#include <memory>
 
 #define V_S(x) #x
 #define V_S_(x) V_S(x)
