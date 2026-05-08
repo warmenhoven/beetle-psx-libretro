@@ -26,6 +26,7 @@
 #include "hash.hpp"
 #include "object_pool.hpp"
 #include "util.hpp"
+#include <utility>
 #include <vector>
 #include <assert.h>
 
@@ -155,7 +156,9 @@ public:
 		{
 			if (values[masked] && get_hash(values[masked]) == hash)
 			{
-				std::swap(values[masked], value);
+				T *tmp = values[masked];
+				values[masked] = value;
+				value = tmp;
 				list.erase(value);
 				list.insert_front(values[masked]);
 				return value;
