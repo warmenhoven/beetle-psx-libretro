@@ -39,7 +39,6 @@
 #include "buffer_pool.hpp"
 #include <memory>
 #include <vector>
-#include <unordered_map>
 
 #include "quirks.hpp"
 
