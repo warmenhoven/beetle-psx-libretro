@@ -22,8 +22,6 @@
 
 #include "memory_allocator.hpp"
 
-using namespace std;
-
 #define ALLOCATOR_LOCK()
 
 namespace Vulkan
@@ -536,8 +534,8 @@ bool DeviceAllocator::allocate(uint32_t size, uint32_t memory_type, VkDeviceMemo
 	else
 	{
 		// Look through our heap and see if there are blocks of other types we can free.
-		std::vector<Allocation>::iterator itr = begin(heap.blocks);
-		while (res != VK_SUCCESS && itr != end(heap.blocks))
+		std::vector<Allocation>::iterator itr = heap.blocks.begin();
+		while (res != VK_SUCCESS && itr != heap.blocks.end())
 		{
 			if (itr->host_memory)
 				vkUnmapMemory(device, itr->memory);
@@ -547,7 +545,7 @@ bool DeviceAllocator::allocate(uint32_t size, uint32_t memory_type, VkDeviceMemo
 			++itr;
 		}
 
-		heap.blocks.erase(begin(heap.blocks), itr);
+		heap.blocks.erase(heap.blocks.begin(), itr);
 
 		if (res == VK_SUCCESS)
 		{
