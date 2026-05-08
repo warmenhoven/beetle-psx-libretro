@@ -63,7 +63,7 @@ using CommandBufferDirtyFlags = uint32_t;
 #define CULL_MODE_BITS 2
 #define FRONT_FACE_BITS 1
 union PipelineState {
-	struct
+	struct State
 	{
 		// Depth state.
 		unsigned depth_write : 1;

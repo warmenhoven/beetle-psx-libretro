@@ -30,6 +30,16 @@ using namespace Util;
 
 namespace Vulkan
 {
+static inline VkOffset3D cb_add_offset(const VkOffset3D &a, const VkOffset3D &b)
+{
+	return { a.x + b.x, a.y + b.y, a.z + b.z };
+}
+
+static inline bool cb_needs_blend_constant(VkBlendFactor factor)
+{
+	return factor == VK_BLEND_FACTOR_CONSTANT_COLOR || factor == VK_BLEND_FACTOR_CONSTANT_ALPHA;
+}
+
 CommandBuffer::CommandBuffer(Device *device, VkCommandBuffer cmd, VkPipelineCache cache, Type type)
     : device(device)
     , cmd(cmd)
@@ -107,7 +117,7 @@ void CommandBuffer::copy_image(const Image &dst, const Image &src)
 
 	for (uint32_t i = 0; i < levels; i++)
 	{
-		auto &region = regions[i];
+		VkImageCopy &region = regions[i];
 		region.extent.width = src.get_create_info().width;
 		region.extent.height = src.get_create_info().height;
 		region.extent.depth = src.get_create_info().depth;
@@ -170,7 +180,7 @@ void CommandBuffer::clear_image(const Image &image, const VkClearValue &value)
 	VK_ASSERT(!framebuffer);
 	VK_ASSERT(!actual_render_pass);
 
-	auto aspect = format_to_aspect_mask(image.get_format());
+	VkImageAspectFlags aspect = format_to_aspect_mask(image.get_format());
 	VkImageSubresourceRange range = {};
 	range.aspectMask = aspect;
 	range.baseArrayLayer = 0;
@@ -314,7 +324,7 @@ void CommandBuffer::barrier_prepare_generate_mipmap(const Image &image, VkImageL
                                                     VkPipelineStageFlags src_stage, VkAccessFlags src_access,
                                                     bool need_top_level_barrier)
 {
-	auto &create_info = image.get_create_info();
+	const ImageCreateInfo &create_info = image.get_create_info();
 	VkImageMemoryBarrier barriers[2] = {};
 	VK_ASSERT(create_info.levels > 1);
 	(void)create_info;
@@ -355,7 +365,7 @@ void CommandBuffer::barrier_prepare_generate_mipmap(const Image &image, VkImageL
 
 void CommandBuffer::generate_mipmap(const Image &image)
 {
-	auto &create_info = image.get_create_info();
+	const ImageCreateInfo &create_info = image.get_create_info();
 	VkOffset3D size = { int(create_info.width), int(create_info.height), int(create_info.depth) };
 	const VkOffset3D origin = { 0, 0, 0 };
 
@@ -395,18 +405,14 @@ void CommandBuffer::blit_image(const Image &dst, const Image &src,
                                unsigned dst_level, unsigned src_level, unsigned dst_base_layer, unsigned src_base_layer,
                                unsigned num_layers, VkFilter filter)
 {
-	const auto add_offset = [](const VkOffset3D &a, const VkOffset3D &b) -> VkOffset3D {
-		return { a.x + b.x, a.y + b.y, a.z + b.z };
-	};
-
 	// RADV workaround: blit one layer at a time.
 	for (unsigned i = 0; i < num_layers; i++)
 	{
 		const VkImageBlit blit = {
 				{ format_to_aspect_mask(src.get_create_info().format), src_level, src_base_layer + i, 1 },
-				{ src_offset,                                          add_offset(src_offset, src_extent) },
+				{ src_offset,                                          cb_add_offset(src_offset, src_extent) },
 				{ format_to_aspect_mask(dst.get_create_info().format), dst_level, dst_base_layer + i, 1 },
-				{ dst_offset,                                          add_offset(dst_offset, dst_extent) },
+				{ dst_offset,                                          cb_add_offset(dst_offset, dst_extent) },
 		};
 
 		vkCmdBlitImage(cmd,
@@ -458,8 +464,8 @@ void CommandBuffer::init_viewport_scissor(const RenderPassInfo &info, const Fram
 CommandBufferHandle CommandBuffer::request_secondary_command_buffer(Device &device, const RenderPassInfo &info,
                                                                     unsigned thread_index, unsigned subpass)
 {
-	auto *fb = &device.request_framebuffer(info);
-	auto cmd = device.request_secondary_command_buffer_for_thread(thread_index, fb, subpass);
+	const Framebuffer *fb = &device.request_framebuffer(info);
+	CommandBufferHandle cmd = device.request_secondary_command_buffer_for_thread(thread_index, fb, subpass);
 	cmd->begin_graphics();
 
 	cmd->framebuffer = fb;
@@ -478,7 +484,7 @@ CommandBufferHandle CommandBuffer::request_secondary_command_buffer(unsigned thr
 	VK_ASSERT(framebuffer);
 	VK_ASSERT(!is_secondary);
 
-	auto cmd = device->request_secondary_command_buffer_for_thread(thread_index, framebuffer, subpass);
+	CommandBufferHandle cmd = device->request_secondary_command_buffer_for_thread(thread_index, framebuffer, subpass);
 	cmd->begin_graphics();
 
 	cmd->framebuffer = framebuffer;
@@ -578,7 +584,7 @@ void CommandBuffer::end_render_pass()
 
 VkPipeline CommandBuffer::build_compute_pipeline(Hash hash)
 {
-	auto &shader = *current_program->get_shader(ShaderStage::Compute);
+	const Shader &shader = *current_program->get_shader(ShaderStage::Compute);
 	VkComputePipelineCreateInfo info = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
 	info.layout = current_program->get_pipeline_layout()->get_layout();
 	info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -594,7 +600,7 @@ VkPipeline CommandBuffer::build_compute_pipeline(Hash hash)
 
 	VkSpecializationInfo spec_info = {};
 	VkSpecializationMapEntry spec_entries[VULKAN_NUM_SPEC_CONSTANTS];
-	auto mask = current_layout->get_resource_layout().combined_spec_constant_mask &
+	uint32_t mask = current_layout->get_resource_layout().combined_spec_constant_mask &
 	            static_state.state.spec_constant_mask;
 
 	if (mask)
@@ -606,7 +612,7 @@ VkPipeline CommandBuffer::build_compute_pipeline(Hash hash)
 
 		FOR_EACH_BIT(mask, bit)
 		{
-			auto &entry = spec_entries[spec_info.mapEntryCount++];
+			VkSpecializationMapEntry &entry = spec_entries[spec_info.mapEntryCount++];
 			entry.offset = sizeof(uint32_t) * bit;
 			entry.size = sizeof(uint32_t);
 			entry.constantID = bit;
@@ -653,7 +659,7 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 	blend.pAttachments = blend_attachments;
 	for (unsigned i = 0; i < blend.attachmentCount; i++)
 	{
-		auto &att = blend_attachments[i];
+		VkPipelineColorBlendAttachmentState &att = blend_attachments[i];
 		att = {};
 
 		if (compatible_render_pass->get_color_attachment(current_subpass, i).attachment != VK_ATTACHMENT_UNUSED &&
@@ -703,7 +709,7 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 	uint32_t binding_mask = 0;
 	FOR_EACH_BIT(attr_mask, bit)
 	{
-		auto &attr = vi_attribs[vi.vertexAttributeDescriptionCount++];
+		VkVertexInputAttributeDescription &attr = vi_attribs[vi.vertexAttributeDescriptionCount++];
 		attr.location = bit;
 		attr.binding = attribs[bit].binding;
 		attr.format = attribs[bit].format;
@@ -715,7 +721,7 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 	vi.pVertexBindingDescriptions = vi_bindings;
 	FOR_EACH_BIT(binding_mask, bit)
 	{
-		auto &bind = vi_bindings[vi.vertexBindingDescriptionCount++];
+		VkVertexInputBindingDescription &bind = vi_bindings[vi.vertexBindingDescriptionCount++];
 		bind.binding = bit;
 		bind.inputRate = vbo.input_rates[bit];
 		bind.stride = vbo.strides[bit];
@@ -755,10 +761,10 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 
 	for (unsigned i = 0; i < static_cast<unsigned>(ShaderStage::Count); i++)
 	{
-		auto stage = static_cast<ShaderStage>(i);
+		ShaderStage stage = static_cast<ShaderStage>(i);
 		if (current_program->get_shader(stage))
 		{
-			auto &s = stages[num_stages++];
+			VkPipelineShaderStageCreateInfo &s = stages[num_stages++];
 			s = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 			s.module = current_program->get_shader(stage)->get_module();
 #ifdef GRANITE_SPIRV_DUMP
@@ -769,7 +775,7 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 			s.pName = "main";
 			s.stage = static_cast<VkShaderStageFlagBits>(1u << i);
 
-			auto mask = current_layout->get_resource_layout().spec_constant_mask[i] &
+			uint32_t mask = current_layout->get_resource_layout().spec_constant_mask[i] &
 			            static_state.state.spec_constant_mask;
 
 			if (mask)
@@ -781,7 +787,7 @@ VkPipeline CommandBuffer::build_graphics_pipeline(Hash hash)
 
 				FOR_EACH_BIT(mask, bit)
 				{
-					auto &entry = spec_entries[i][spec_info[i].mapEntryCount++];
+					VkSpecializationMapEntry &entry = spec_entries[i][spec_info[i].mapEntryCount++];
 					entry.offset = sizeof(uint32_t) * bit;
 					entry.size = sizeof(uint32_t);
 					entry.constantID = bit;
@@ -822,7 +828,7 @@ void CommandBuffer::flush_compute_pipeline()
 	h.u64(current_program->get_hash());
 
 	// Spec constants.
-	auto &layout = current_layout->get_resource_layout();
+	const CombinedResourceLayout &layout = current_layout->get_resource_layout();
 	uint32_t combined_spec_constant = layout.combined_spec_constant_mask;
 	combined_spec_constant &= static_state.state.spec_constant_mask;
 	h.u32(combined_spec_constant);
@@ -831,7 +837,7 @@ void CommandBuffer::flush_compute_pipeline()
 		h.u32(potential_static_state.spec_constants[bit]);
 		}
 
-	auto hash = h.get();
+	Hash hash = h.get();
 	current_pipeline = current_program->get_pipeline(hash);
 	if (current_pipeline == VK_NULL_HANDLE)
 		current_pipeline = build_compute_pipeline(hash);
@@ -841,7 +847,7 @@ void CommandBuffer::flush_graphics_pipeline()
 {
 	Hasher h;
 	active_vbos = 0;
-	auto &layout = current_layout->get_resource_layout();
+	const CombinedResourceLayout &layout = current_layout->get_resource_layout();
 	FOR_EACH_BIT(layout.attribute_mask, bit)
 	{
 		h.u32(bit);
@@ -864,13 +870,10 @@ void CommandBuffer::flush_graphics_pipeline()
 
 	if (static_state.state.blend_enable)
 	{
-		const auto needs_blend_constant = [](VkBlendFactor factor) {
-			return factor == VK_BLEND_FACTOR_CONSTANT_COLOR || factor == VK_BLEND_FACTOR_CONSTANT_ALPHA;
-		};
-		bool b0 = needs_blend_constant(static_cast<VkBlendFactor>(static_state.state.src_color_blend));
-		bool b1 = needs_blend_constant(static_cast<VkBlendFactor>(static_state.state.src_alpha_blend));
-		bool b2 = needs_blend_constant(static_cast<VkBlendFactor>(static_state.state.dst_color_blend));
-		bool b3 = needs_blend_constant(static_cast<VkBlendFactor>(static_state.state.dst_alpha_blend));
+		bool b0 = cb_needs_blend_constant(static_cast<VkBlendFactor>(static_state.state.src_color_blend));
+		bool b1 = cb_needs_blend_constant(static_cast<VkBlendFactor>(static_state.state.src_alpha_blend));
+		bool b2 = cb_needs_blend_constant(static_cast<VkBlendFactor>(static_state.state.dst_color_blend));
+		bool b3 = cb_needs_blend_constant(static_cast<VkBlendFactor>(static_state.state.dst_alpha_blend));
 		if (b0 || b1 || b2 || b3)
 			h.data(reinterpret_cast<uint32_t *>(potential_static_state.blend_constants),
 			       sizeof(potential_static_state.blend_constants));
@@ -885,7 +888,7 @@ void CommandBuffer::flush_graphics_pipeline()
 		h.u32(potential_static_state.spec_constants[bit]);
 		}
 
-	auto hash = h.get();
+	Hash hash = h.get();
 	current_pipeline = current_program->get_pipeline(hash);
 	if (current_pipeline == VK_NULL_HANDLE)
 		current_pipeline = build_graphics_pipeline(hash);
@@ -908,7 +911,7 @@ void CommandBuffer::flush_compute_state()
 
 	if (get_and_clear(COMMAND_BUFFER_DIRTY_PUSH_CONSTANTS_BIT))
 	{
-		auto &range = current_layout->get_resource_layout().push_constant_range;
+		const VkPushConstantRange &range = current_layout->get_resource_layout().push_constant_range;
 		if (range.stageFlags != 0)
 		{
 			VK_ASSERT(range.offset == 0);
@@ -941,7 +944,7 @@ void CommandBuffer::flush_render_state()
 
 	if (get_and_clear(COMMAND_BUFFER_DIRTY_PUSH_CONSTANTS_BIT))
 	{
-		auto &range = current_layout->get_resource_layout().push_constant_range;
+		const VkPushConstantRange &range = current_layout->get_resource_layout().push_constant_range;
 		if (range.stageFlags != 0)
 		{
 			VK_ASSERT(range.offset == 0);
@@ -984,7 +987,7 @@ void CommandBuffer::set_vertex_attrib(uint32_t attrib, uint32_t binding, VkForma
 	VK_ASSERT(attrib < VULKAN_NUM_VERTEX_ATTRIBS);
 	VK_ASSERT(framebuffer);
 
-	auto &attr = attribs[attrib];
+	VertexAttribState &attr = attribs[attrib];
 
 	if (attr.binding != binding || attr.format != format || attr.offset != offset)
 		set_dirty(COMMAND_BUFFER_DIRTY_STATIC_VERTEX_BIT);
@@ -1077,8 +1080,8 @@ void CommandBuffer::set_program(Program &program)
 	}
 	else if (program.get_pipeline_layout()->get_hash() != current_layout->get_hash())
 	{
-		auto &new_layout = program.get_pipeline_layout()->get_resource_layout();
-		auto &old_layout = current_layout->get_resource_layout();
+		const CombinedResourceLayout &new_layout = program.get_pipeline_layout()->get_resource_layout();
+		const CombinedResourceLayout &old_layout = current_layout->get_resource_layout();
 
 		// If the push constant layout changes, all descriptor sets
 		// are invalidated.
@@ -1090,7 +1093,7 @@ void CommandBuffer::set_program(Program &program)
 		else
 		{
 			// Find the first set whose descriptor set layout differs.
-			auto *new_pipe_layout = program.get_pipeline_layout();
+			PipelineLayout *new_pipe_layout = program.get_pipeline_layout();
 			for (unsigned set = 0; set < VULKAN_NUM_DESCRIPTOR_SETS; set++)
 			{
 				if (new_pipe_layout->get_allocator(set) != current_layout->get_allocator(set))
@@ -1107,7 +1110,7 @@ void CommandBuffer::set_program(Program &program)
 
 void *CommandBuffer::allocate_constant_data(unsigned set, unsigned binding, VkDeviceSize size)
 {
-	auto data = ubo_block.allocate(size);
+	BufferBlockAllocation data = ubo_block.allocate(size);
 	if (!data.host)
 	{
 		device->request_uniform_block(ubo_block, size);
@@ -1119,7 +1122,7 @@ void *CommandBuffer::allocate_constant_data(unsigned set, unsigned binding, VkDe
 
 void *CommandBuffer::allocate_index_data(VkDeviceSize size, VkIndexType index_type)
 {
-	auto data = ibo_block.allocate(size);
+	BufferBlockAllocation data = ibo_block.allocate(size);
 	if (!data.host)
 	{
 		device->request_index_block(ibo_block, size);
@@ -1131,7 +1134,7 @@ void *CommandBuffer::allocate_index_data(VkDeviceSize size, VkIndexType index_ty
 
 void *CommandBuffer::update_buffer(const Buffer &buffer, VkDeviceSize offset, VkDeviceSize size)
 {
-	auto data = staging_block.allocate(size);
+	BufferBlockAllocation data = staging_block.allocate(size);
 	if (!data.host)
 	{
 		device->request_staging_block(staging_block, size);
@@ -1145,7 +1148,7 @@ void *CommandBuffer::update_image(const Image &image, const VkOffset3D &offset, 
                                   uint32_t row_length, uint32_t image_height,
                                   const VkImageSubresourceLayers &subresource)
 {
-	auto &create_info = image.get_create_info();
+	const ImageCreateInfo &create_info = image.get_create_info();
 	uint32_t width = max(image.get_width() >> subresource.mipLevel, 1u);
 	uint32_t height = max(image.get_height() >> subresource.mipLevel, 1u);
 	uint32_t depth = max(image.get_depth() >> subresource.mipLevel, 1u);
@@ -1162,7 +1165,7 @@ void *CommandBuffer::update_image(const Image &image, const VkOffset3D &offset, 
 	VkDeviceSize size =
 	    TextureFormatLayout::format_block_size(create_info.format) * subresource.layerCount * depth * blocks_x * blocks_y;
 
-	auto data = staging_block.allocate(size);
+	BufferBlockAllocation data = staging_block.allocate(size);
 	if (!data.host)
 	{
 		device->request_staging_block(staging_block, size);
@@ -1185,7 +1188,7 @@ void *CommandBuffer::update_image(const Image &image, uint32_t row_length, uint3
 void *CommandBuffer::allocate_vertex_data(unsigned binding, VkDeviceSize size, VkDeviceSize stride,
                                           VkVertexInputRate step_rate)
 {
-	auto data = vbo_block.allocate(size);
+	BufferBlockAllocation data = vbo_block.allocate(size);
 	if (!data.host)
 	{
 		device->request_vertex_block(vbo_block, size);
@@ -1202,7 +1205,7 @@ void CommandBuffer::set_uniform_buffer(unsigned set, unsigned binding, const Buf
 	VK_ASSERT(set < VULKAN_NUM_DESCRIPTOR_SETS);
 	VK_ASSERT(binding < VULKAN_NUM_BINDINGS);
 	VK_ASSERT(buffer.get_create_info().usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-	auto &b = bindings.bindings[set][binding];
+	ResourceBinding &b = bindings.bindings[set][binding];
 
 	if (buffer.get_cookie() == bindings.cookies[set][binding] && b.buffer.offset == offset && b.buffer.range == range)
 		return;
@@ -1219,7 +1222,7 @@ void CommandBuffer::set_storage_buffer(unsigned set, unsigned binding, const Buf
 	VK_ASSERT(set < VULKAN_NUM_DESCRIPTOR_SETS);
 	VK_ASSERT(binding < VULKAN_NUM_BINDINGS);
 	VK_ASSERT(buffer.get_create_info().usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-	auto &b = bindings.bindings[set][binding];
+	ResourceBinding &b = bindings.bindings[set][binding];
 
 	if (buffer.get_cookie() == bindings.cookies[set][binding] && b.buffer.offset == offset && b.buffer.range == range)
 		return;
@@ -1247,7 +1250,7 @@ void CommandBuffer::set_sampler(unsigned set, unsigned binding, const Sampler &s
 	if (sampler.get_cookie() == bindings.secondary_cookies[set][binding])
 		return;
 
-	auto &b = bindings.bindings[set][binding];
+	ResourceBinding &b = bindings.bindings[set][binding];
 	b.image.fp.sampler = sampler.get_sampler();
 	b.image.integer.sampler = sampler.get_sampler();
 	dirty_sets |= 1u << set;
@@ -1261,7 +1264,7 @@ void CommandBuffer::set_buffer_view(unsigned set, unsigned binding, const Buffer
 	VK_ASSERT(view.get_buffer().get_create_info().usage & VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT);
 	if (view.get_cookie() == bindings.cookies[set][binding])
 		return;
-	auto &b = bindings.bindings[set][binding];
+	ResourceBinding &b = bindings.bindings[set][binding];
 	b.buffer_view = view.get_view();
 	bindings.cookies[set][binding] = view.get_cookie();
 	bindings.secondary_cookies[set][binding] = 0;
@@ -1275,7 +1278,7 @@ void CommandBuffer::set_input_attachments(unsigned set, unsigned start_binding)
 	unsigned num_input_attachments = actual_render_pass->get_num_input_attachments(current_subpass);
 	for (unsigned i = 0; i < num_input_attachments; i++)
 	{
-		auto &ref = actual_render_pass->get_input_attachment(current_subpass, i);
+		const VkAttachmentReference &ref = actual_render_pass->get_input_attachment(current_subpass, i);
 		if (ref.attachment == VK_ATTACHMENT_UNUSED)
 			continue;
 
@@ -1289,7 +1292,7 @@ void CommandBuffer::set_input_attachments(unsigned set, unsigned start_binding)
 			continue;
 		}
 
-		auto &b = bindings.bindings[set][start_binding + i];
+		ResourceBinding &b = bindings.bindings[set][start_binding + i];
 		b.image.fp.imageLayout = ref.layout;
 		b.image.integer.imageLayout = ref.layout;
 		b.image.fp.imageView = view->get_float_view();
@@ -1310,7 +1313,7 @@ void CommandBuffer::set_texture(unsigned set, unsigned binding,
 	if (cookie == bindings.cookies[set][binding] && bindings.bindings[set][binding].image.fp.imageLayout == layout)
 		return;
 
-	auto &b = bindings.bindings[set][binding];
+	ResourceBinding &b = bindings.bindings[set][binding];
 	b.image.fp.imageLayout = layout;
 	b.image.fp.imageView = float_view;
 	b.image.integer.imageLayout = layout;
@@ -1335,7 +1338,7 @@ enum CookieBits
 void CommandBuffer::set_unorm_texture(unsigned set, unsigned binding, const ImageView &view)
 {
 	VK_ASSERT(view.get_image().get_create_info().usage & VK_IMAGE_USAGE_SAMPLED_BIT);
-	auto unorm_view = view.get_unorm_view();
+	VkImageView unorm_view = view.get_unorm_view();
 	VK_ASSERT(unorm_view != VK_NULL_HANDLE);
 	set_texture(set, binding, unorm_view, unorm_view,
 	            view.get_image().get_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), view.get_cookie() | COOKIE_BIT_UNORM);
@@ -1344,7 +1347,7 @@ void CommandBuffer::set_unorm_texture(unsigned set, unsigned binding, const Imag
 void CommandBuffer::set_srgb_texture(unsigned set, unsigned binding, const ImageView &view)
 {
 	VK_ASSERT(view.get_image().get_create_info().usage & VK_IMAGE_USAGE_SAMPLED_BIT);
-	auto srgb_view = view.get_srgb_view();
+	VkImageView srgb_view = view.get_srgb_view();
 	VK_ASSERT(srgb_view != VK_NULL_HANDLE);
 	set_texture(set, binding, srgb_view, srgb_view,
 	            view.get_image().get_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL), view.get_cookie() | COOKIE_BIT_SRGB);
@@ -1361,13 +1364,13 @@ void CommandBuffer::set_texture(unsigned set, unsigned binding, const ImageView 
 	VK_ASSERT(set < VULKAN_NUM_DESCRIPTOR_SETS);
 	VK_ASSERT(binding < VULKAN_NUM_BINDINGS);
 	VK_ASSERT(view.get_image().get_create_info().usage & VK_IMAGE_USAGE_SAMPLED_BIT);
-	const auto &sampler = device->get_stock_sampler(stock);
+	const Sampler &sampler = device->get_stock_sampler(stock);
 	set_texture(set, binding, view, sampler);
 }
 
 void CommandBuffer::set_sampler(unsigned set, unsigned binding, StockSampler stock)
 {
-	const auto &sampler = device->get_stock_sampler(stock);
+	const Sampler &sampler = device->get_stock_sampler(stock);
 	set_sampler(set, binding, sampler);
 }
 
@@ -1380,8 +1383,8 @@ void CommandBuffer::set_storage_texture(unsigned set, unsigned binding, const Im
 
 void CommandBuffer::flush_descriptor_set(uint32_t set)
 {
-	auto &layout = current_layout->get_resource_layout();
-	auto &set_layout = layout.sets[set];
+	const CombinedResourceLayout &layout = current_layout->get_resource_layout();
+	const DescriptorSetLayout &set_layout = layout.sets[set];
 	uint32_t num_dynamic_offsets = 0;
 	uint32_t dynamic_offsets[VULKAN_NUM_BINDINGS];
 	Hasher h;
@@ -1459,7 +1462,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 		}
 
 	Hash hash = h.get();
-	auto allocated = current_layout->get_allocator(set)->find(thread_index, hash);
+	std::pair<VkDescriptorSet, bool> allocated = current_layout->get_allocator(set)->find(thread_index, hash);
 
 	// The descriptor set was not successfully cached, rebuild.
 	if (!allocated.second)
@@ -1471,7 +1474,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 		FOR_EACH_BIT(set_layout.uniform_buffer_mask, binding)
 		{
-			auto &write = writes[write_count++];
+			VkWriteDescriptorSet &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
 			write.descriptorCount = 1;
@@ -1481,7 +1484,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 			write.dstSet = allocated.first;
 
 			// Offsets are applied dynamically.
-			auto &buffer = buffer_info[buffer_info_count++];
+			VkDescriptorBufferInfo &buffer = buffer_info[buffer_info_count++];
 			buffer = bindings.bindings[set][binding].buffer;
 			buffer.offset = 0;
 			write.pBufferInfo = &buffer;
@@ -1489,7 +1492,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 		FOR_EACH_BIT(set_layout.storage_buffer_mask, binding)
 		{
-			auto &write = writes[write_count++];
+			VkWriteDescriptorSet &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
 			write.descriptorCount = 1;
@@ -1502,7 +1505,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 		FOR_EACH_BIT(set_layout.sampled_buffer_mask, binding)
 		{
-			auto &write = writes[write_count++];
+			VkWriteDescriptorSet &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
 			write.descriptorCount = 1;
@@ -1515,7 +1518,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 		FOR_EACH_BIT(set_layout.sampled_image_mask, binding)
 		{
-			auto &write = writes[write_count++];
+			VkWriteDescriptorSet &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
 			write.descriptorCount = 1;
@@ -1532,7 +1535,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 		FOR_EACH_BIT(set_layout.separate_image_mask, binding)
 		{
-			auto &write = writes[write_count++];
+			VkWriteDescriptorSet &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
 			write.descriptorCount = 1;
@@ -1549,7 +1552,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 		FOR_EACH_BIT(set_layout.sampler_mask & ~set_layout.immutable_sampler_mask, binding)
 		{
-			auto &write = writes[write_count++];
+			VkWriteDescriptorSet &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
 			write.descriptorCount = 1;
@@ -1562,7 +1565,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 		FOR_EACH_BIT(set_layout.storage_image_mask, binding)
 		{
-			auto &write = writes[write_count++];
+			VkWriteDescriptorSet &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
 			write.descriptorCount = 1;
@@ -1579,7 +1582,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 		FOR_EACH_BIT(set_layout.input_attachment_mask, binding)
 		{
-			auto &write = writes[write_count++];
+			VkWriteDescriptorSet &write = writes[write_count++];
 			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			write.pNext = nullptr;
 			write.descriptorCount = 1;
@@ -1602,7 +1605,7 @@ void CommandBuffer::flush_descriptor_set(uint32_t set)
 
 void CommandBuffer::flush_descriptor_sets()
 {
-	auto &layout = current_layout->get_resource_layout();
+	const CombinedResourceLayout &layout = current_layout->get_resource_layout();
 	uint32_t set_update = layout.descriptor_set_mask & dirty_sets;
 	FOR_EACH_BIT(set_update, set)
 	{ flush_descriptor_set(set); 	}
@@ -1663,7 +1666,7 @@ void CommandBuffer::dispatch(uint32_t groups_x, uint32_t groups_y, uint32_t grou
 
 void CommandBuffer::set_opaque_state()
 {
-	auto &state = static_state.state;
+	PipelineState::State &state = static_state.state;
 	memset(&state, 0, sizeof(state));
 	state.front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	state.cull_mode = VK_CULL_MODE_BACK_BIT;
@@ -1682,7 +1685,7 @@ void CommandBuffer::set_opaque_state()
 
 void CommandBuffer::set_quad_state()
 {
-	auto &state = static_state.state;
+	PipelineState::State &state = static_state.state;
 	memset(&state, 0, sizeof(state));
 	state.front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	state.cull_mode = VK_CULL_MODE_NONE;
@@ -1696,7 +1699,7 @@ void CommandBuffer::set_quad_state()
 
 void CommandBuffer::set_opaque_sprite_state()
 {
-	auto &state = static_state.state;
+	PipelineState::State &state = static_state.state;
 	memset(&state, 0, sizeof(state));
 	state.front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	state.cull_mode = VK_CULL_MODE_NONE;
@@ -1711,7 +1714,7 @@ void CommandBuffer::set_opaque_sprite_state()
 
 void CommandBuffer::set_transparent_sprite_state()
 {
-	auto &state = static_state.state;
+	PipelineState::State &state = static_state.state;
 	memset(&state, 0, sizeof(state));
 	state.front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	state.cull_mode = VK_CULL_MODE_NONE;
