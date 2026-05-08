@@ -23,8 +23,6 @@
 #include "query_pool.hpp"
 #include "device.hpp"
 
-using namespace std;
-
 namespace Vulkan
 {
 
@@ -85,7 +83,7 @@ void QueryPool::add_pool()
 	pool.query_results.resize(pool.size);
 	pool.cookies.resize(pool.size);
 
-	pools.push_back(move(pool));
+	pools.push_back(std::move(pool));
 }
 
 QueryPoolHandle QueryPool::write_timestamp(VkCommandBuffer cmd, VkPipelineStageFlagBits stage)
