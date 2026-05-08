@@ -43,24 +43,33 @@ CommandPool &CommandPool::operator=(CommandPool &&other) noexcept
 	if (this != &other)
 	{
 		device = other.device;
+
+		// Free our owned resources first.
 		if (!buffers.empty())
 			vkFreeCommandBuffers(device, pool, buffers.size(), buffers.data());
+		if (!secondary_buffers.empty())
+			vkFreeCommandBuffers(device, pool, secondary_buffers.size(), secondary_buffers.data());
 		if (pool != VK_NULL_HANDLE)
 			vkDestroyCommandPool(device, pool, nullptr);
 
-		pool = VK_NULL_HANDLE;
-		buffers.clear();
-		{
-			VkCommandPool tmp = pool;
-			pool = other.pool;
-			other.pool = tmp;
-		}
-		buffers.swap(other.buffers);
+		// Adopt other's resources.
+		pool = other.pool;
+		buffers = std::move(other.buffers);
+		secondary_buffers = std::move(other.secondary_buffers);
 		index = other.index;
-		other.index = 0;
+		secondary_index = other.secondary_index;
 #ifdef VULKAN_DEBUG
-		in_flight.clear();
-		in_flight.swap(other.in_flight);
+		in_flight = std::move(other.in_flight);
+#endif
+
+		// Leave other in a destructor-safe state (no double-free).
+		other.pool = VK_NULL_HANDLE;
+		other.index = 0;
+		other.secondary_index = 0;
+		other.buffers.clear();
+		other.secondary_buffers.clear();
+#ifdef VULKAN_DEBUG
+		other.in_flight.clear();
 #endif
 	}
 	return *this;
