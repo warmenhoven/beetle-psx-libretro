@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include <vector>
-#include <algorithm>
 
 namespace PSX
 {
@@ -69,30 +68,42 @@ struct Rect
 
 	inline bool intersects(const Rect &rect) const
 	{
-		unsigned xend = std::min(x + width, rect.x + rect.width);
-		unsigned xbegin = std::max(x, rect.x);
-		unsigned yend = std::min(y + height, rect.y + rect.height);
-		unsigned ybegin = std::max(y, rect.y);
+		unsigned x_end_self = x + width;
+		unsigned x_end_other = rect.x + rect.width;
+		unsigned y_end_self = y + height;
+		unsigned y_end_other = rect.y + rect.height;
+		unsigned xend = (x_end_self < x_end_other) ? x_end_self : x_end_other;
+		unsigned xbegin = (x > rect.x) ? x : rect.x;
+		unsigned yend = (y_end_self < y_end_other) ? y_end_self : y_end_other;
+		unsigned ybegin = (y > rect.y) ? y : rect.y;
 		return xbegin < xend && ybegin < yend;
 	}
 
 	inline Rect scissor(const Rect &rect) const
 	{
-		unsigned x0 = std::max(x, rect.x);
-		unsigned y0 = std::max(y, rect.y);
-		unsigned x1 = std::min(x + width, rect.x + rect.width);
-		unsigned y1 = std::min(y + height, rect.y + rect.height);
-		unsigned width = std::max(int(x1) - int(x0), 0);
-		unsigned height = std::max(int(y1) - int(y0), 0);
+		unsigned x_end_self = x + width;
+		unsigned x_end_other = rect.x + rect.width;
+		unsigned y_end_self = y + height;
+		unsigned y_end_other = rect.y + rect.height;
+		unsigned x0 = (x > rect.x) ? x : rect.x;
+		unsigned y0 = (y > rect.y) ? y : rect.y;
+		unsigned x1 = (x_end_self < x_end_other) ? x_end_self : x_end_other;
+		unsigned y1 = (y_end_self < y_end_other) ? y_end_self : y_end_other;
+		unsigned width = (x1 > x0) ? (x1 - x0) : 0u;
+		unsigned height = (y1 > y0) ? (y1 - y0) : 0u;
 		return { x0, y0, width, height };
 	}
 
 	inline void extend_bounding_box(const Rect &rect)
 	{
-		unsigned x0 = std::min(x, rect.x);
-		unsigned y0 = std::min(y, rect.y);
-		unsigned x1 = std::max(x + width, rect.x + rect.width);
-		unsigned y1 = std::max(y + height, rect.y + rect.height);
+		unsigned x_end_self = x + width;
+		unsigned x_end_other = rect.x + rect.width;
+		unsigned y_end_self = y + height;
+		unsigned y_end_other = rect.y + rect.height;
+		unsigned x0 = (x < rect.x) ? x : rect.x;
+		unsigned y0 = (y < rect.y) ? y : rect.y;
+		unsigned x1 = (x_end_self > x_end_other) ? x_end_self : x_end_other;
+		unsigned y1 = (y_end_self > y_end_other) ? y_end_self : y_end_other;
 		x = x0;
 		y = y0;
 		width = x1 - x0;
@@ -189,8 +200,9 @@ public:
 
 	TextureMode set_texture_mode(TextureMode mode)
 	{
-		std::swap(renderpass.texture_mode, mode);
-		return mode;
+		TextureMode old = renderpass.texture_mode;
+		renderpass.texture_mode = mode;
+		return old;
 	}
 
 	void set_texture_offset(unsigned x, unsigned y)
