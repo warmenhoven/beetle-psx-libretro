@@ -10,7 +10,7 @@ namespace PSX
 
 FBAtlas::FBAtlas()
 {
-	for (auto &f : fb_info)
+	for (StatusFlags &f : fb_info)
 		f = STATUS_FB_PREFER;
 }
 
@@ -48,7 +48,7 @@ bool FBAtlas::texture_rendered(const Rect &rect)
 
 Domain FBAtlas::blit_vram(const Rect &dst, const Rect &src)
 {
-	auto domain = find_suitable_domain(src);
+	Domain domain = find_suitable_domain(src);
 
 	sync_domain(domain, src);
 	sync_domain(domain, dst);
@@ -110,7 +110,7 @@ void FBAtlas::write_transfer(Domain domain, const Rect &rect)
 
 void FBAtlas::read_texture(Domain domain)
 {
-	auto shifted = renderpass.texture_window;
+	Rect shifted = renderpass.texture_window;
 	bool palette;
 	switch (renderpass.texture_mode)
 	{
@@ -126,7 +126,7 @@ void FBAtlas::read_texture(Domain domain)
 	shifted.x += renderpass.texture_offset_x;
 	shifted.y += renderpass.texture_offset_y;
 
-	//auto domain = palette ? Domain::Unscaled : find_suitable_domain(shifted);
+	//Domain domain = palette ? Domain::Unscaled : find_suitable_domain(shifted);
 	sync_domain(domain, shifted);
 
 	Rect palette_rect = { renderpass.palette_offset_x, renderpass.palette_offset_y,
@@ -322,7 +322,7 @@ void FBAtlas::sync_domain(Domain domain, const Rect &rect)
 	{
 		for (unsigned x = xbegin; x <= xend; x++)
 		{
-			auto &mask = info(x, y);
+			StatusFlags &mask = info(x, y);
 			// If our block isn't in the ownership class we want,
 			// we need to read from one block and write to the other.
 			// We might have to wait for writers on read,
@@ -341,7 +341,7 @@ void FBAtlas::sync_domain(Domain domain, const Rect &rect)
 	{
 		for (unsigned x = xbegin; x <= xend; x++)
 		{
-			auto &mask = info(x, y);
+			StatusFlags &mask = info(x, y);
 			if ((mask & STATUS_OWNERSHIP_MASK) == ownership)
 			{
 				mask &= ~STATUS_OWNERSHIP_MASK;
@@ -398,11 +398,11 @@ void FBAtlas::flush_render_pass()
 		return;
 
 	// Clear out the "shadow" stage.
-	for (auto &f : fb_info)
+	for (StatusFlags &f : fb_info)
 		f &= ~STATUS_TEXTURE_READ;
 
 	renderpass.inside = false;
-	auto const &rect = renderpass.rect;
+	const Rect &rect = renderpass.rect;
 	if (rect.width == 0 || rect.height == 0)
 		return;
 
@@ -427,7 +427,7 @@ void FBAtlas::extend_render_pass(const Rect &rect, bool scissor)
 {
 	bool scissor_invariant = !scissor || renderpass.scissor.contains(rect);
 	listener->set_scissored_invariant(scissor_invariant);
-	auto scissored_rect = !scissor_invariant ? rect.scissor(renderpass.scissor) : rect;
+	Rect scissored_rect = !scissor_invariant ? rect.scissor(renderpass.scissor) : rect;
 
 	if (!scissored_rect.width || !scissored_rect.height)
 		return;
@@ -561,7 +561,7 @@ void FBAtlas::notify_external_barrier(StatusFlags domains)
 	if (domains & fragment_read_stages)
 		domains |= fragment_read_stages;
 
-	for (auto &f : fb_info)
+	for (StatusFlags &f : fb_info)
 		f &= ~domains;
 }
 
