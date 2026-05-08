@@ -99,7 +99,6 @@ public:
 	};
 
 	RenderPass(Util::Hash hash, Device *device, const RenderPassInfo &info);
-	RenderPass(Util::Hash hash, Device *device, const VkRenderPassCreateInfo &create_info);
 	~RenderPass();
 
 	unsigned get_num_subpasses() const

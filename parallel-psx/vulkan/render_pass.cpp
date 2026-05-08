@@ -137,42 +137,6 @@ void RenderPass::setup_subpasses(const VkRenderPassCreateInfo &create_info)
 	}
 }
 
-RenderPass::RenderPass(Hash hash, Device *device, const VkRenderPassCreateInfo &create_info)
-	: IntrusiveHashMapEnabled<RenderPass>(hash)
-	, device(device)
-{
-	unsigned num_color_attachments = 0;
-	if (create_info.attachmentCount > 0)
-	{
-		const VkAttachmentDescription &att = create_info.pAttachments[create_info.attachmentCount - 1];
-		if (format_has_depth_or_stencil_aspect(att.format))
-		{
-			depth_stencil = att.format;
-			num_color_attachments = create_info.attachmentCount - 1;
-		}
-		else
-			num_color_attachments = create_info.attachmentCount;
-	}
-
-	for (unsigned i = 0; i < num_color_attachments; i++)
-		color_attachments[i] = create_info.pAttachments[i].format;
-
-	// Store the important subpass information for later.
-	setup_subpasses(create_info);
-
-
-	// Fixup after, we want the underlying render pass to be generic.
-	VkRenderPassCreateInfo info = create_info;
-	VkAttachmentDescription fixup_attachments[VULKAN_NUM_ATTACHMENTS + 1];
-	fixup_render_pass_nvidia(info, fixup_attachments);
-	if (device->get_workarounds().wsi_acquire_barrier_is_expensive)
-		fixup_wsi_barrier(info, fixup_attachments);
-
-	LOGI("Creating render pass.\n");
-	if (vkCreateRenderPass(device->get_device(), &info, nullptr, &render_pass) != VK_SUCCESS)
-		LOGE("Failed to create render pass.");
-}
-
 RenderPass::RenderPass(Hash hash, Device *device, const RenderPassInfo &info)
 	: IntrusiveHashMapEnabled<RenderPass>(hash)
 	, device(device)
