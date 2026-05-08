@@ -2374,7 +2374,7 @@ InitialImageBuffer Device::create_image_staging_buffer(const TextureFormatLayout
 	memcpy(mapped, layout.data(), layout.get_required_size());
 	unmap_host_buffer(*result.buffer, MEMORY_ACCESS_WRITE_BIT);
 
-	layout.build_buffer_image_copies(result.blits);
+	layout.build_buffer_image_copies(result.blits, result.num_blits);
 	return result;
 }
 
@@ -2447,7 +2447,7 @@ InitialImageBuffer Device::create_image_staging_buffer(const ImageCreateInfo &in
 	}
 
 	unmap_host_buffer(*result.buffer, MEMORY_ACCESS_WRITE_BIT);
-	layout.build_buffer_image_copies(result.blits);
+	layout.build_buffer_image_copies(result.blits, result.num_blits);
 	return result;
 }
 
@@ -2720,7 +2720,7 @@ ImageHandle Device::create_image_from_staging_buffer(const ImageCreateInfo &crea
 		                            VK_ACCESS_TRANSFER_WRITE_BIT);
 
 		transfer_cmd->begin_region("copy-image-to-gpu");
-		transfer_cmd->copy_buffer_to_image(*handle, *staging_buffer->buffer, staging_buffer->blits.size(), staging_buffer->blits.data());
+		transfer_cmd->copy_buffer_to_image(*handle, *staging_buffer->buffer, staging_buffer->num_blits, staging_buffer->blits);
 		transfer_cmd->end_region();
 
 		if (transfer_queue != graphics_queue)

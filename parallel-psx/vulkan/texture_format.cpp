@@ -459,9 +459,10 @@ size_t TextureFormatLayout::layer_byte_stride(uint32_t image_height, size_t row_
 	return ((image_height + block_dim_y - 1) / block_dim_y) * row_byte_stride;
 }
 
-void TextureFormatLayout::build_buffer_image_copies(std::vector<VkBufferImageCopy> &copies) const
+void TextureFormatLayout::build_buffer_image_copies(VkBufferImageCopy *copies, unsigned &num_copies) const
 {
-	copies.resize(mip_levels);
+	assert(mip_levels <= 16);
+	num_copies = mip_levels;
 	for (unsigned level = 0; level < mip_levels; level++)
 	{
 		const MipInfo &mip_info = mips[level];

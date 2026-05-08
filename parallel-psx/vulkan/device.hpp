@@ -54,7 +54,12 @@ enum class SwapchainRenderPass
 struct InitialImageBuffer
 {
 	BufferHandle buffer;
-	std::vector<VkBufferImageCopy> blits;
+	// Bound matches the implicit invariant in TextureFormatLayout::mips[16]:
+	// callers must pass <= 16 mip levels (no runtime check exists in
+	// fill_mipinfo). build_buffer_image_copies is the sole writer of these
+	// fields; it asserts num_blits <= 16 before writing.
+	VkBufferImageCopy blits[16];
+	unsigned num_blits = 0;
 };
 
 struct HandlePool

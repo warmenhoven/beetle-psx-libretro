@@ -23,7 +23,6 @@
 #pragma once
 
 #include "volk.h"
-#include <vector>
 #include <stddef.h>
 #include <assert.h>
 
@@ -138,7 +137,7 @@ public:
 		return data_generic<T>(x, y, z, mip);
 	}
 
-	void build_buffer_image_copies(std::vector<VkBufferImageCopy> &copies) const;
+	void build_buffer_image_copies(VkBufferImageCopy *copies, unsigned &num_copies) const;
 
 private:
 	uint8_t *buffer = nullptr;
