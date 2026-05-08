@@ -97,7 +97,7 @@ public:
 			return nullptr;
 
 		Hash hash_mask = values.size() - 1;
-		auto masked = hash & hash_mask;
+		Hash masked = hash & hash_mask;
 		for (unsigned i = 0; i < load_count; i++)
 		{
 			if (values[masked] && get_hash(values[masked]) == hash)
@@ -118,8 +118,8 @@ public:
 			grow();
 
 		Hash hash_mask = values.size() - 1;
-		auto hash = get_hash(value);
-		auto masked = hash & hash_mask;
+		Hash hash = get_hash(value);
+		Hash masked = hash & hash_mask;
 
 		for (unsigned i = 0; i < load_count; i++)
 		{
@@ -148,8 +148,8 @@ public:
 			grow();
 
 		Hash hash_mask = values.size() - 1;
-		auto hash = get_hash(value);
-		auto masked = hash & hash_mask;
+		Hash hash = get_hash(value);
+		Hash masked = hash & hash_mask;
 
 		for (unsigned i = 0; i < load_count; i++)
 		{
@@ -177,13 +177,13 @@ public:
 	T *erase(Hash hash)
 	{
 		Hash hash_mask = values.size() - 1;
-		auto masked = hash & hash_mask;
+		Hash masked = hash & hash_mask;
 
 		for (unsigned i = 0; i < load_count; i++)
 		{
 			if (values[masked] && get_hash(values[masked]) == hash)
 			{
-				auto *value = values[masked];
+				T *value = values[masked];
 				list.erase(value);
 				values[masked] = nullptr;
 				return value;
@@ -235,8 +235,8 @@ private:
 	bool insert_inner(T *value)
 	{
 		Hash hash_mask = values.size() - 1;
-		auto hash = get_hash(value);
-		auto masked = hash & hash_mask;
+		Hash hash = get_hash(value);
+		Hash masked = hash & hash_mask;
 
 		for (unsigned i = 0; i < load_count; i++)
 		{
@@ -255,7 +255,7 @@ private:
 		bool success;
 		do
 		{
-			for (auto &v : values)
+			for (T *&v : values)
 				v = nullptr;
 
 			if (values.empty())
@@ -273,7 +273,7 @@ private:
 
 			// Re-insert.
 			success = true;
-			for (auto &t : list)
+			for (T &t : list)
 			{
 				if (!insert_inner(&t))
 				{
@@ -304,11 +304,11 @@ public:
 
 	void clear()
 	{
-		auto &list = hashmap.inner_list();
-		auto itr = list.begin();
+		IntrusiveList<T> &list = hashmap.inner_list();
+		typename IntrusiveList<T>::Iterator itr = list.begin();
 		while (itr != list.end())
 		{
-			auto *to_free = itr.get();
+			T *to_free = itr.get();
 			itr = list.erase(itr);
 			pool.free(to_free);
 		}
@@ -323,7 +323,7 @@ public:
 
 	void erase(Hash hash)
 	{
-		auto *value = hashmap.erase(hash);
+		T *value = hashmap.erase(hash);
 		if (value)
 			pool.free(value);
 	}
