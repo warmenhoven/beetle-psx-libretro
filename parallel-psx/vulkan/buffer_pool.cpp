@@ -22,7 +22,6 @@
 
 #include "buffer_pool.hpp"
 #include "device.hpp"
-#include <utility>
 
 using namespace std;
 

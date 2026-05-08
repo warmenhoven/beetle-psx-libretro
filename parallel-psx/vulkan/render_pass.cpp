@@ -24,7 +24,6 @@
 #include "stack_allocator.hpp"
 #include "device.hpp"
 #include "quirks.hpp"
-#include <utility>
 #include <cstring>
 
 using namespace std;
