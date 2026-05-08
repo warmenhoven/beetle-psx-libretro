@@ -34,7 +34,6 @@
 
 //#undef VULKAN_DEBUG
 
-using namespace std;
 
 namespace Vulkan
 {
@@ -301,20 +300,20 @@ bool Context::create_instance(const char **instance_ext, uint32_t instance_ext_c
 	VkInstanceCreateInfo info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
 	info.pApplicationInfo = &get_application_info(ext.supports_vulkan_11_instance);
 
-	vector<const char *> instance_exts;
-	vector<const char *> instance_layers;
+	std::vector<const char *> instance_exts;
+	std::vector<const char *> instance_layers;
 	for (uint32_t i = 0; i < instance_ext_count; i++)
 		instance_exts.push_back(instance_ext[i]);
 
 	uint32_t ext_count = 0;
 	vkEnumerateInstanceExtensionProperties(nullptr, &ext_count, nullptr);
-	vector<VkExtensionProperties> queried_extensions(ext_count);
+	std::vector<VkExtensionProperties> queried_extensions(ext_count);
 	if (ext_count)
 		vkEnumerateInstanceExtensionProperties(nullptr, &ext_count, queried_extensions.data());
 
 	uint32_t layer_count = 0;
 	vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
-	vector<VkLayerProperties> queried_layers(layer_count);
+	std::vector<VkLayerProperties> queried_layers(layer_count);
 	if (layer_count)
 		vkEnumerateInstanceLayerProperties(&layer_count, queried_layers.data());
 
@@ -411,7 +410,7 @@ bool Context::create_device(VkPhysicalDevice gpu, VkSurfaceKHR surface, const ch
 		if (gpu_count == 0)
 			return false;
 
-		vector<VkPhysicalDevice> gpus(gpu_count);
+		std::vector<VkPhysicalDevice> gpus(gpu_count);
 		if (vkEnumeratePhysicalDevices(instance, &gpu_count, gpus.data()) != VK_SUCCESS)
 		{
 			LOGE("vkEnumeratePhysicalDevices failed.\n");
@@ -447,13 +446,13 @@ bool Context::create_device(VkPhysicalDevice gpu, VkSurfaceKHR surface, const ch
 
 	uint32_t ext_count = 0;
 	vkEnumerateDeviceExtensionProperties(gpu, nullptr, &ext_count, nullptr);
-	vector<VkExtensionProperties> queried_extensions(ext_count);
+	std::vector<VkExtensionProperties> queried_extensions(ext_count);
 	if (ext_count)
 		vkEnumerateDeviceExtensionProperties(gpu, nullptr, &ext_count, queried_extensions.data());
 
 	uint32_t layer_count = 0;
 	vkEnumerateDeviceLayerProperties(gpu, &layer_count, nullptr);
-	vector<VkLayerProperties> queried_layers(layer_count);
+	std::vector<VkLayerProperties> queried_layers(layer_count);
 	if (layer_count)
 		vkEnumerateDeviceLayerProperties(gpu, &layer_count, queried_layers.data());
 
@@ -498,7 +497,7 @@ bool Context::create_device(VkPhysicalDevice gpu, VkSurfaceKHR surface, const ch
 
 	uint32_t queue_count;
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_count, nullptr);
-	vector<VkQueueFamilyProperties> queue_props(queue_count);
+	std::vector<VkQueueFamilyProperties> queue_props(queue_count);
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_count, queue_props.data());
 
 	for (unsigned i = 0; i < queue_count; i++)
@@ -611,8 +610,8 @@ bool Context::create_device(VkPhysicalDevice gpu, VkSurfaceKHR surface, const ch
 
 	device_info.queueCreateInfoCount = queue_family_count;
 
-	vector<const char *> enabled_extensions;
-	vector<const char *> enabled_layers;
+	std::vector<const char *> enabled_extensions;
+	std::vector<const char *> enabled_layers;
 
 	for (uint32_t i = 0; i < num_required_device_extensions; i++)
 		enabled_extensions.push_back(required_device_extensions[i]);
