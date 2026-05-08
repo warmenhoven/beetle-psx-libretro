@@ -216,13 +216,13 @@ void io_thread(void *user_data) {
                 // Read in texture
                 std::string path = replacement_filename_from_hash(hash, palette_hash);
                 // TODO: use formats/image.h instead of stb_image?
-                auto image = load_image(path.c_str());
+                std::unique_ptr<RGBAImage> image = load_image(path.c_str());
                 if (image->data != nullptr) {
                     // convert_tri_to_psx(image.data, image.width, image.height);
                 
                     // Stick the response in the other vector
                     int alpha_flags_out = 0;
-                    auto levels = prepare_texture(*image, alpha_flags_out);
+                    std::vector<LoadedImage> levels = prepare_texture(*image, alpha_flags_out);
                     IOResponse response = { hash, palette_hash, alpha_flags_out, std::move(levels) };
 
                     slock_lock(channel->lock);
@@ -311,7 +311,7 @@ void TextureTracker::dump_image(TextureUpload &upload, UsedMode &mode) {
     int ppp = 1 << shift;
     int bpp = 16 >> shift;
     int mask = (1 << bpp) - 1;
-    for (auto pixel : upload.image) {
+    for (uint16_t pixel : upload.image) {
         for (int p = 0; p < ppp; p++) {
             uint16_t subpixel = (pixel >> (p * bpp)) & mask;
             if (mode.mode != TextureMode::ABGR1555 && palette == nullptr) {
@@ -530,7 +530,7 @@ TextureRect subTexture(TextureRect original, SRect sub_vram_rect) {
 }
 
 std::pair<TextureRect, bool> clip_texture_rect_to_vram(TextureRect &t, Rect vram_rect) {
-    auto intersection = intersect(t.vram_rect, toSRect(vram_rect));
+    std::pair<SRect, bool> intersection = intersect(t.vram_rect, toSRect(vram_rect));
     if (intersection.second) {
         return std::make_pair(subTexture(t, intersection.first), true);
     } else {
@@ -551,7 +551,7 @@ void TextureTracker::notifyReadback(Rect rect, uint16_t *vram) {
 
     uint32_t hash = dbgHashVram(rect, vram);
     
-    for (auto it = restorable_rects.begin(); it != restorable_rects.end(); ) {
+    for (std::vector<RestorableRect>::iterator it = restorable_rects.begin(); it != restorable_rects.end(); ) {
         if (it->rect.intersects(rect)) {
             restorable_rects.erase(it);
         } else {
@@ -566,7 +566,7 @@ void TextureTracker::notifyReadback(Rect rect, uint16_t *vram) {
         EnduringTextureRect &e = tracker.textures[index];
         if (e.alive) { // TODO: This check is unnecessary because tracker.overlapping never returns dead indices
             // Clip to the requested rect
-            auto result = clip_texture_rect_to_vram(e.texture_rect, rect);
+            std::pair<TextureRect, bool> result = clip_texture_rect_to_vram(e.texture_rect, rect);
             if (result.second) {
                 // assert(rect.contains(fromSRect(result.first.vram_rect)));
                 to_restore.push_back(result.first);
@@ -653,11 +653,11 @@ void TextureTracker::upload(Rect rect, uint16_t *vram) {
 }
 
 void TextureTracker::load_hd_texture(uint32_t hash) {
-    auto it_low = known_files.lower_bound({ hash, 0 });
-    auto it_high = known_files.upper_bound({ hash, 0xFFFFFFFF });
+    std::set<HdTextureId>::iterator it_low = known_files.lower_bound({ hash, 0 });
+    std::set<HdTextureId>::iterator it_high = known_files.upper_bound({ hash, 0xFFFFFFFF });
     if (it_low != it_high) {
         slock_lock(iothread.channel->lock);
-        for (auto it = it_low; it != it_high; it++) {
+        for (std::set<HdTextureId>::iterator it = it_low; it != it_high; it++) {
             TT_LOG_VERBOSE(RETRO_LOG_INFO, "requesting texture: %x-%x\n", hash, it->palette_hash);
             IORequest load;
             load.kind = IORequestKind::Load;
@@ -684,7 +684,7 @@ void TextureTracker::dump_texture(std::shared_ptr<TextureUpload> &upload, UsedMo
         return;
     }
 
-    auto it = std::find(upload->dumped_modes.begin(), upload->dumped_modes.end(), dump_mode);
+    std::vector<DumpedMode>::iterator it = std::find(upload->dumped_modes.begin(), upload->dumped_modes.end(), dump_mode);
     if (it == upload->dumped_modes.end()) {
         upload->dumped_modes.push_back(dump_mode);
         if (dump_enabled) {
@@ -735,7 +735,7 @@ HdTextureHandle TextureTracker::get_hd_texture_index(Rect rect, UsedMode &mode, 
     }
     if (hd_textures_enabled) {
         // Check if the same texture as last time is used.
-        auto cache_result = handle_cache.get(rect, palette_hash);
+        std::pair<HdTextureHandle, bool> cache_result = handle_cache.get(rect, palette_hash);
         cache_hit = cache_result.second;
         if (cache_hit) {
             // cache_result.first is currently always a non-fused, non-none, index + palette_hash
@@ -780,7 +780,7 @@ HdTextureHandle TextureTracker::get_hd_texture_index(Rect rect, UsedMode &mode, 
     Rect result_rect;
     for (RectIndex index : overlap) {
         TextureRect *tex = tracker.get_index(index);
-        auto overlapped_image = tex->upload->textures.find(palette_hash);
+        std::map<uint32_t, HdImageHandle>::iterator overlapped_image = tex->upload->textures.find(palette_hash);
         if (overlapped_image != tex->upload->textures.end()) {
             if (result == HdTextureHandle::make_none()) {
                 // note that if tex->vram_rect contains rect, then it will be the only entry in overlap, so an early out would be pointless
@@ -826,7 +826,7 @@ HdTexture TextureTracker::get_hd_texture(HdTextureHandle handle) {
         TextureUpload &upload = *tex->upload;
         // Use find rather than index, because if a stale HdTextureHandle was provided this could segfault
         // because indexing on a key that isn't present would initialize a new one with a null pointer
-        auto iter = upload.textures.find(handle.palette_hash);
+        std::map<uint32_t, HdImageHandle>::iterator iter = upload.textures.find(handle.palette_hash);
         if (iter == upload.textures.end()) {
             TT_LOG(RETRO_LOG_WARN, "stale HdTextureHandle: %d, %x\n", handle.index, handle.palette_hash);
             return {
@@ -873,7 +873,7 @@ void TextureTracker::on_queues_reset() {
 
     for (IOResponse &response : responses) {
         TT_LOG_VERBOSE(RETRO_LOG_INFO, "received texture: %x\n", response.hash);
-        auto upload = find_upload(response.hash);
+        std::shared_ptr<TextureUpload> upload = find_upload(response.hash);
 
         if (upload != nullptr && upload->textures.find(response.palette_hash) == upload->textures.end()) {
             // warn if the hd texture width/height aren't power of 2 multiples of the original vram
@@ -1044,7 +1044,7 @@ SRect bounds(int left, int right, int top, int bottom) {
 }
 
 void split(SRect original, SRect remove, std::vector<SRect> &results) {
-    auto intersectionResult = intersect(original, remove);
+    std::pair<SRect, bool> intersectionResult = intersect(original, remove);
     if (!intersectionResult.second) {
         results.push_back(original);
         return;
@@ -1110,10 +1110,10 @@ void RectTracker::blit(SRect dst, SRect src) {
     for (EnduringTextureRect &eold : textures) {
         if (eold.alive) {
             TextureRect &old = eold.texture_rect;
-            auto intersection = intersect(old.vram_rect, src);
+            std::pair<SRect, bool> intersection = intersect(old.vram_rect, src);
             if (intersection.second) {
-                auto sub = subTexture(old, intersection.first);
-                auto subMoved = TextureRect(sub.upload, sub.offset_x, sub.offset_y, moved(sub.vram_rect, moveX, moveY));
+                TextureRect sub = subTexture(old, intersection.first);
+                TextureRect subMoved = TextureRect(sub.upload, sub.offset_x, sub.offset_y, moved(sub.vram_rect, moveX, moveY));
                 to_place.push_back(subMoved);
             }
         }
@@ -1129,8 +1129,8 @@ void RectTracker::clear(SRect rect) {
     lookup_grid_dirty = true;
 }
 void RectTracker::releaseDeadHandles() {
-    auto retainedIt = textures.begin();
-    for (auto it = textures.begin(); it != textures.end(); it++) {
+    std::vector<EnduringTextureRect>::iterator retainedIt = textures.begin();
+    for (std::vector<EnduringTextureRect>::iterator it = textures.begin(); it != textures.end(); it++) {
         if (it->alive) {
             *retainedIt = *it;
             retainedIt++;
@@ -1295,10 +1295,10 @@ FusionRects fusion_rects(Rect full_page_rect, uint32_t palette_hash, RectTracker
         if (!e.alive) {
             continue;
         }
-        auto intersection = intersect(toSRect(full_page_rect), e.texture_rect.vram_rect);
+        std::pair<SRect, bool> intersection = intersect(toSRect(full_page_rect), e.texture_rect.vram_rect);
         if (intersection.second) {
             TextureUpload &upload = *e.texture_rect.upload;
-            auto hd_texture = upload.textures.find(palette_hash);
+            std::map<uint32_t, HdImageHandle>::iterator hd_texture = upload.textures.find(palette_hash);
             if (hd_texture != upload.textures.end()) {
                 // Clip to the destination texture (important, otherwise it might blit out of bounds which may have wrought havoc upon my sanity)
                 TextureRect clipped = subTexture(e.texture_rect, intersection.first);
@@ -1392,7 +1392,7 @@ void rebuild_page(FusedPage &page, RectTracker &tracker, Renderer *uploader) {
     for (TextureRect &tex : page.fusion.rects) {
         TextureUpload &upload = *tex.upload;
 
-        auto hd_texture = upload.textures.find(page.palette);
+        std::map<uint32_t, HdImageHandle>::iterator hd_texture = upload.textures.find(page.palette);
         if (hd_texture == upload.textures.end()) {
             // That's odd
             continue;
@@ -1563,8 +1563,8 @@ void FusedPages::rebuild_dirty(RectTracker &tracker, Renderer *uploader) {
     }
 }
 void FusedPages::remove_dead() {
-    auto retainedIt = pages.begin();
-    for (auto it = pages.begin(); it != pages.end(); it++) {
+    std::vector<FusedPage>::iterator retainedIt = pages.begin();
+    for (std::vector<FusedPage>::iterator it = pages.begin(); it != pages.end(); it++) {
         if (!it->dead) {
             *retainedIt = *it;
             retainedIt++;
@@ -1596,7 +1596,7 @@ TextureRectSaveState to_save_state(const TextureRect &t, std::map<uint32_t, Text
     };
 }
 TextureRect from_save_state(const TextureRectSaveState &t, std::map<uint32_t, std::shared_ptr<TextureUpload>> &uploads) {
-    auto it = uploads.find(t.upload_hash);
+    std::map<uint32_t, std::shared_ptr<TextureUpload>>::iterator it = uploads.find(t.upload_hash);
     if (it == uploads.end()) {
         TT_LOG(RETRO_LOG_ERROR, "SaveState upload missing!\n");
     }
@@ -1632,8 +1632,8 @@ TextureTrackerSaveState TextureTracker::save_state() {
 
 void TextureTracker::load_state(const TextureTrackerSaveState &state) {
     std::map<uint32_t, std::shared_ptr<TextureUpload>> uploads;
-    for (auto it = state.uploads.begin(); it != state.uploads.end(); it++) {
-        auto ptr = std::shared_ptr<TextureUpload>(new TextureUpload);
+    for (std::map<uint32_t, TextureUpload>::const_iterator it = state.uploads.begin(); it != state.uploads.end(); it++) {
+        std::shared_ptr<TextureUpload> ptr = std::shared_ptr<TextureUpload>(new TextureUpload);
         *ptr = it->second;
         uploads[it->first] = std::move(ptr);
     }
@@ -1654,7 +1654,7 @@ void TextureTracker::load_state(const TextureTrackerSaveState &state) {
         restorable_rects.push_back(std::move(loaded));
     }
     // Need to reload the hd textures, too
-    for (auto it = state.uploads.begin(); it != state.uploads.end(); it++) {
+    for (std::map<uint32_t, TextureUpload>::const_iterator it = state.uploads.begin(); it != state.uploads.end(); it++) {
         load_hd_texture(it->first);
     }
 }
