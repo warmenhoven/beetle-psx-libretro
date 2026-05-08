@@ -50,13 +50,17 @@ CommandPool &CommandPool::operator=(CommandPool &&other) noexcept
 
 		pool = VK_NULL_HANDLE;
 		buffers.clear();
-		std::swap(pool, other.pool);
-		std::swap(buffers, other.buffers);
+		{
+			VkCommandPool tmp = pool;
+			pool = other.pool;
+			other.pool = tmp;
+		}
+		buffers.swap(other.buffers);
 		index = other.index;
 		other.index = 0;
 #ifdef VULKAN_DEBUG
 		in_flight.clear();
-		std::swap(in_flight, other.in_flight);
+		in_flight.swap(other.in_flight);
 #endif
 	}
 	return *this;
