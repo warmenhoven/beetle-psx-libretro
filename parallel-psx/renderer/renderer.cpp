@@ -5,7 +5,6 @@
 #include <string.h>
 
 using namespace Vulkan;
-using namespace std;
 
 namespace PSX
 {
@@ -223,7 +222,7 @@ Renderer::SaveState Renderer::save_vram_state()
 	std::vector<uint32_t> vram(FB_WIDTH * FB_HEIGHT);
 	memcpy(vram.data(), ptr, FB_WIDTH * FB_HEIGHT * sizeof(uint32_t));
 	device.unmap_host_buffer(*buffer, MEMORY_ACCESS_READ_BIT);
-	return { move(vram), render_state, tracker.save_state() };
+	return { std::move(vram), render_state, tracker.save_state() };
 }
 
 void Renderer::set_filter_mode(FilterMode mode)
@@ -495,7 +494,7 @@ void Renderer::mipmap_framebuffer()
 	for (unsigned i = 1; i <= levels; i++)
 	{
 		RenderPassInfo rp;
-		unsigned current_scale = max(scaling >> i, 1u);
+		unsigned current_scale = std::max(scaling >> i, 1u);
 
 		if (i == levels)
 			rp.color_attachments[0] = &bias_framebuffer->get_view();
@@ -605,7 +604,7 @@ void Renderer::ssaa_framebuffer()
 	unsigned size = resolves_ssaa.size();
 	for (unsigned i = 0; i < size; i += 1024)
 	{
-		unsigned to_run = min(size - i, 1024u);
+		unsigned to_run = std::min(size - i, 1024u);
 
 		Push push = { { 1.0f / FB_WIDTH, 1.0f / FB_HEIGHT }, 1u };
 		cmd->push_constants(&push, 0, sizeof(push));
@@ -903,7 +902,7 @@ ImageHandle Renderer::scanout_to_texture()
 		if (bpp24)
 		{
 			tmp.width = (tmp.width * 3 + 1) / 2;
-			tmp.width = min(tmp.width, FB_WIDTH - tmp.x);
+			tmp.width = std::min(tmp.width, FB_WIDTH - tmp.x);
 		}
 		atlas.read_fragment(Domain::Unscaled, tmp);
 	}
@@ -1207,7 +1206,7 @@ void Renderer::flush_resolves()
 		unsigned size = queue.scaled_resolves.size();
 		for (unsigned i = 0; i < size; i += 1024)
 		{
-			unsigned to_run = min(size - i, 1024u);
+			unsigned to_run = std::min(size - i, 1024u);
 
 			Push push = { { 1.0f / (scaling * FB_WIDTH), 1.0f / (scaling * FB_HEIGHT) }, scaling };
 			cmd->push_constants(&push, 0, sizeof(push));
@@ -1235,7 +1234,7 @@ void Renderer::flush_resolves()
 		unsigned size = queue.unscaled_resolves.size();
 		for (unsigned i = 0; i < size; i += 1024)
 		{
-			unsigned to_run = min(size - i, 1024u);
+			unsigned to_run = std::min(size - i, 1024u);
 
 			Push push = { { 1.0f / FB_WIDTH, 1.0f / FB_HEIGHT }, 1u };
 			cmd->push_constants(&push, 0, sizeof(push));
@@ -1383,10 +1382,10 @@ void Renderer::build_attribs(BufferVertex *output, const Vertex *vertices, unsig
 	{
 		float tmp_x = vertices[i].x + render_state.draw_offset_x;
 		float tmp_y = vertices[i].y + render_state.draw_offset_y;
-		max_x = max(max_x, tmp_x);
-		max_y = max(max_y, tmp_y);
-		min_x = min(min_x, tmp_x);
-		min_y = min(min_y, tmp_y);
+		max_x = std::max(max_x, tmp_x);
+		max_y = std::max(max_y, tmp_y);
+		min_x = std::min(min_x, tmp_x);
+		min_y = std::min(min_y, tmp_y);
 		x[i] = tmp_x;
 		y[i] = tmp_y;
 
@@ -1394,18 +1393,18 @@ void Renderer::build_attribs(BufferVertex *output, const Vertex *vertices, unsig
 		{
 			unsigned tmp_u = vertices[i].u + render_state.texture_offset_x;
 			unsigned tmp_v = vertices[i].v + render_state.texture_offset_y;
-			max_u = max(max_u, tmp_u);
-			max_v = max(max_v, tmp_v);
-			min_u = min(min_u, tmp_u);
-			min_v = min(min_v, tmp_v);
+			max_u = std::max(max_u, tmp_u);
+			max_v = std::max(max_v, tmp_v);
+			min_u = std::min(min_u, tmp_u);
+			min_v = std::min(min_v, tmp_v);
 		}
 	}
 
 	// Clamp the rect.
-	min_x = floorf(max(min_x, 0.0f));
-	min_y = floorf(max(min_y, 0.0f));
-	max_x = ceilf(min(max_x, float(FB_WIDTH)));
-	max_y = ceilf(min(max_y, float(FB_HEIGHT)));
+	min_x = floorf(std::max(min_x, 0.0f));
+	min_y = floorf(std::max(min_y, 0.0f));
+	max_x = ceilf(std::min(max_x, float(FB_WIDTH)));
+	max_y = ceilf(std::min(max_y, float(FB_HEIGHT)));
 
 	const Rect rect = {
 		unsigned(min_x), unsigned(min_y), unsigned(max_x) - unsigned(min_x), unsigned(max_y) - unsigned(min_y),
@@ -1886,9 +1885,9 @@ void Renderer::dispatch_set_scaled_read_texture(bool scaled_read, bool textured)
 	}
 }
 
-void Renderer::dispatch(const vector<BufferVertex> &vertices, vector<PrimitiveInfo> &scissors, bool textured)
+void Renderer::dispatch(const std::vector<BufferVertex> &vertices, std::vector<PrimitiveInfo> &scissors, bool textured)
 {
-	sort(begin(scissors), end(scissors), [](const PrimitiveInfo &a, const PrimitiveInfo &b) {
+	std::sort(scissors.begin(), scissors.end(), [](const PrimitiveInfo &a, const PrimitiveInfo &b) {
 		if (a.offset_uv != b.offset_uv)
 			return a.offset_uv > b.offset_uv;
 		if (a.shift != b.shift)
@@ -2174,7 +2173,7 @@ void Renderer::flush_blit(const std::vector<BlitInfo> &infos, Program &program, 
 	unsigned scale = scaled ? scaling : 1u;
 	for (unsigned i = 0; i < size; i += 512)
 	{
-		unsigned to_blit = min(size - i, 512u);
+		unsigned to_blit = std::min(size - i, 512u);
 		void *ptr = cmd->allocate_constant_data(1, 0, to_blit * sizeof(BlitInfo));
 		memcpy(ptr, infos.data() + i, to_blit * sizeof(BlitInfo));
 		cmd->dispatch(scale, scale, to_blit);
@@ -2267,7 +2266,7 @@ void Renderer::blit_vram(const Rect &dst, const Rect &src)
 						q.push_back({
 							{ (x + src.x) * scaling, (y + src.y) * scaling },
 							{ (x + dst.x) * scaling, (y + dst.y) * scaling },
-							{ min(BLOCK_WIDTH, width - x) * scaling, min(BLOCK_HEIGHT, height - y) * scaling },
+							{ std::min(BLOCK_WIDTH, width - x) * scaling, std::min(BLOCK_HEIGHT, height - y) * scaling },
 							render_state.force_mask_bit ? 0x8000u : 0u, s,
 						});
 		}
@@ -2281,7 +2280,7 @@ void Renderer::blit_vram(const Rect &dst, const Rect &src)
 					q.push_back({
 					    { x + src.x, y + src.y },
 					    { x + dst.x, y + dst.y },
-					    { min(BLOCK_WIDTH, width - x), min(BLOCK_HEIGHT, height - y) },
+					    { std::min(BLOCK_WIDTH, width - x), std::min(BLOCK_HEIGHT, height - y) },
 						render_state.force_mask_bit ? 0x8000u : 0u, 0,
 					});
 		}
@@ -2393,7 +2392,7 @@ BufferHandle Renderer::copy_cpu_to_vram(const Rect &rect)
 	{
 		for (unsigned y = 0; y < rect.height; y += BLOCK_HEIGHT)
 		{
-			unsigned y_size = min(rect.height - y, BLOCK_HEIGHT);
+			unsigned y_size = std::min(rect.height - y, BLOCK_HEIGHT);
 			view_info.offset = y * rect.width * sizeof(uint16_t);
 			view_info.range = y_size * rect.width * sizeof(uint16_t);
 			view_info.format = VK_FORMAT_R16_UINT;
