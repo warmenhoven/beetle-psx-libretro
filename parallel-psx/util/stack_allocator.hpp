@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <algorithm>
+#include <stddef.h>
 
 namespace Util
 {
@@ -46,7 +46,11 @@ public:
 	{
 		T *ret = allocate(count);
 		if (ret)
-			std::fill(ret, ret + count, T());
+		{
+			T defval = T();
+			for (size_t i = 0; i < count; i++)
+				ret[i] = defval;
+		}
 		return ret;
 	}
 
