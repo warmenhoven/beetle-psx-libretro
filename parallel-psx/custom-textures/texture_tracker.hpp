@@ -95,6 +95,13 @@ struct SRect {
     int y;
     int width;
     int height;
+    // Default-constructed SRect zero-initializes all fields. The result is in
+    // an "invalid" state by the 4-arg constructor's invariant (width == 0 and
+    // height == 0 would fail its width > 0 / height > 0 check) and is intended
+    // only as a placeholder — array slot or struct field — to be overwritten
+    // before being read. The 4-arg constructor below is the validated path;
+    // use it for any SRect that is meant to be immediately usable.
+    SRect() : x(0), y(0), width(0), height(0) {}
     SRect(int x, int y, int width, int height):
     x(x), y(y), width(width), height(height) {
         if (width <= 0 || height <= 0) {
