@@ -101,7 +101,6 @@ public:
 	friend class CommandBuffer;
 	friend struct CommandBufferDeleter;
 	friend class Program;
-	friend class WSI;
 	friend class Cookie;
 	friend class Framebuffer;
 	friend class PipelineLayout;
@@ -121,14 +120,11 @@ public:
 	// Only called by main thread, during setup phase.
 	void set_context(const Context &context);
 	void init_swapchain(const std::vector<VkImage> &swapchain_images, unsigned width, unsigned height, VkFormat format);
-	void init_external_swapchain(const std::vector<ImageHandle> &swapchain_images);
 	void init_frame_contexts(unsigned count);
 
 	ImageView &get_swapchain_view();
 	ImageView &get_swapchain_view(unsigned index);
-	unsigned get_num_swapchain_images() const;
 	unsigned get_num_frame_contexts() const;
-	unsigned get_swapchain_index() const;
 	unsigned get_current_frame_context() const;
 
 	size_t get_pipeline_cache_size();
@@ -138,7 +134,6 @@ public:
 	// Frame-pushing interface.
 	void next_frame_context();
 	void wait_idle();
-	void end_frame_context();
 
 	// Set names for objects for debuggers and profilers.
 	void set_name(const Buffer &buffer, const char *name);
@@ -171,26 +166,14 @@ public:
 	void *map_host_buffer(const Buffer &buffer, MemoryAccessFlags access);
 	void unmap_host_buffer(const Buffer &buffer, MemoryAccessFlags access);
 
-	void *map_linear_host_image(const LinearHostImage &image, MemoryAccessFlags access);
-	void unmap_linear_host_image_and_sync(const LinearHostImage &image, MemoryAccessFlags access);
-
 	// Create buffers and images.
 	BufferHandle create_buffer(const BufferCreateInfo &info, const void *initial = nullptr);
 	ImageHandle create_image(const ImageCreateInfo &info, const ImageInitialData *initial = nullptr);
 	ImageHandle create_image_from_staging_buffer(const ImageCreateInfo &info, const InitialImageBuffer *buffer);
-	LinearHostImageHandle create_linear_host_image(const LinearHostImageCreateInfo &info);
 
 	// Create staging buffers for images.
 	InitialImageBuffer create_image_staging_buffer(const ImageCreateInfo &info, const ImageInitialData *initial);
 	InitialImageBuffer create_image_staging_buffer(const TextureFormatLayout &layout);
-
-#ifndef _WIN32
-	ImageHandle create_imported_image(int fd,
-	                                  VkDeviceSize size,
-	                                  uint32_t memory_type,
-	                                  VkExternalMemoryHandleTypeFlagBitsKHR handle_type,
-	                                  const ImageCreateInfo &create_info);
-#endif
 
 	// Create image view, buffer views and samplers.
 	ImageViewHandle create_image_view(const ImageViewCreateInfo &view_info);
@@ -208,13 +191,6 @@ public:
 	ImageView &get_transient_attachment(unsigned width, unsigned height, VkFormat format,
 	                                    unsigned index = 0, unsigned samples = 1, unsigned layers = 1);
 	RenderPassInfo get_swapchain_render_pass(SwapchainRenderPass style);
-
-	// Request semaphores.
-	Semaphore request_semaphore();
-	Semaphore request_external_semaphore(VkSemaphore semaphore, bool signalled);
-#ifndef _WIN32
-	Semaphore request_imported_semaphore(int fd, VkExternalSemaphoreHandleTypeFlagBitsKHR handle_type);
-#endif
 
 	VkDevice get_device()
 	{
