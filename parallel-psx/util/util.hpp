@@ -48,8 +48,7 @@ static inline uint32_t util_clz(uint32_t x)
 	unsigned long result;
 	if (_BitScanReverse(&result, x))
 		return 31 - result;
-	else
-		return 32;
+	return 32;
 }
 
 static inline uint32_t util_ctz(uint32_t x)
@@ -57,8 +56,7 @@ static inline uint32_t util_ctz(uint32_t x)
 	unsigned long result;
 	if (_BitScanForward(&result, x))
 		return result;
-	else
-		return 32;
+	return 32;
 }
 
 #define leading_zeroes(x) util_clz(x)

@@ -502,7 +502,7 @@ void FBAtlas::write_fragment(Domain domain, const Rect &rect)
 	extend_render_pass(rect, true);
 }
 
-void FBAtlas::clear_rect(const Rect &rect, FBColor color)
+void FBAtlas::clear_rect(const Rect &rect, uint32_t fb_color)
 {
 	if (rect.width == 0 || rect.height == 0)
 		return;
@@ -516,7 +516,7 @@ void FBAtlas::clear_rect(const Rect &rect, FBColor color)
 
 	// If the render pass area doesn't increase later, we can use loadOp == CLEAR instead of LOAD,
 	// which helps a lot on mobile GPUs.
-	listener->clear_quad(rect, color, renderpass.rect == rect);
+	listener->clear_quad(rect, fb_color, renderpass.rect == rect);
 
 	unsigned xbegin = rect.x / BLOCK_WIDTH;
 	unsigned xend = (rect.x + rect.width - 1) / BLOCK_WIDTH;

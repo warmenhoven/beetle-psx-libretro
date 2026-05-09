@@ -1,14 +1,186 @@
 #include "renderer.hpp"
-#include "renderer_pipelines.hpp"
 #include <algorithm>
 #include <math.h>
 #include <string.h>
+
+namespace PSX
+{
+static const uint32_t quad_vert[] =
+#include "quad.vert.inc"
+    ;
+static const uint32_t scaled_quad_frag[] =
+#include "scaled.quad.frag.inc"
+    ;
+static const uint32_t scaled_dither_quad_frag[] =
+#include "scaled.dither.quad.frag.inc"
+    ;
+static const uint32_t bpp24_quad_frag[] =
+#include "bpp24.quad.frag.inc"
+    ;
+static const uint32_t bpp24_yuv_quad_frag[] =
+#include "bpp24.yuv.quad.frag.inc"
+    ;
+static const uint32_t unscaled_quad_frag[] =
+#include "unscaled.quad.frag.inc"
+    ;
+static const uint32_t unscaled_dither_quad_frag[] =
+#include "unscaled.dither.quad.frag.inc"
+    ;
+static const uint32_t copy_vram_comp[] =
+#include "copy_vram.comp.inc"
+    ;
+static const uint32_t copy_vram_masked_comp[] =
+#include "copy_vram.masked.comp.inc"
+    ;
+static const uint32_t resolve_to_scaled[] =
+#include "resolve.scaled.comp.inc"
+    ;
+static const uint32_t resolve_to_msaa_scaled[] =
+#include "resolve.msaa.scaled.comp.inc"
+    ;
+static const uint32_t resolve_to_unscaled[] =
+#include "resolve.unscaled.comp.inc"
+    ;
+static const uint32_t resolve_msaa_to_unscaled[] =
+#include "resolve.msaa.unscaled.comp.inc"
+    ;
+
+static const uint32_t flat_vert[] =
+#include "flat.vert.inc"
+    ;
+static const uint32_t flat_unscaled_vert[] =
+#include "flat.unscaled.vert.inc"
+    ;
+static const uint32_t flat_frag[] =
+#include "flat.frag.inc"
+    ;
+static const uint32_t textured_vert[] =
+#include "textured.vert.inc"
+    ;
+static const uint32_t textured_unscaled_vert[] =
+#include "textured.unscaled.vert.inc"
+    ;
+static const uint32_t textured_frag[] =
+#include "textured.frag.inc"
+    ;
+static const uint32_t textured_unscaled_frag[] =
+#include "textured.unscaled.frag.inc"
+    ;
+static const uint32_t textured_msaa_frag[] =
+#include "textured.msaa.frag.inc"
+    ;
+static const uint32_t textured_msaa_unscaled_frag[] =
+#include "textured.msaa.unscaled.frag.inc"
+    ;
+
+static const uint32_t blit_vram_scaled_comp[] =
+#include "blit_vram.scaled.comp.inc"
+    ;
+static const uint32_t blit_vram_scaled_masked_comp[] =
+#include "blit_vram.masked.scaled.comp.inc"
+    ;
+static const uint32_t blit_vram_cached_scaled_comp[] =
+#include "blit_vram.cached.scaled.comp.inc"
+    ;
+static const uint32_t blit_vram_cached_scaled_masked_comp[] =
+#include "blit_vram.cached.masked.scaled.comp.inc"
+    ;
+
+static const uint32_t blit_vram_msaa_scaled_comp[] =
+#include "blit_vram.msaa.scaled.comp.inc"
+    ;
+static const uint32_t blit_vram_msaa_scaled_masked_comp[] =
+#include "blit_vram.msaa.masked.scaled.comp.inc"
+    ;
+static const uint32_t blit_vram_msaa_cached_scaled_comp[] =
+#include "blit_vram.msaa.cached.scaled.comp.inc"
+    ;
+static const uint32_t blit_vram_msaa_cached_scaled_masked_comp[] =
+#include "blit_vram.msaa.cached.masked.scaled.comp.inc"
+    ;
+
+static const uint32_t blit_vram_unscaled_comp[] =
+#include "blit_vram.unscaled.comp.inc"
+    ;
+static const uint32_t blit_vram_unscaled_masked_comp[] =
+#include "blit_vram.masked.unscaled.comp.inc"
+    ;
+
+static const uint32_t blit_vram_cached_unscaled_comp[] =
+#include "blit_vram.cached.unscaled.comp.inc"
+    ;
+static const uint32_t blit_vram_cached_unscaled_masked_comp[] =
+#include "blit_vram.cached.masked.unscaled.comp.inc"
+    ;
+
+static const uint32_t feedback_frag[] =
+#include "feedback.frag.inc"
+    ;
+static const uint32_t feedback_unscaled_frag[] =
+#include "feedback.unscaled.frag.inc"
+    ;
+static const uint32_t feedback_flat_frag[] =
+#include "feedback.flat.frag.inc"
+    ;
+
+static const uint32_t feedback_msaa_frag[] =
+#include "feedback.msaa.frag.inc"
+    ;
+static const uint32_t feedback_msaa_unscaled_frag[] =
+#include "feedback.msaa.unscaled.frag.inc"
+    ;
+static const uint32_t feedback_msaa_flat_frag[] =
+#include "feedback.msaa.flat.frag.inc"
+    ;
+
+static const uint32_t mipmap_vert[] =
+#include "mipmap.vert.inc"
+    ;
+static const uint32_t mipmap_shifted_vert[] =
+#include "mipmap.shifted.vert.inc"
+    ;
+static const uint32_t mipmap_energy_first_frag[] =
+#include "mipmap.energy.first.frag.inc"
+    ;
+static const uint32_t mipmap_resolve_frag[] =
+#include "mipmap.resolve.frag.inc"
+    ;
+static const uint32_t mipmap_dither_resolve_frag[] =
+#include "mipmap.dither.resolve.frag.inc"
+    ;
+static const uint32_t mipmap_energy_frag[] =
+#include "mipmap.energy.frag.inc"
+    ;
+static const uint32_t mipmap_energy_blur_frag[] =
+#include "mipmap.energy.blur.frag.inc"
+    ;
+}
+
+// 3 LSBs are ignored.
+static inline uint32_t fbcolor_to_rgba8(uint32_t color)
+{
+	return color & 0xfff8f8f8u;
+}
+
+static inline void fbcolor_to_rgba32f(float *v, uint32_t color)
+{
+	// 3 LSBs are ignored.
+	unsigned r = (color >> 0) & 0xf8;
+	unsigned g = (color >> 8) & 0xf8;
+	unsigned b = (color >> 16) & 0xf8;
+	v[0] = r * (1.0f / 255.0f);
+	v[1] = g * (1.0f / 255.0f);
+	v[2] = b * (1.0f / 255.0f);
+	// Mask bit is always cleared.
+	v[3] = 0.0f;
+}
 
 using namespace Vulkan;
 
 namespace PSX
 {
-uint32_t colorToRGBA8(float r, float g, float b, float a) {
+uint32_t colorToRGBA8(float r, float g, float b, float a)
+{
 	return ((int)(a * 0xff) << 24) + ((int)(b * 0xff) << 16) + ((int)(g * 0xff) << 8) + (int)(r * 0xff);
 }
 
@@ -386,13 +558,13 @@ void Renderer::set_draw_rect(const Rect &rect)
 		    { { scaled_x, scaled_y }, { scaled_w, scaled_h } });
 }
 
-void Renderer::clear_rect(const Rect &rect, FBColor color)
+void Renderer::clear_rect(const Rect &rect, uint32_t fb_color)
 {
 	if (texture_tracking_enabled) {
 		tracker.clearRegion(rect);
 	}
 	last_scanout.reset();
-	atlas.clear_rect(rect, color);
+	atlas.clear_rect(rect, fb_color);
 
 	VK_ASSERT(rect.x + rect.width <= FB_WIDTH);
 	VK_ASSERT(rect.y + rect.height <= FB_HEIGHT);
@@ -1751,18 +1923,18 @@ void Renderer::draw_quad(const Vertex *vertices)
 	}
 }
 
-void Renderer::clear_quad(const Rect &rect, FBColor color, bool candidate)
+void Renderer::clear_quad(const Rect &rect, uint32_t fb_color, bool candidate)
 {
 	last_scanout.reset();
 	TextureMode old = atlas.set_texture_mode(TextureMode::None);
 	float z = allocate_depth(Domain::Unscaled, rect);
 	atlas.set_texture_mode(old);
 
-	BufferVertex pos0 = { float(rect.x), float(rect.y), z, 1.0f, fbcolor_to_rgba8(color) };
-	BufferVertex pos1 = { float(rect.x) + float(rect.width), float(rect.y), z, 1.0f, fbcolor_to_rgba8(color) };
-	BufferVertex pos2 = { float(rect.x), float(rect.y) + float(rect.height), z, 1.0f, fbcolor_to_rgba8(color) };
+	BufferVertex pos0 = { float(rect.x), float(rect.y), z, 1.0f, fbcolor_to_rgba8(fb_color) };
+	BufferVertex pos1 = { float(rect.x) + float(rect.width), float(rect.y), z, 1.0f, fbcolor_to_rgba8(fb_color) };
+	BufferVertex pos2 = { float(rect.x), float(rect.y) + float(rect.height), z, 1.0f, fbcolor_to_rgba8(fb_color) };
 	BufferVertex pos3 = { float(rect.x) + float(rect.width), float(rect.y) + float(rect.height), z, 1.0f,
-		                  fbcolor_to_rgba8(color) };
+		                  fbcolor_to_rgba8(fb_color) };
 	queue.opaque.push_back(pos0);
 	queue.opaque.push_back(pos1);
 	queue.opaque.push_back(pos2);
@@ -1773,7 +1945,7 @@ void Renderer::clear_quad(const Rect &rect, FBColor color, bool candidate)
 	queue.opaque_scissor.emplace_back(queue.opaque_scissor.size());
 
 	if (candidate)
-		queue.clear_candidates.push_back({ rect, color, z });
+		queue.clear_candidates.push_back({ rect, fb_color, z });
 }
 
 const Renderer::ClearCandidate *Renderer::find_clear_candidate(const Rect &rect) const

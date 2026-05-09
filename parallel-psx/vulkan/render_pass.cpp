@@ -21,13 +21,54 @@
  */
 
 #include "render_pass.hpp"
-#include "stack_allocator.hpp"
 #include "device.hpp"
 #include "quirks.hpp"
 #include <cstring>
+#include <stddef.h>
 
 using namespace std;
 using namespace Util;
+
+namespace Util
+{
+template <typename T, size_t N>
+class StackAllocator
+{
+public:
+	T *allocate(size_t count)
+	{
+		if (count == 0)
+			return nullptr;
+		if (offset + count > N)
+			return nullptr;
+
+		T *ret = buffer + offset;
+		offset += count;
+		return ret;
+	}
+
+	T *allocate_cleared(size_t count)
+	{
+		T *ret = allocate(count);
+		if (ret)
+		{
+			T defval = T();
+			for (size_t i = 0; i < count; i++)
+				ret[i] = defval;
+		}
+		return ret;
+	}
+
+	void reset()
+	{
+		offset = 0;
+	}
+
+private:
+	T buffer[N];
+	size_t offset = 0;
+};
+}
 
 #define LOCK() ((void)0)
 

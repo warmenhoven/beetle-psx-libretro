@@ -26,8 +26,6 @@
 #include <vector>
 #include <stdlib.h>
 
-//#define OBJECT_POOL_DEBUG
-
 namespace Util
 {
 template<typename T>
@@ -37,7 +35,6 @@ public:
 	template<typename... P>
 	T *allocate(P &&... p)
 	{
-#ifndef OBJECT_POOL_DEBUG
 		if (vacants.empty())
 		{
 			unsigned num_objects = 64u << memory.size();
@@ -55,31 +52,21 @@ public:
 		vacants.pop_back();
 		new(ptr) T(std::forward<P>(p)...);
 		return ptr;
-#else
-		return new T(std::forward<P>(p)...);
-#endif
 	}
 
 	void free(T *ptr)
 	{
-#ifndef OBJECT_POOL_DEBUG
 		ptr->~T();
 		vacants.push_back(ptr);
-#else
-		delete ptr;
-#endif
 	}
 
 	void clear()
 	{
-#ifndef OBJECT_POOL_DEBUG
 		vacants.clear();
 		memory.clear();
-#endif
 	}
 
 protected:
-#ifndef OBJECT_POOL_DEBUG
 	std::vector<T *> vacants;
 
 	struct MallocDeleter
@@ -91,7 +78,6 @@ protected:
 	};
 
 	std::vector<std::unique_ptr<T, MallocDeleter>> memory;
-#endif
 };
 
 }

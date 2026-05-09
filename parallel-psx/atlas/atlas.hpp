@@ -111,27 +111,6 @@ struct Rect
 	}
 };
 
-using FBColor = uint32_t;
-
-static inline uint32_t fbcolor_to_rgba8(FBColor color)
-{
-	// 3 LSBs are ignored.
-	return color & 0xfff8f8f8u;
-}
-
-static inline void fbcolor_to_rgba32f(float *v, FBColor color)
-{
-	// 3 LSBs are ignored.
-	unsigned r = (color >> 0) & 0xf8;
-	unsigned g = (color >> 8) & 0xf8;
-	unsigned b = (color >> 16) & 0xf8;
-	v[0] = r * (1.0f / 255.0f);
-	v[1] = g * (1.0f / 255.0f);
-	v[2] = b * (1.0f / 255.0f);
-	// Mask bit is always cleared.
-	v[3] = 0.0f;
-}
-
 enum StatusFlag
 {
 	STATUS_FB_ONLY = 0,
@@ -194,7 +173,7 @@ public:
 	bool texture_rendered(const Rect &rect);
 
 	void write_fragment(Domain domain, const Rect &rect);
-	void clear_rect(const Rect &rect, FBColor color);
+	void clear_rect(const Rect &rect, uint32_t color);
 	void set_draw_rect(const Rect &rect);
 	void set_texture_window(const Rect &rect);
 

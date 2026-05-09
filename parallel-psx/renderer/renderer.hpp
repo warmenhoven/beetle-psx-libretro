@@ -324,7 +324,7 @@ public:
 	}
 
 	// Draw commands
-	void clear_rect(const Rect &rect, FBColor color);
+	void clear_rect(const Rect &rect, uint32_t fb_color);
 	void draw_line(const Vertex *vertices);
 	void draw_triangle(const Vertex *vertices);
 	void draw_quad(const Vertex *vertices);
@@ -461,7 +461,7 @@ public:
 	void resolve(Domain target_domain, unsigned x, unsigned y);
 	void flush_render_pass(const Rect &rect);
 	void discard_render_pass();
-	void clear_quad(const Rect &rect, FBColor color, bool candidate);
+	void clear_quad(const Rect &rect, uint32_t fb_color, bool candidate);
 
 	// Called by TextureTracker (formerly via TextureUploader interface).
 	Vulkan::ImageHandle upload_texture(std::vector<LoadedImage> &image);
@@ -569,7 +569,7 @@ private:
 	struct ClearCandidate
 	{
 		Rect rect;
-		FBColor color;
+		uint32_t color; /* fb_color */
 		float z;
 	};
 
