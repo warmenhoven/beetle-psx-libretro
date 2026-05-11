@@ -324,44 +324,6 @@ void Device::init_pipeline_cache()
 {
 }
 
-size_t Device::get_pipeline_cache_size()
-{
-	if (pipeline_cache == VK_NULL_HANDLE)
-		return 0;
-
-	static const size_t uuid_size = sizeof(gpu_props.pipelineCacheUUID);
-	size_t size = 0;
-	if (vkGetPipelineCacheData(device, pipeline_cache, &size, nullptr) != VK_SUCCESS)
-	{
-		LOGE("Failed to get pipeline cache data.\n");
-		return 0;
-	}
-
-	return size + uuid_size;
-}
-
-bool Device::get_pipeline_cache_data(uint8_t *data, size_t size)
-{
-	if (pipeline_cache == VK_NULL_HANDLE)
-		return false;
-
-	static const size_t uuid_size = sizeof(gpu_props.pipelineCacheUUID);
-	if (size < uuid_size)
-		return false;
-
-	size -= uuid_size;
-	memcpy(data, gpu_props.pipelineCacheUUID, uuid_size);
-	data += uuid_size;
-
-	if (vkGetPipelineCacheData(device, pipeline_cache, &size, data) != VK_SUCCESS)
-	{
-		LOGE("Failed to get pipeline cache data.\n");
-		return false;
-	}
-
-	return true;
-}
-
 void Device::flush_pipeline_cache()
 {
 }
@@ -610,25 +572,6 @@ void Device::submit_nolock(CommandBufferHandle cmd, Fence *fence, unsigned semap
 	}
 
 	decrement_frame_counter_nolock();
-}
-
-void Device::submit_empty(CommandBuffer::Type type, Fence *fence,
-                          unsigned semaphore_count, Semaphore *semaphores)
-{
-	LOCK();
-	submit_empty_nolock(type, fence, semaphore_count, semaphores);
-}
-
-void Device::submit_empty_nolock(CommandBuffer::Type type, Fence *fence,
-                                 unsigned semaphore_count, Semaphore *semaphores)
-{
-	if (type != CommandBuffer::Type::AsyncTransfer)
-		flush_frame(CommandBuffer::Type::AsyncTransfer);
-
-	VkFence cleared_fence = VK_NULL_HANDLE;
-	submit_queue(type, fence ? &cleared_fence : nullptr, semaphore_count, semaphores);
-	if (fence)
-		*fence = Fence(handle_pool.fences.allocate(this, cleared_fence));
 }
 
 void Device::submit_empty_inner(CommandBuffer::Type type, VkFence *fence,
@@ -2603,11 +2546,6 @@ bool Device::memory_type_is_host_visible(uint32_t type) const
 	return (mem_props.memoryTypes[type].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
 }
 
-void Device::get_format_properties(VkFormat format, VkFormatProperties *properties)
-{
-	vkGetPhysicalDeviceFormatProperties(gpu, format, properties);
-}
-
 bool Device::get_image_format_properties(VkFormat format, VkImageType type, VkImageTiling tiling,
                                          VkImageUsageFlags usage, VkImageCreateFlags flags,
                                          VkImageFormatProperties *properties)
@@ -2733,16 +2671,6 @@ ImageView &Device::get_transient_attachment(unsigned width, unsigned height, VkF
                                             unsigned index, unsigned samples, unsigned layers)
 {
 	return transient_allocator.request_attachment(width, height, format, index, samples, layers);
-}
-
-unsigned Device::get_num_frame_contexts() const
-{
-	return unsigned(per_frame.size());
-}
-
-unsigned Device::get_current_frame_context() const
-{
-	return frame_context_index;
 }
 
 void Device::set_name(const Buffer &buffer, const char *name)

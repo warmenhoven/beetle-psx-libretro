@@ -114,11 +114,6 @@ public:
 	void set_context(const Context &context);
 	void init_frame_contexts(unsigned count);
 
-	unsigned get_num_frame_contexts() const;
-	unsigned get_current_frame_context() const;
-
-	size_t get_pipeline_cache_size();
-	bool get_pipeline_cache_data(uint8_t *data, size_t size);
 	bool init_pipeline_cache(const uint8_t *data, size_t size);
 
 	// Frame-pushing interface.
@@ -136,10 +131,6 @@ public:
 	CommandBufferHandle request_command_buffer_for_thread(unsigned thread_index, CommandBuffer::Type type = CommandBuffer::Type::Generic);
 	void submit(CommandBufferHandle &cmd, Fence *fence = nullptr,
 	            unsigned semaphore_count = 0, Semaphore *semaphore = nullptr);
-	void submit_empty(CommandBuffer::Type type,
-	                  Fence *fence = nullptr,
-	                  unsigned semaphore_count = 0,
-	                  Semaphore *semaphore = nullptr);
 	void add_wait_semaphore(CommandBuffer::Type type, Semaphore semaphore, VkPipelineStageFlags stages, bool flush);
 	CommandBuffer::Type get_physical_queue_type(CommandBuffer::Type queue_type) const;
 
@@ -171,7 +162,6 @@ public:
 
 	// Render pass helpers.
 	bool image_format_is_supported(VkFormat format, VkFormatFeatureFlags required, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL) const;
-	void get_format_properties(VkFormat format, VkFormatProperties *properties);
 	bool get_image_format_properties(VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags,
 	                                 VkImageFormatProperties *properties);
 
@@ -413,9 +403,6 @@ private:
 	CommandBufferHandle request_command_buffer_nolock(unsigned thread_index, CommandBuffer::Type type = CommandBuffer::Type::Generic);
 	void submit_nolock(CommandBufferHandle cmd, Fence *fence,
 	                   unsigned semaphore_count, Semaphore *semaphore);
-	void submit_empty_nolock(CommandBuffer::Type type, Fence *fence,
-	                         unsigned semaphore_count,
-	                         Semaphore *semaphore);
 	void add_wait_semaphore_nolock(CommandBuffer::Type type, Semaphore semaphore, VkPipelineStageFlags stages,
 	                               bool flush);
 
