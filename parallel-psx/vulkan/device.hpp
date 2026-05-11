@@ -44,13 +44,6 @@
 
 namespace Vulkan
 {
-enum class SwapchainRenderPass
-{
-	ColorOnly,
-	Depth,
-	DepthStencil
-};
-
 struct InitialImageBuffer
 {
 	BufferHandle buffer;
@@ -119,11 +112,8 @@ public:
 
 	// Only called by main thread, during setup phase.
 	void set_context(const Context &context);
-	void init_swapchain(const std::vector<VkImage> &swapchain_images, unsigned width, unsigned height, VkFormat format);
 	void init_frame_contexts(unsigned count);
 
-	ImageView &get_swapchain_view();
-	ImageView &get_swapchain_view(unsigned index);
 	unsigned get_num_frame_contexts() const;
 	unsigned get_current_frame_context() const;
 
@@ -173,7 +163,6 @@ public:
 
 	// Create staging buffers for images.
 	InitialImageBuffer create_image_staging_buffer(const ImageCreateInfo &info, const ImageInitialData *initial);
-	InitialImageBuffer create_image_staging_buffer(const TextureFormatLayout &layout);
 
 	// Create image view, buffer views and samplers.
 	ImageViewHandle create_image_view(const ImageViewCreateInfo &view_info);
@@ -190,7 +179,6 @@ public:
 	VkFormat get_default_depth_format() const;
 	ImageView &get_transient_attachment(unsigned width, unsigned height, VkFormat format,
 	                                    unsigned index = 0, unsigned samples = 1, unsigned layers = 1);
-	RenderPassInfo get_swapchain_render_pass(SwapchainRenderPass style);
 
 	VkDevice get_device()
 	{
@@ -323,7 +311,6 @@ private:
 		Semaphore release;
 		bool touched = false;
 		bool consumed = false;
-		std::vector<ImageHandle> swapchain;
 		unsigned index = 0;
 	} wsi;
 

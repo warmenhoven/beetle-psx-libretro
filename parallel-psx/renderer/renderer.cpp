@@ -1263,33 +1263,6 @@ ImageHandle Renderer::scanout_to_texture()
 	return reuseable_scanout;
 }
 
-void Renderer::scanout()
-{
-	ImageHandle image = scanout_to_texture();
-
-	ensure_command_buffer();
-	cmd->begin_render_pass(device.get_swapchain_render_pass(SwapchainRenderPass::ColorOnly));
-	cmd->set_quad_state();
-	cmd->set_program(*pipelines.scaled_quad_blitter);
-	cmd->set_texture(0, 0, image->get_view(), StockSampler::LinearClamp);
-
-	cmd->set_vertex_binding(0, *quad, 0, 8);
-	struct Push
-	{
-		float offset[2];
-		float scale[2];
-	};
-	const Push push = { { 0.0f, 0.0f }, { 1.0f, 1.0f } };
-
-	cmd->push_constants(&push, 0, sizeof(push));
-	cmd->set_vertex_attrib(0, 0, VK_FORMAT_R32G32_SFLOAT, 0);
-	cmd->set_primitive_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
-	counters.draw_calls++;
-	counters.vertices += 4;
-	cmd->draw(4);
-	cmd->end_render_pass();
-}
-
 void Renderer::hazard(StatusFlags flags)
 {
 	VkPipelineStageFlags src_stages = 0;

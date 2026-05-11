@@ -280,7 +280,6 @@ public:
 		render_state.dither_native_resolution = enable;
 	}
 
-	void scanout();
 	Vulkan::ImageHandle scanout_vram_to_texture(bool scaled = true);
 	Vulkan::ImageHandle scanout_to_texture();
 

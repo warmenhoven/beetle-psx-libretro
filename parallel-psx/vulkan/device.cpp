@@ -1200,7 +1200,6 @@ Device::~Device()
 
 	wsi.acquire.reset();
 	wsi.release.reset();
-	wsi.swapchain.clear();
 
 	if (pipeline_cache != VK_NULL_HANDLE)
 	{
@@ -1230,46 +1229,6 @@ void Device::init_frame_contexts(unsigned count)
 	{
 		std::unique_ptr<PerFrame> frame = std::unique_ptr<PerFrame>(new PerFrame(this));
 		per_frame.emplace_back(std::move(frame));
-	}
-}
-
-void Device::init_swapchain(const std::vector<VkImage> &swapchain_images, unsigned width, unsigned height, VkFormat format)
-{
-	DRAIN_FRAME_LOCK();
-	wsi.swapchain.clear();
-	wait_idle_nolock();
-
-	const ImageCreateInfo info = ImageCreateInfo::render_target(width, height, format);
-
-	wsi.index = 0;
-	wsi.touched = false;
-	wsi.consumed = false;
-	for (const VkImage &image : swapchain_images)
-	{
-		VkImageViewCreateInfo view_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-		view_info.image = image;
-		view_info.format = format;
-		view_info.components.r = VK_COMPONENT_SWIZZLE_R;
-		view_info.components.g = VK_COMPONENT_SWIZZLE_G;
-		view_info.components.b = VK_COMPONENT_SWIZZLE_B;
-		view_info.components.a = VK_COMPONENT_SWIZZLE_A;
-		view_info.subresourceRange.aspectMask = format_to_aspect_mask(format);
-		view_info.subresourceRange.baseMipLevel = 0;
-		view_info.subresourceRange.baseArrayLayer = 0;
-		view_info.subresourceRange.levelCount = 1;
-		view_info.subresourceRange.layerCount = 1;
-		view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-
-		VkImageView image_view;
-		if (vkCreateImageView(device, &view_info, nullptr, &image_view) != VK_SUCCESS)
-			LOGE("Failed to create view for backbuffer.");
-
-		ImageHandle backbuffer = ImageHandle(handle_pool.images.allocate(this, image, image_view, DeviceAllocation{}, info));
-		backbuffer->set_internal_sync_object();
-		backbuffer->get_view().set_internal_sync_object();
-		wsi.swapchain.push_back(backbuffer);
-		set_name(*backbuffer, "backbuffer");
-		backbuffer->set_swapchain_layout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	}
 }
 
@@ -2016,25 +1975,6 @@ ImageViewHandle Device::create_image_view(const ImageViewCreateInfo &create_info
 	}
 	else
 		return ImageViewHandle(nullptr);
-}
-
-InitialImageBuffer Device::create_image_staging_buffer(const TextureFormatLayout &layout)
-{
-	InitialImageBuffer result;
-
-	BufferCreateInfo buffer_info = {};
-	buffer_info.domain = BufferDomain::Host;
-	buffer_info.size = layout.get_required_size();
-	buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-	result.buffer = create_buffer(buffer_info, nullptr);
-	set_name(*result.buffer, "image-upload-staging-buffer");
-
-	uint8_t *mapped = static_cast<uint8_t *>(map_host_buffer(*result.buffer, MEMORY_ACCESS_WRITE_BIT));
-	memcpy(mapped, layout.data(), layout.get_required_size());
-	unmap_host_buffer(*result.buffer, MEMORY_ACCESS_WRITE_BIT);
-
-	layout.build_buffer_image_copies(result.blits, result.num_blits);
-	return result;
 }
 
 InitialImageBuffer Device::create_image_staging_buffer(const ImageCreateInfo &info, const ImageInitialData *initial)
@@ -2795,18 +2735,6 @@ ImageView &Device::get_transient_attachment(unsigned width, unsigned height, VkF
 	return transient_allocator.request_attachment(width, height, format, index, samples, layers);
 }
 
-ImageView &Device::get_swapchain_view()
-{
-	VK_ASSERT(wsi.index < wsi.swapchain.size());
-	return wsi.swapchain[wsi.index]->get_view();
-}
-
-ImageView &Device::get_swapchain_view(unsigned index)
-{
-	VK_ASSERT(index < wsi.swapchain.size());
-	return wsi.swapchain[index]->get_view();
-}
-
 unsigned Device::get_num_frame_contexts() const
 {
 	return unsigned(per_frame.size());
@@ -2815,40 +2743,6 @@ unsigned Device::get_num_frame_contexts() const
 unsigned Device::get_current_frame_context() const
 {
 	return frame_context_index;
-}
-
-RenderPassInfo Device::get_swapchain_render_pass(SwapchainRenderPass style)
-{
-	RenderPassInfo info;
-	info.num_color_attachments = 1;
-	info.color_attachments[0] = &get_swapchain_view();
-	info.clear_attachments = ~0u;
-	info.store_attachments = 1u << 0;
-
-	switch (style)
-	{
-	case SwapchainRenderPass::Depth:
-	{
-		info.op_flags |= RENDER_PASS_OP_CLEAR_DEPTH_STENCIL_BIT;
-		info.depth_stencil =
-		    &get_transient_attachment(wsi.swapchain[wsi.index]->get_create_info().width,
-		                              wsi.swapchain[wsi.index]->get_create_info().height, get_default_depth_format());
-		break;
-	}
-
-	case SwapchainRenderPass::DepthStencil:
-	{
-		info.op_flags |= RENDER_PASS_OP_CLEAR_DEPTH_STENCIL_BIT;
-		info.depth_stencil =
-		    &get_transient_attachment(wsi.swapchain[wsi.index]->get_create_info().width,
-		                              wsi.swapchain[wsi.index]->get_create_info().height, get_default_depth_stencil_format());
-		break;
-	}
-
-	default:
-		break;
-	}
-	return info;
 }
 
 void Device::set_name(const Buffer &buffer, const char *name)
