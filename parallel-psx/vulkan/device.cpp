@@ -272,32 +272,6 @@ void Device::bake_program(Program &program)
 	program.set_pipeline_layout(request_pipeline_layout(layout));
 }
 
-bool Device::init_pipeline_cache(const uint8_t *data, size_t size)
-{
-	static const size_t uuid_size = sizeof(gpu_props.pipelineCacheUUID);
-
-	VkPipelineCacheCreateInfo info = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
-	if (!data || size < uuid_size)
-	{
-		LOGI("Creating a fresh pipeline cache.\n");
-	}
-	else if (memcmp(data, gpu_props.pipelineCacheUUID, uuid_size) != 0)
-	{
-		LOGI("Pipeline cache UUID changed.\n");
-	}
-	else
-	{
-		info.initialDataSize = size - uuid_size;
-		info.pInitialData = data + uuid_size;
-		LOGI("Initializing pipeline cache.\n");
-	}
-
-	if (pipeline_cache != VK_NULL_HANDLE)
-		vkDestroyPipelineCache(device, pipeline_cache, nullptr);
-	pipeline_cache = VK_NULL_HANDLE;
-	return vkCreatePipelineCache(device, &info, nullptr, &pipeline_cache) == VK_SUCCESS;
-}
-
 static inline char to_hex(uint8_t v)
 {
 	if (v < 10)
@@ -2414,15 +2388,6 @@ SamplerHandle Device::create_sampler(const SamplerCreateInfo &sampler_info, Stoc
 	if (vkCreateSampler(device, &info, nullptr, &sampler) != VK_SUCCESS)
 		return SamplerHandle(nullptr);
 
-	return SamplerHandle(handle_pool.samplers.allocate(this, sampler, sampler_info));
-}
-
-SamplerHandle Device::create_sampler(const SamplerCreateInfo &sampler_info)
-{
-	VkSamplerCreateInfo info = fill_vk_sampler_info(sampler_info);
-	VkSampler sampler;
-	if (vkCreateSampler(device, &info, nullptr, &sampler) != VK_SUCCESS)
-		return SamplerHandle(nullptr);
 	return SamplerHandle(handle_pool.samplers.allocate(this, sampler, sampler_info));
 }
 

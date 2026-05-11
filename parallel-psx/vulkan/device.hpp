@@ -114,8 +114,6 @@ public:
 	void set_context(const Context &context);
 	void init_frame_contexts(unsigned count);
 
-	bool init_pipeline_cache(const uint8_t *data, size_t size);
-
 	// Frame-pushing interface.
 	void next_frame_context();
 	void wait_idle();
@@ -158,7 +156,6 @@ public:
 	// Create image view, buffer views and samplers.
 	ImageViewHandle create_image_view(const ImageViewCreateInfo &view_info);
 	BufferViewHandle create_buffer_view(const BufferViewCreateInfo &view_info);
-	SamplerHandle create_sampler(const SamplerCreateInfo &info);
 
 	// Render pass helpers.
 	bool image_format_is_supported(VkFormat format, VkFormatFeatureFlags required, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL) const;
