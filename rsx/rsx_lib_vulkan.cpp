@@ -23,11 +23,12 @@ using namespace Vulkan;
 using namespace PSX;
 using namespace std;
 
-static Context *context;
-static Device *device;
-static Renderer *renderer;
+static Context *context = nullptr;
+static Device *device = nullptr;
+static Renderer *renderer = nullptr;
 static unsigned scaling = 4;
 
+extern enum rsx_renderer_type rsx_type;
 extern retro_log_printf_t log_cb;
 namespace Granite
 {
@@ -212,6 +213,9 @@ static void vk_context_reset(void)
 
 static void vk_context_destroy(void)
 {
+   if (device == nullptr)
+      return;
+
    save_state = renderer->save_vram_state();
    vulkan     = nullptr;
    scanout_handles.clear();
@@ -656,6 +660,12 @@ static void ensure_sync_index_resources(void)
 
 void rsx_vulkan_prepare_frame(void)
 {
+   if (device == nullptr)
+   {
+      rsx_type = RSX_SOFTWARE;
+      return;
+   }
+
    inside_frame = true;
    device->flush_frame();
    vulkan->wait_sync_index(vulkan->handle);
@@ -683,6 +693,9 @@ static Renderer::ScanoutMode get_scanout_mode(bool bpp24)
 void rsx_vulkan_finalize_frame(const void *fb, unsigned width,
                                unsigned height, unsigned pitch)
 {
+   if (device == nullptr)
+      return;
+
    tt_log("vk finalize_frame display=%ux%u\n",
          (unsigned)width, (unsigned)height);
    tt_frame_advance();
