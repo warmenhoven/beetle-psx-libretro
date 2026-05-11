@@ -35,7 +35,6 @@ static inline unsigned get_current_thread_index()
 	return 0;
 }
 
-using namespace std;
 using namespace Util;
 
 namespace Vulkan
@@ -307,9 +306,9 @@ static inline char to_hex(uint8_t v)
 		return char('a' + (v - 10));
 }
 
-string Device::get_pipeline_cache_string() const
+std::string Device::get_pipeline_cache_string() const
 {
-	string res;
+	std::string res;
 	res.reserve(sizeof(gpu_props.pipelineCacheUUID) * 2);
 
 	for (const uint8_t &c : gpu_props.pipelineCacheUUID)
@@ -504,7 +503,7 @@ static void request_block(Device &device, BufferBlock &block, VkDeviceSize size,
 	if (block.offset == 0)
 	{
 		if (block.size == pool.get_block_size())
-			pool.recycle_block(move(block));
+			pool.recycle_block(std::move(block));
 	}
 	else
 	{
@@ -571,7 +570,7 @@ void Device::request_staging_block_nolock(BufferBlock &block, VkDeviceSize size)
 void Device::submit(CommandBufferHandle &cmd, Fence *fence, unsigned semaphore_count, Semaphore *semaphores)
 {
 	LOCK();
-	submit_nolock(move(cmd), fence, semaphore_count, semaphores);
+	submit_nolock(std::move(cmd), fence, semaphore_count, semaphores);
 }
 
 CommandBuffer::Type Device::get_physical_queue_type(CommandBuffer::Type queue_type) const
@@ -597,7 +596,7 @@ void Device::submit_nolock(CommandBufferHandle cmd, Fence *fence, unsigned semap
 
 	pool.signal_submitted(cmd->get_command_buffer());
 	cmd->end();
-	submissions.push_back(move(cmd));
+	submissions.push_back(std::move(cmd));
 
 	VkFence cleared_fence = VK_NULL_HANDLE;
 
@@ -639,9 +638,9 @@ void Device::submit_empty_inner(CommandBuffer::Type type, VkFence *fence,
 	VkSubmitInfo submit = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
 
 	// Add external wait semaphores.
-	vector<VkSemaphore> waits;
-	vector<VkSemaphore> signals;
-	std::vector<VkPipelineStageFlags> stages = move(data.wait_stages);
+	std::vector<VkSemaphore> waits;
+	std::vector<VkSemaphore> signals;
+	std::vector<VkPipelineStageFlags> stages = std::move(data.wait_stages);
 
 	for (Semaphore &semaphore : data.wait_semaphores)
 	{
@@ -812,19 +811,19 @@ void Device::submit_queue(CommandBuffer::Type type, VkFence *fence,
 		return;
 	}
 
-	vector<VkCommandBuffer> cmds;
+	std::vector<VkCommandBuffer> cmds;
 	cmds.reserve(submissions.size());
 
-	vector<VkSubmitInfo> submits;
+	std::vector<VkSubmitInfo> submits;
 	submits.reserve(2);
 	size_t last_cmd = 0;
 
-	vector<VkSemaphore> waits[2];
-	vector<VkSemaphore> signals[2];
-	vector<VkFlags> stages[2];
+	std::vector<VkSemaphore> waits[2];
+	std::vector<VkSemaphore> signals[2];
+	std::vector<VkFlags> stages[2];
 
 	// Add external wait semaphores.
-	stages[0] = move(data.wait_stages);
+	stages[0] = std::move(data.wait_stages);
 
 	for (Semaphore &semaphore : data.wait_semaphores)
 	{
@@ -1082,7 +1081,7 @@ CommandPool &Device::get_command_pool(CommandBuffer::Type type, unsigned thread)
 	}
 }
 
-vector<CommandBufferHandle> &Device::get_queue_submissions(CommandBuffer::Type type)
+std::vector<CommandBufferHandle> &Device::get_queue_submissions(CommandBuffer::Type type)
 {
 	switch (get_physical_queue_type(type))
 	{
@@ -1166,7 +1165,7 @@ CommandBufferHandle Device::request_secondary_command_buffer_for_thread(unsigned
 
 void Device::set_acquire_semaphore(unsigned index, Semaphore acquire)
 {
-	wsi.acquire = move(acquire);
+	wsi.acquire = std::move(acquire);
 	wsi.index = index;
 	wsi.touched = false;
 	wsi.consumed = false;
@@ -1180,7 +1179,7 @@ void Device::set_acquire_semaphore(unsigned index, Semaphore acquire)
 
 Semaphore Device::consume_release_semaphore()
 {
-	Semaphore ret = move(wsi.release);
+	Semaphore ret = std::move(wsi.release);
 	wsi.release.reset();
 	return ret;
 }
@@ -1229,12 +1228,12 @@ void Device::init_frame_contexts(unsigned count)
 
 	for (unsigned i = 0; i < count; i++)
 	{
-		unique_ptr<PerFrame> frame = unique_ptr<PerFrame>(new PerFrame(this));
-		per_frame.emplace_back(move(frame));
+		std::unique_ptr<PerFrame> frame = std::unique_ptr<PerFrame>(new PerFrame(this));
+		per_frame.emplace_back(std::move(frame));
 	}
 }
 
-void Device::init_swapchain(const vector<VkImage> &swapchain_images, unsigned width, unsigned height, VkFormat format)
+void Device::init_swapchain(const std::vector<VkImage> &swapchain_images, unsigned width, unsigned height, VkFormat format)
 {
 	DRAIN_FRAME_LOCK();
 	wsi.swapchain.clear();
@@ -1287,7 +1286,7 @@ Device::PerFrame::PerFrame(Device *device)
 void Device::keep_handle_alive(ImageHandle handle)
 {
 	LOCK();
-	frame().keep_alive_images.push_back(move(handle));
+	frame().keep_alive_images.push_back(std::move(handle));
 }
 
 void Device::free_memory_nolock(const DeviceAllocation &alloc)
@@ -1300,7 +1299,7 @@ void Device::free_memory_nolock(const DeviceAllocation &alloc)
 template <typename T, typename U>
 static inline bool exists(const T &container, const U &value)
 {
-	return find(begin(container), end(container), value) != end(container);
+	return std::find(container.begin(), container.end(), value) != container.end();
 }
 
 #endif
@@ -1580,13 +1579,13 @@ void Device::PerFrame::begin()
 		alloc.free_immediate(managers.memory);
 
 	for (BufferBlock &block : vbo_blocks)
-		managers.vbo.recycle_block(move(block));
+		managers.vbo.recycle_block(std::move(block));
 	for (BufferBlock &block : ibo_blocks)
-		managers.ibo.recycle_block(move(block));
+		managers.ibo.recycle_block(std::move(block));
 	for (BufferBlock &block : ubo_blocks)
-		managers.ubo.recycle_block(move(block));
+		managers.ubo.recycle_block(std::move(block));
 	for (BufferBlock &block : staging_blocks)
-		managers.staging.recycle_block(move(block));
+		managers.staging.recycle_block(std::move(block));
 	vbo_blocks.clear();
 	ibo_blocks.clear();
 	ubo_blocks.clear();
@@ -1806,7 +1805,7 @@ public:
 	VkImageView stencil_view = VK_NULL_HANDLE;
 	VkImageView unorm_view = VK_NULL_HANDLE;
 	VkImageView srgb_view = VK_NULL_HANDLE;
-	vector<VkImageView> rt_views;
+	std::vector<VkImageView> rt_views;
 	DeviceAllocation allocation;
 	DeviceAllocator *allocator = nullptr;
 	bool owned = true;
@@ -2012,7 +2011,7 @@ ImageViewHandle Device::create_image_view(const ImageViewCreateInfo &create_info
 	{
 		holder.owned = false;
 		ret->set_alt_views(holder.depth_view, holder.stencil_view);
-		ret->set_render_target_views(move(holder.rt_views));
+		ret->set_render_target_views(std::move(holder.rt_views));
 		return ret;
 	}
 	else
@@ -2331,7 +2330,7 @@ ImageHandle Device::create_image_from_staging_buffer(const ImageCreateInfo &crea
 		if (has_view)
 		{
 			handle->get_view().set_alt_views(holder.depth_view, holder.stencil_view);
-			handle->get_view().set_render_target_views(move(holder.rt_views));
+			handle->get_view().set_render_target_views(std::move(holder.rt_views));
 			handle->get_view().set_unorm_view(holder.unorm_view);
 			handle->get_view().set_srgb_view(holder.srgb_view);
 		}
