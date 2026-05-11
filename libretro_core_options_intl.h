@@ -1660,6 +1660,7 @@ struct retro_core_option_v2_definition option_defs_ar[] = {
       {
          { "weave", OPTION_VAL_WEAVE_AR },
          { "bob",   OPTION_VAL_BOB_AR },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -3734,6 +3735,7 @@ struct retro_core_option_v2_definition option_defs_ast[] = {
       {
          { "weave", OPTION_VAL_WEAVE_AST },
          { "bob",   OPTION_VAL_BOB_AST },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -5808,6 +5810,7 @@ struct retro_core_option_v2_definition option_defs_be[] = {
       {
          { "weave", OPTION_VAL_WEAVE_BE },
          { "bob",   OPTION_VAL_BOB_BE },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -7882,6 +7885,7 @@ struct retro_core_option_v2_definition option_defs_bg[] = {
       {
          { "weave", OPTION_VAL_WEAVE_BG },
          { "bob",   OPTION_VAL_BOB_BG },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -9956,6 +9960,7 @@ struct retro_core_option_v2_definition option_defs_ca[] = {
       {
          { "weave", OPTION_VAL_WEAVE_CA },
          { "bob",   OPTION_VAL_BOB_CA },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -12030,6 +12035,7 @@ struct retro_core_option_v2_definition option_defs_chs[] = {
       {
          { "weave", OPTION_VAL_WEAVE_CHS },
          { "bob",   OPTION_VAL_BOB_CHS },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -14104,6 +14110,7 @@ struct retro_core_option_v2_definition option_defs_cht[] = {
       {
          { "weave", OPTION_VAL_WEAVE_CHT },
          { "bob",   OPTION_VAL_BOB_CHT },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -16178,6 +16185,7 @@ struct retro_core_option_v2_definition option_defs_cs[] = {
       {
          { "weave", OPTION_VAL_WEAVE_CS },
          { "bob",   OPTION_VAL_BOB_CS },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -18252,6 +18260,7 @@ struct retro_core_option_v2_definition option_defs_cy[] = {
       {
          { "weave", OPTION_VAL_WEAVE_CY },
          { "bob",   OPTION_VAL_BOB_CY },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -20326,6 +20335,7 @@ struct retro_core_option_v2_definition option_defs_da[] = {
       {
          { "weave", OPTION_VAL_WEAVE_DA },
          { "bob",   OPTION_VAL_BOB_DA },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -22400,6 +22410,7 @@ struct retro_core_option_v2_definition option_defs_de[] = {
       {
          { "weave", OPTION_VAL_WEAVE_DE },
          { "bob",   OPTION_VAL_BOB_DE },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -24474,6 +24485,7 @@ struct retro_core_option_v2_definition option_defs_el[] = {
       {
          { "weave", OPTION_VAL_WEAVE_EL },
          { "bob",   OPTION_VAL_BOB_EL },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -26548,6 +26560,7 @@ struct retro_core_option_v2_definition option_defs_en[] = {
       {
          { "weave", OPTION_VAL_WEAVE_EN },
          { "bob",   OPTION_VAL_BOB_EN },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -28622,6 +28635,7 @@ struct retro_core_option_v2_definition option_defs_eo[] = {
       {
          { "weave", OPTION_VAL_WEAVE_EO },
          { "bob",   OPTION_VAL_BOB_EO },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -30696,6 +30710,7 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       {
          { "weave", OPTION_VAL_WEAVE_ES },
          { "bob",   OPTION_VAL_BOB_ES },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -32770,6 +32785,7 @@ struct retro_core_option_v2_definition option_defs_fa[] = {
       {
          { "weave", OPTION_VAL_WEAVE_FA },
          { "bob",   OPTION_VAL_BOB_FA },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -34844,6 +34860,7 @@ struct retro_core_option_v2_definition option_defs_fi[] = {
       {
          { "weave", OPTION_VAL_WEAVE_FI },
          { "bob",   OPTION_VAL_BOB_FI },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -36918,6 +36935,7 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       {
          { "weave", OPTION_VAL_WEAVE_FR },
          { "bob",   OPTION_VAL_BOB_FR },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -38992,6 +39010,7 @@ struct retro_core_option_v2_definition option_defs_ga[] = {
       {
          { "weave", OPTION_VAL_WEAVE_GA },
          { "bob",   OPTION_VAL_BOB_GA },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -41066,6 +41085,7 @@ struct retro_core_option_v2_definition option_defs_gl[] = {
       {
          { "weave", OPTION_VAL_WEAVE_GL },
          { "bob",   OPTION_VAL_BOB_GL },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -43140,6 +43160,7 @@ struct retro_core_option_v2_definition option_defs_he[] = {
       {
          { "weave", OPTION_VAL_WEAVE_HE },
          { "bob",   OPTION_VAL_BOB_HE },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -45214,6 +45235,7 @@ struct retro_core_option_v2_definition option_defs_hr[] = {
       {
          { "weave", OPTION_VAL_WEAVE_HR },
          { "bob",   OPTION_VAL_BOB_HR },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -47288,6 +47310,7 @@ struct retro_core_option_v2_definition option_defs_hu[] = {
       {
          { "weave", OPTION_VAL_WEAVE_HU },
          { "bob",   OPTION_VAL_BOB_HU },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -49362,6 +49385,7 @@ struct retro_core_option_v2_definition option_defs_id[] = {
       {
          { "weave", OPTION_VAL_WEAVE_ID },
          { "bob",   OPTION_VAL_BOB_ID },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -51436,6 +51460,7 @@ struct retro_core_option_v2_definition option_defs_it[] = {
       {
          { "weave", OPTION_VAL_WEAVE_IT },
          { "bob",   OPTION_VAL_BOB_IT },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -53510,6 +53535,7 @@ struct retro_core_option_v2_definition option_defs_ja[] = {
       {
          { "weave", OPTION_VAL_WEAVE_JA },
          { "bob",   OPTION_VAL_BOB_JA },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -55584,6 +55610,7 @@ struct retro_core_option_v2_definition option_defs_ko[] = {
       {
          { "weave", OPTION_VAL_WEAVE_KO },
          { "bob",   OPTION_VAL_BOB_KO },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -57658,6 +57685,7 @@ struct retro_core_option_v2_definition option_defs_nl[] = {
       {
          { "weave", OPTION_VAL_WEAVE_NL },
          { "bob",   OPTION_VAL_BOB_NL },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -59732,6 +59760,7 @@ struct retro_core_option_v2_definition option_defs_no[] = {
       {
          { "weave", OPTION_VAL_WEAVE_NO },
          { "bob",   OPTION_VAL_BOB_NO },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -61806,6 +61835,7 @@ struct retro_core_option_v2_definition option_defs_or[] = {
       {
          { "weave", OPTION_VAL_WEAVE_OR },
          { "bob",   OPTION_VAL_BOB_OR },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -63880,6 +63910,7 @@ struct retro_core_option_v2_definition option_defs_pl[] = {
       {
          { "weave", OPTION_VAL_WEAVE_PL },
          { "bob",   OPTION_VAL_BOB_PL },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -65954,6 +65985,7 @@ struct retro_core_option_v2_definition option_defs_pt_br[] = {
       {
          { "weave", OPTION_VAL_WEAVE_PT_BR },
          { "bob",   OPTION_VAL_BOB_PT_BR },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -68028,6 +68060,7 @@ struct retro_core_option_v2_definition option_defs_pt_pt[] = {
       {
          { "weave", OPTION_VAL_WEAVE_PT_PT },
          { "bob",   OPTION_VAL_BOB_PT_PT },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -70102,6 +70135,7 @@ struct retro_core_option_v2_definition option_defs_ru[] = {
       {
          { "weave", OPTION_VAL_WEAVE_RU },
          { "bob",   OPTION_VAL_BOB_RU },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -72176,6 +72210,7 @@ struct retro_core_option_v2_definition option_defs_sk[] = {
       {
          { "weave", OPTION_VAL_WEAVE_SK },
          { "bob",   OPTION_VAL_BOB_SK },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -74250,6 +74285,7 @@ struct retro_core_option_v2_definition option_defs_sr[] = {
       {
          { "weave", OPTION_VAL_WEAVE_SR },
          { "bob",   OPTION_VAL_BOB_SR },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -76324,6 +76360,7 @@ struct retro_core_option_v2_definition option_defs_sv[] = {
       {
          { "weave", OPTION_VAL_WEAVE_SV },
          { "bob",   OPTION_VAL_BOB_SV },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -78398,6 +78435,7 @@ struct retro_core_option_v2_definition option_defs_th[] = {
       {
          { "weave", OPTION_VAL_WEAVE_TH },
          { "bob",   OPTION_VAL_BOB_TH },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -80472,6 +80510,7 @@ struct retro_core_option_v2_definition option_defs_tr[] = {
       {
          { "weave", OPTION_VAL_WEAVE_TR },
          { "bob",   OPTION_VAL_BOB_TR },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -82546,6 +82585,7 @@ struct retro_core_option_v2_definition option_defs_tt[] = {
       {
          { "weave", OPTION_VAL_WEAVE_TT },
          { "bob",   OPTION_VAL_BOB_TT },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -84620,6 +84660,7 @@ struct retro_core_option_v2_definition option_defs_uk[] = {
       {
          { "weave", OPTION_VAL_WEAVE_UK },
          { "bob",   OPTION_VAL_BOB_UK },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -86694,6 +86735,7 @@ struct retro_core_option_v2_definition option_defs_val[] = {
       {
          { "weave", OPTION_VAL_WEAVE_VAL },
          { "bob",   OPTION_VAL_BOB_VAL },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },
@@ -88768,6 +88810,7 @@ struct retro_core_option_v2_definition option_defs_vn[] = {
       {
          { "weave", OPTION_VAL_WEAVE_VN },
          { "bob",   OPTION_VAL_BOB_VN },
+         { "bob_offset", "Bob (Offset)" },
          { "off",   "Off" },
          { NULL, NULL },
       },

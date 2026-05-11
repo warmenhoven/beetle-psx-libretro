@@ -4353,6 +4353,8 @@ static void check_variables(bool startup)
    {
       if (strcmp(var.value, "bob") == 0)
          Deinterlacer_SetType(&deint, DEINT_BOB);
+      else if (strcmp(var.value, "bob_offset") == 0)
+         Deinterlacer_SetType(&deint, DEINT_BOB_OFFSET);
       else if (strcmp(var.value, "off") == 0)
          Deinterlacer_SetType(&deint, DEINT_OFF);
       else

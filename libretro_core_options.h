@@ -1263,13 +1263,14 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       BEETLE_OPT(deinterlacer),
       "Deinterlace Method",
       NULL,
-      "'Weave' shows both fields on the same frame for full high resolution still image, 'Bob' sacrificies resolution clarity for motion clarity. 'Off' makes the software renderer match the hardware (Vulkan/OpenGL) renderer behaviour by rasterising to all VRAM lines every frame and deferring scanout to the end of the frame, eliminating comb-on-motion in interlaced games. Note: programs that DMA to VRAM during scanout (some demos using >512-line PAL framebuffer-wrap tricks), or that update moving sprites via CPU-to-VRAM image transfers tied to the displayed field (e.g. Pro Pinball), may show stale rows or sprite ghosting under 'Off'; use 'Weave' or 'Bob' for those.",
+      "'Weave' shows both fields on the same frame for full high resolution still image, 'Bob' sacrificies resolution clarity for motion clarity. 'Bob (Offset)' is Bob with the current field doubled into the full surface height with a one-line offset between fields, preserving the libretro output resolution while keeping Bob-style smooth motion. 'Off' makes the software renderer match the hardware (Vulkan/OpenGL) renderer behaviour by rasterising to all VRAM lines every frame and deferring scanout to the end of the frame, eliminating comb-on-motion in interlaced games. Note: programs that DMA to VRAM during scanout (some demos using >512-line PAL framebuffer-wrap tricks), or that update moving sprites via CPU-to-VRAM image transfers tied to the displayed field (e.g. Pro Pinball), may show stale rows or sprite ghosting under 'Off'; use 'Weave', 'Bob', or 'Bob (Offset)' for those.",
       NULL,
       "video",
       {
-         { "weave", "Weave" },
-         { "bob",   "Bob" },
-         { "off",   "Off" },
+         { "weave",      "Weave" },
+         { "bob",        "Bob" },
+         { "bob_offset", "Bob (Offset)" },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
