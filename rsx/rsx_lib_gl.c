@@ -280,6 +280,7 @@ static INLINE void glVertexAttribLPointer(
 #define VRAM_HEIGHT 512
 #define VRAM_PIXELS (VRAM_WIDTH_PIXELS * VRAM_HEIGHT)
 
+extern enum rsx_renderer_type rsx_type;
 extern retro_log_printf_t log_cb;
 
 /* === GL hardware-render plumbing ============================
@@ -3456,6 +3457,7 @@ void rsx_gl_prepare_frame(void)
    renderer = static_renderer.state_data;
    if (!renderer)
    {
+      rsx_type = RSX_SOFTWARE;
       log_cb(RETRO_LOG_ERROR, "[rsx_gl_prepare_frame] Renderer state marked as valid but state data is null.\n");
       return;
    }
