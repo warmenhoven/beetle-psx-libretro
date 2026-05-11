@@ -422,10 +422,22 @@ static INLINE bool LineSkipTest(PS_GPU* g, unsigned y)
       return false;
 
    /* "Off" deinterlace mode: rasterise polygons to every VRAM line
-    * regardless of the game's dfe flag.  The SW path uses deferred
-    * scanout (see GPU_FlushDeferredScanout) so this can't tear. */
+    * WITHIN THE DISPLAYED Y RANGE, regardless of the game's dfe
+    * flag.  Scoping the bypass to the display rectangle preserves
+    * real-PSX dfe-skip semantics for back-buffer / offscreen VRAM
+    * regions that some games (e.g. Pro Pinball) populate from CPU
+    * and read back through GPUREAD - trampling those rows by
+    * drawing on-screen-intended polygons there would hang those
+    * games on boot. */
    if (psx_gpu_rasterize_both_fields)
-      return false;
+   {
+      const unsigned dy_start = g->DisplayFB_YStart;
+      const unsigned dy_end   = (dy_start + 480) & 0x1FF;
+      if (dy_start <= dy_end
+            ? (y >= dy_start && y < dy_end)
+            : (y >= dy_start || y < dy_end))
+         return false;
+   }
 
    if(!g->dfe && ((y & 1) == ((g->DisplayFB_YStart + g->field_ram_readout) & 1))/* && !DisplayOff*/) //&& (y >> 1) >= DisplayFB_YStart && (y >> 1) < (DisplayFB_YStart + (VertEnd - VertStart)))
       return true;
