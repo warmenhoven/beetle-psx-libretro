@@ -2057,23 +2057,26 @@ void Renderer::dispatch_set_scaled_read_texture(bool scaled_read, bool textured)
 	}
 }
 
+bool Renderer::primitive_info_sort_gt(const PrimitiveInfo &a, const PrimitiveInfo &b)
+{
+	if (a.offset_uv != b.offset_uv)
+		return a.offset_uv > b.offset_uv;
+	if (a.shift != b.shift)
+		return a.shift > b.shift;
+	if (a.scaled_read != b.scaled_read)
+		return a.scaled_read > b.scaled_read;
+	if (a.filtering != b.filtering)
+		return a.filtering > b.filtering;
+	if (a.hd_texture_index != b.hd_texture_index)
+		return a.hd_texture_index > b.hd_texture_index;
+	if (a.scissor_index != b.scissor_index)
+		return a.scissor_index > b.scissor_index;
+	return a.triangle_index > b.triangle_index;
+}
+
 void Renderer::dispatch(const std::vector<BufferVertex> &vertices, std::vector<PrimitiveInfo> &scissors, bool textured)
 {
-	std::sort(scissors.begin(), scissors.end(), [](const PrimitiveInfo &a, const PrimitiveInfo &b) {
-		if (a.offset_uv != b.offset_uv)
-			return a.offset_uv > b.offset_uv;
-		if (a.shift != b.shift)
-			return a.shift > b.shift;
-		if (a.scaled_read != b.scaled_read)
-			return a.scaled_read > b.scaled_read;
-		if (a.filtering != b.filtering)
-			return a.filtering > b.filtering;
-		if (a.hd_texture_index != b.hd_texture_index)
-			return a.hd_texture_index > b.hd_texture_index;
-		if (a.scissor_index != b.scissor_index)
-			return a.scissor_index > b.scissor_index;
-		return a.triangle_index > b.triangle_index;
-	});
+	std::sort(scissors.begin(), scissors.end(), primitive_info_sort_gt);
 
 	// Render flat-shaded primitives.
 	BufferVertex *vert = static_cast<BufferVertex *>(

@@ -1297,6 +1297,15 @@ bool srect_gt(const SRect &a, const SRect &b) {
     return a.height > b.height;
 }
 
+static bool texture_rect_sort_gt(const TextureRect &a, const TextureRect &b) {
+    // Compare .upload by internal pointer
+    if (a.upload.get() != b.upload.get())
+        return a.upload.get() > b.upload.get();
+    if (a.vram_rect != b.vram_rect)
+        return srect_gt(a.vram_rect, b.vram_rect);
+    return srect_gt(a.texture_subrect(), b.texture_subrect());
+}
+
 FusionRects fusion_rects(Rect full_page_rect, uint32_t palette_hash, RectTracker &tracker) {
     FusionRects f;
     f.scaleX = 0;
@@ -1328,14 +1337,7 @@ FusionRects fusion_rects(Rect full_page_rect, uint32_t palette_hash, RectTracker
     }
 
     // Sort rects so that the vector itself can be compared
-    std::sort(f.rects.begin(), f.rects.end(), [](const TextureRect &a, const TextureRect &b) {
-        // Compare .upload by internal pointer
-        if (a.upload.get() != b.upload.get())
-            return a.upload.get() > b.upload.get();
-		if (a.vram_rect != b.vram_rect)
-			return srect_gt(a.vram_rect, b.vram_rect);
-        return srect_gt(a.texture_subrect(), b.texture_subrect());
-	});
+    std::sort(f.rects.begin(), f.rects.end(), texture_rect_sort_gt);
 
     return f;
 }

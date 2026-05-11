@@ -633,6 +633,7 @@ private:
 	float last_uv_scale_x, last_uv_scale_y;
 
 	void dispatch(const std::vector<BufferVertex> &vertices, std::vector<PrimitiveInfo> &scissors, bool textured = false);
+	static bool primitive_info_sort_gt(const PrimitiveInfo &a, const PrimitiveInfo &b);
 	void render_opaque_primitives();
 	void render_opaque_texture_primitives();
 	void render_semi_transparent_opaque_texture_primitives();
