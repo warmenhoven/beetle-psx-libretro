@@ -3115,6 +3115,27 @@ static void alloc_surface(void)
    uint32_t width  = MEDNAFEN_CORE_GEOMETRY_MAX_W;
    uint32_t height = content_is_pal ? MEDNAFEN_CORE_GEOMETRY_MAX_H : 480;
 
+   /* The hardware renderers (OpenGL, Vulkan) never read or write
+    * this surface - the GPU runs entirely on the GPU and the
+    * libretro-side video callback is the swapchain.  Allocating
+    * a ~21 MB buffer (PAL @ 4x upscale) that nothing ever
+    * touches is pure waste, so skip it unless we know we'll
+    * use it. */
+   if (rsx_intf_is_type() != RSX_SOFTWARE)
+   {
+      if (surf)
+      {
+         MDFN_Surface_Delete(surf);
+         surf = NULL;
+      }
+      /* The per-dest_line scanout cache assumes the surface's
+       * margin pixels are zero; with no surface, the assumption
+       * is vacuous, but resetting keeps it clean if the user
+       * later switches back to SW via a core reload. */
+      GPU_InvalidateScanoutCache();
+      return;
+   }
+
    width  <<= GPU_get_upscale_shift();
    height <<= GPU_get_upscale_shift();
 
@@ -3122,6 +3143,14 @@ static void alloc_surface(void)
       MDFN_Surface_Delete(surf);
 
    surf = MDFN_Surface_New(width, height, width);
+
+   /* The fresh surface is calloc'd (all zero).  Discard any
+    * previously-cached per-dest_line geometry so the first
+    * frame's scanout writes the margin zeros explicitly - those
+    * pixels are already zero from calloc, but the cache is what
+    * lets subsequent frames skip the re-write, and it must
+    * agree with reality before the first match check. */
+   GPU_InvalidateScanoutCache();
 }
 
 static void check_system_specs(void)
@@ -4713,7 +4742,11 @@ bool retro_load_game(const struct retro_game_info *info)
    if (cd_speedup_compat_max && cd_2x_speedup > cd_speedup_compat_max)
       cd_2x_speedup = cd_speedup_compat_max;
 
-   alloc_surface();
+   /* Note: alloc_surface() used to run here, before rsx_intf_open.
+    * It now runs AFTER the renderer has been selected so it can
+    * skip the (~21 MB at 4x PAL) allocation when a hardware
+    * renderer is in use - nothing in this block depends on surf
+    * being valid, only on MDFNI_LoadGame having succeeded. */
 
 #ifdef NEED_DEINTERLACER
    PrevInterlaced = false;
@@ -4727,10 +4760,13 @@ bool retro_load_game(const struct retro_game_info *info)
    frame_count = 0;
    internal_frame_count = 0;
 
-   // MDFNI_LoadGame() has been called and surface has been allocated,
-   // we can now perform firmware check
+   // MDFNI_LoadGame() has been called, we can now perform firmware
+   // check and pick a renderer.  alloc_surface follows the renderer
+   // choice so it can be skipped on the HW paths.
    force_software_renderer = false;
    ret = rsx_intf_open(content_is_pal, force_software_renderer);
+
+   alloc_surface();
 
    /* Hide irrelevant core options */
    switch (rsx_intf_is_type())
@@ -5209,6 +5245,22 @@ void retro_run(void)
             Deinterlacer_ClearState(&deint);
 
          Deinterlacer_Process(&deint, surf, &spec.DisplayRect, rects, spec.InterlaceField);
+
+         /* The scanout cache assumes margin pixels are still zero
+          * from the previous frame's writes.  WEAVE's XReposition
+          * memmove (and only that path) shifts active pixels into
+          * the margin region, breaking the assumption.  BOB,
+          * BOB_OFFSET and FASTMAD copy / blend whole row blocks
+          * whose source rows still have zero margins, so they
+          * preserve the invariant.
+          *
+          * Ask the deinterlacer whether the *last call* actually
+          * disturbed margins, instead of invalidating on every
+          * WEAVE frame.  In steady-state WEAVE (no inter-field
+          * horizontal-resolution change), the memmove doesn't
+          * run and the cache can stay hot. */
+         if (Deinterlacer_DidDisturbMargins(&deint))
+            GPU_InvalidateScanoutCache();
 
          PrevInterlaced = true;
 

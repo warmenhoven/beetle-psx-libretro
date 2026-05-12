@@ -261,6 +261,13 @@ uint32_t GPU_Read(const int32_t timestamp, uint32_t A);
 void GPU_StartFrame(EmulateSpecStruct *espec_arg);
 void GPU_FlushDeferredScanout(void);
 
+/* Resets the per-dest_line cache that lets the SW renderer skip
+ * re-zeroing margin pixels each frame when geometry is unchanged.
+ * Must be called whenever the surface storage has been replaced
+ * (alloc_surface, GPU_Rescale) or when external code may have
+ * dirtied the margin pixels (Deinterlacer_Process in WEAVE mode). */
+void GPU_InvalidateScanoutCache(void);
+
 int GPU_StateAction(StateMem *sm, int load, int data_only);
 
 void GPU_set_visible_scanlines(int sls, int sle); // Beetle PSX addition

@@ -23,6 +23,10 @@
 
 #include <retro_miscellaneous.h>
 
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#endif
+
 #include "../math_ops.h"
 #include "../state_helpers.h"
 #include "../../rsx/rsx_intf.h"
@@ -159,9 +163,77 @@ typedef struct
    bool     rgb24;
 } GPU_DeferredScanline;
 
-#define DEFERRED_SCANOUT_MAX 576
-static GPU_DeferredScanline deferred_scanouts[DEFERRED_SCANOUT_MAX];
+/* Upper bound on the SW surface dest_line index, both for the
+ * deferred-scanout records below and the per-dest_line scanout
+ * cache further down.  Equals MEDNAFEN_CORE_GEOMETRY_MAX_H (576
+ * - PAL 480i), which is the largest dest_line the surface
+ * geometry permits.  Hardcoded here (rather than #include'd from
+ * libretro_options.h) to keep the GPU TU self-contained for the
+ * non-libretro Mednafen build. */
+#define GPU_DEST_LINE_MAX 576
+
+/* Legacy alias kept so historical comments / external readers
+ * referring to DEFERRED_SCANOUT_MAX still resolve.  New code
+ * should use GPU_DEST_LINE_MAX. */
+#define DEFERRED_SCANOUT_MAX GPU_DEST_LINE_MAX
+
+static GPU_DeferredScanline deferred_scanouts[GPU_DEST_LINE_MAX];
 static unsigned              deferred_scanout_count = 0;
+
+/*
+ * Per-dest_line cache for the SW renderer's margin zero-fill skip.
+ *
+ * The per-scanline scanout path zeros the surface row outside the
+ * active region every frame:
+ *
+ *    memset(dest, 0, udx_start * 4);             // left margin
+ *    ReorderRGB_Var(..., udx_start, udx_end);    // VRAM -> XRGB8888
+ *    for (x = udx_end; x < udmw; x++) dest[x]=0; // right margin
+ *
+ * For the steady-state case where (dx_start, dx_end, dmw) is the
+ * same as the previous frame for a given dest_line, those zero
+ * pixels are unchanged from what the previous frame already wrote -
+ * re-zeroing them is wasted memory traffic.  We cache the triple
+ * per dest_line; when it matches, skip both memsets.
+ *
+ * Cache validity (one entry == one "we know that row's margins are
+ * already zero" assertion):
+ *
+ *   - alloc_surface() resets the cache.  The surface is a fresh
+ *     calloc, so every byte is zero; cache entries start invalid
+ *     and the first frame populates them.
+ *   - GPU_Rescale() reallocates the surface (also a fresh calloc)
+ *     and resets the cache.
+ *   - Deinterlace modes that may overwrite margin pixels invalidate
+ *     the cache from libretro.c after Deinterlacer_Process runs.
+ *     DEINT_WEAVE's XReposition shift can shuffle active pixels
+ *     into the margin region; that's the only mode we need to
+ *     guard against in practice (BOB / BOB_OFFSET copy whole rows
+ *     whose source rows already have zero margins, and FASTMAD's
+ *     motion blend on (0,0,0) inputs is 0).  libretro.c uses
+ *     Deinterlacer_DidDisturbMargins() rather than the deint
+ *     mode itself, so steady-state WEAVE (where the XReposition
+ *     memmove doesn't run) keeps the cache hot.
+ *
+ * Sized to GPU_DEST_LINE_MAX so any valid dest_line can index
+ * directly without bounds-arithmetic in the hot path.
+ */
+typedef struct
+{
+   int32_t  dx_start;
+   int32_t  dx_end;
+   uint32_t dmw;
+   bool     valid;
+} GPU_ScanoutCacheEntry;
+
+static GPU_ScanoutCacheEntry scanout_cache[GPU_DEST_LINE_MAX];
+
+void GPU_InvalidateScanoutCache(void)
+{
+   unsigned i;
+   for (i = 0; i < GPU_DEST_LINE_MAX; i++)
+      scanout_cache[i].valid = false;
+}
 
 static INLINE void InvalidateTexCache(PS_GPU *gpu)
 {
@@ -1587,7 +1659,69 @@ static INLINE void ReorderRGB_Var(uint32_t out_Rshift,
    }           /* 15bpp */
    else
    {
-      for(int32 x = dx_start; x < dx_end; x++)
+      int32 x = dx_start;
+
+#if defined(__SSE2__)
+      /* 8-pixel SSE2 fast path.  Each PSX 16-bit pixel is
+       *   bit  15: mask  (dropped)
+       *   bits 10-14: B (5 bits)
+       *   bits  5-9:  G (5 bits)
+       *   bits  0-4:  R (5 bits)
+       * and the scalar path produces XRGB8888 by zero-padding each
+       * 5-bit channel to 8 bits (i.e. `<< 3`, NOT bit-replication) -
+       * we match that bit-exactly so SSE2 / scalar output is
+       * indistinguishable.
+       *
+       * Bails to scalar when:
+       *   - fewer than 8 output pixels remain (handles the tail);
+       *   - the 8-pixel source span would cross the fb_x wrap
+       *     boundary (rare: only when starting near the end of the
+       *     upscaled VRAM row, and even then only at the boundary
+       *     itself).  The scalar loop's `& fb_mask` handles wrap
+       *     correctly on its own, so we just break and let it run.
+       */
+      const __m128i mask5         = _mm_set1_epi16(0x001F);
+      const int32_t words_per_row = (fb_mask + 1) >> 1;
+      while ((dx_end - x) >= 8)
+      {
+         const int32_t word_idx = fb_x >> 1;
+         __m128i s, r5, g5, b5, r8, g8, b8, gb_lo, ar_hi;
+         __m128i pixels_lo, pixels_hi;
+
+         /* Would the 8-word load cross the wrap?  Hand off to
+          * scalar if so - it'll wrap correctly via `& fb_mask`. */
+         if (word_idx + 8 > words_per_row)
+            break;
+
+         s     = _mm_loadu_si128((const __m128i*)&src[word_idx]);
+         /* Extract R5/G5/B5 in 16-bit lanes. */
+         r5    = _mm_and_si128(s,                          mask5);
+         g5    = _mm_and_si128(_mm_srli_epi16(s,  5),      mask5);
+         b5    = _mm_and_si128(_mm_srli_epi16(s, 10),      mask5);
+         /* Scale to 8-bit by shifting left 3 (zero-pad low bits -
+          * matches scalar's `<< 3` exactly). */
+         r8    = _mm_slli_epi16(r5, 3);
+         g8    = _mm_slli_epi16(g5, 3);
+         b8    = _mm_slli_epi16(b5, 3);
+         /* Assemble per-pixel halves:
+          *   gb_lo lane i = (G8[i] << 8) | B8[i]   -> low 16 bits of XRGB8888
+          *   ar_hi lane i = 0 | R8[i]              -> high 16 bits of XRGB8888 (alpha=0)
+          */
+         gb_lo = _mm_or_si128(_mm_slli_epi16(g8, 8), b8);
+         ar_hi = r8;
+         /* Interleave 16-bit halves into 32-bit XRGB8888 pixels. */
+         pixels_lo = _mm_unpacklo_epi16(gb_lo, ar_hi);   /* P0..P3 */
+         pixels_hi = _mm_unpackhi_epi16(gb_lo, ar_hi);   /* P4..P7 */
+         _mm_storeu_si128((__m128i*)&dest[x],     pixels_lo);
+         _mm_storeu_si128((__m128i*)&dest[x + 4], pixels_hi);
+
+         x   += 8;
+         fb_x = (fb_x + 16) & fb_mask;
+      }
+#endif
+
+      /* Scalar tail / non-SSE2 fallback / wrap-crossing chunks. */
+      for (; x < dx_end; x++)
       {
          uint32_t srcpix = src[(fb_x >> 1)];
          dest[x] = MAKECOLOR(
@@ -1756,6 +1890,15 @@ int32_t GPU_Update(const int32_t sys_timestamp)
 
                         memset(dest, 0, 384 * sizeof(int32));
                      }
+
+                     /* The mismatch clear zeroes only [0, 384) per
+                      * row.  If a previous frame had a wider dmw
+                      * cached, [384, dmw_cached) on those rows now
+                      * holds stale data, but the cache thinks the
+                      * margin is clean - drop it.  Cheap because
+                      * this path only runs in the PAL/NTSC
+                      * mode-mismatch transitional state. */
+                     GPU_InvalidateScanoutCache();
                   }
                   else
                   {
@@ -1841,6 +1984,18 @@ int32_t GPU_Update(const int32_t sys_timestamp)
             unsigned pix_clock = 0;
             unsigned pix_clock_div = 0;
             uint32_t *dest = NULL;
+
+            /* Surface pitch handed to FrontIO_GPULineHook below.
+             * The hook only dereferences this when its `pixels`
+             * argument is non-NULL (crosshair plotting, lightgun
+             * sample), and `pixels` is always NULL outside the SW
+             * renderer.  Reading GPU.surface->pitch32 directly
+             * would NULL-deref on the HW renderers because
+             * alloc_surface skips the SW surface allocation
+             * there.  The placeholder value isn't used; we just
+             * need *some* defined value to pass through. */
+            const int32_t surf_pitch =
+               GPU.surface ? GPU.surface->pitch32 : 0;
 
             if((bool)(GPU.DisplayMode & DISP_PAL) == GPU.HardwarePALType
                   && GPU.scanline >= FirstVisibleLine
@@ -1950,6 +2105,24 @@ int32_t GPU_Update(const int32_t sys_timestamp)
                   }
                   else
                   {
+                     /* Margin zero-fill skip: if this dest_line's
+                      * (dx_start, dx_end, dmw) hasn't changed since
+                      * last frame AND nothing has invalidated the
+                      * cache, the [0, udx_start) and [udx_end, udmw)
+                      * regions of the row are still zero from the
+                      * previous frame's writes - skip the memset
+                      * and the trailing zero loop.  Only the active
+                      * region needs to be (re)written by
+                      * ReorderRGB_Var because VRAM may have changed
+                      * since last frame. */
+                     const bool skip_margin =
+                            dest_line >= 0
+                         && dest_line < GPU_DEST_LINE_MAX
+                         && scanout_cache[dest_line].valid
+                         && scanout_cache[dest_line].dx_start == dx_start
+                         && scanout_cache[dest_line].dx_end   == dx_end
+                         && scanout_cache[dest_line].dmw      == (uint32_t)dmw;
+
                      for (uint32_t i = 0; i < _upscale; i++)
                      {
                         const uint16_t *src = GPU.vram +
@@ -1957,7 +2130,9 @@ int32_t GPU_Update(const int32_t sys_timestamp)
 
                         dest = GPU.surface->pixels +
                            ((dest_line << GPU.upscale_shift) + i) * GPU.surface->pitch32;
-                        memset(dest, 0, udx_start * sizeof(int32));
+
+                        if (!skip_margin)
+                           memset(dest, 0, udx_start * sizeof(int32));
 
                         ReorderRGB_Var(
                               RED_SHIFT,
@@ -1972,8 +2147,20 @@ int32_t GPU_Update(const int32_t sys_timestamp)
                               GPU.upscale_shift,
                               _upscale);
 
-                        for(x = udx_end; x < udmw; x++)
-                           dest[x] = 0;
+                        if (!skip_margin)
+                           for(x = udx_end; x < udmw; x++)
+                              dest[x] = 0;
+                     }
+
+                     /* Record geometry for next frame's skip check.
+                      * dest_line bound was already validated above
+                      * (GPU_DEST_LINE_MAX covers PAL 480i). */
+                     if (dest_line >= 0 && dest_line < GPU_DEST_LINE_MAX)
+                     {
+                        scanout_cache[dest_line].dx_start = dx_start;
+                        scanout_cache[dest_line].dx_end   = dx_end;
+                        scanout_cache[dest_line].dmw      = (uint32_t)dmw;
+                        scanout_cache[dest_line].valid    = true;
                      }
 
                      /*reset dest back to i=0 for PSX_GPULineHook call */
@@ -1995,7 +2182,7 @@ int32_t GPU_Update(const int32_t sys_timestamp)
                                pix_clock_offset,
                                pix_clock,
                                pix_clock_div,
-                               GPU.surface->pitch32,
+                               surf_pitch,
                                (1 << GPU.upscale_shift));
             }
             else
@@ -2006,7 +2193,7 @@ int32_t GPU_Update(const int32_t sys_timestamp)
                                GPU.scanline == 0,
                                NULL,
                                0, 0, 0, 0,
-                               GPU.surface->pitch32,
+                               surf_pitch,
                                (1 << GPU.upscale_shift));
             }
 
@@ -2066,9 +2253,21 @@ void GPU_FlushDeferredScanout(void)
 {
    const unsigned s = GPU.upscale_shift;
    const unsigned up = 1u << s;
-   const int32_t pitch_pix = GPU.surface->pitch32;
-   uint32_t *pixels = GPU.surface->pixels;
+   int32_t   pitch_pix;
+   uint32_t *pixels;
    unsigned r;
+
+   /* Fast path and HW-renderer safety:  with no deferred records
+    * there's nothing to flush, and dereferencing GPU.surface below
+    * would crash on the HW renderers where alloc_surface() now
+    * skips the SW surface allocation.  Records are only ever
+    * appended in the SW path, so count == 0 implies "no surface
+    * needed". */
+   if (deferred_scanout_count == 0)
+      return;
+
+   pitch_pix = GPU.surface->pitch32;
+   pixels    = GPU.surface->pixels;
 
    for (r = 0; r < deferred_scanout_count; r++)
    {
@@ -2088,6 +2287,17 @@ void GPU_FlushDeferredScanout(void)
          const int32_t  dest_line = field ? rec->dest_line_other : rec->dest_line;
          const uint32_t y_up      = (uint32_t)(field ? rec->vram_y_other
                                                      : rec->vram_y_native) << s;
+         /* Margin zero-fill skip - same rationale as the immediate-
+          * scanout path.  Both fields' rows are checked / updated
+          * independently because they live at different dest_lines
+          * in the surface. */
+         const bool skip_margin =
+                dest_line >= 0
+             && dest_line < GPU_DEST_LINE_MAX
+             && scanout_cache[dest_line].valid
+             && scanout_cache[dest_line].dx_start == rec->dx_start
+             && scanout_cache[dest_line].dx_end   == rec->dx_end
+             && scanout_cache[dest_line].dmw      == (uint32_t)rec->dmw;
          unsigned i;
 
          for (i = 0; i < up; i++)
@@ -2098,7 +2308,8 @@ void GPU_FlushDeferredScanout(void)
                (size_t)(((dest_line << s) + i)) * pitch_pix;
             uint32_t x;
 
-            memset(dest, 0, udx_start * sizeof(uint32_t));
+            if (!skip_margin)
+               memset(dest, 0, udx_start * sizeof(uint32_t));
 
             ReorderRGB_Var(
                   RED_SHIFT,
@@ -2113,8 +2324,17 @@ void GPU_FlushDeferredScanout(void)
                   s,
                   up);
 
-            for (x = (uint32_t)udx_end; x < udmw; x++)
-               dest[x] = 0;
+            if (!skip_margin)
+               for (x = (uint32_t)udx_end; x < udmw; x++)
+                  dest[x] = 0;
+         }
+
+         if (dest_line >= 0 && dest_line < GPU_DEST_LINE_MAX)
+         {
+            scanout_cache[dest_line].dx_start = rec->dx_start;
+            scanout_cache[dest_line].dx_end   = rec->dx_end;
+            scanout_cache[dest_line].dmw      = (uint32_t)rec->dmw;
+            scanout_cache[dest_line].valid    = true;
          }
       }
 
