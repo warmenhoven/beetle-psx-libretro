@@ -1804,6 +1804,10 @@ int32_t GPU_Update(const int32_t sys_timestamp)
             unsigned int VisibleLineCountTemp =
                (crop_overscan == 2 ? (GPU.VertEnd - GPU.VertStart) - ((GPU.HardwarePALType ? 287 : 239) - GPU.LineVisLast) - GPU.LineVisFirst : GPU.LineVisLast + 1 - GPU.LineVisFirst); /*HardwarePALType ? 288 : 240; */
 
+            /* Get rid of smart crop startup logo shift */
+            if (crop_overscan == 2 && VisibleLineCountTemp == 236 && (GPU.DisplayMode & DISP_INTERLACED))
+               VisibleLineCountTemp = 239;
+
             if (VisibleLineCountTemp > (GPU.HardwarePALType ? 288 : 240))
             {
                FirstVisibleLineTemp =
