@@ -5330,6 +5330,13 @@ void retro_run(void)
          /* Smart height geometry trigger */
          if (crop_overscan == 2)
          {
+            /* Get rid of startup logo shift */
+            if (currently_interlaced || PrevInterlaced)
+            {
+               if (height == 478 || height == 239)
+                  height = (height == 239) ? 236 : 472;
+            }
+
             if (image_height != height)
             {
                image_height = height;
