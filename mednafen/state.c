@@ -44,18 +44,11 @@ int StateAction(StateMem *sm, int load, int data_only);
 
 bool FastSaveStates = false;
 
-static INLINE void MDFN_en32lsb_(uint8_t *buf, uint32_t morp)
-{
-   buf[0]=morp;
-   buf[1]=morp>>8;
-   buf[2]=morp>>16;
-   buf[3]=morp>>24;
-}
-
-static INLINE uint32_t MDFN_de32lsb_(const uint8_t *morp)
-{
-   return(morp[0]|(morp[1]<<8)|(morp[2]<<16)|(morp[3]<<24));
-}
+/* MDFN_de32lsb / MDFN_en32lsb from mednafen-endian.h handle the
+ * little-endian encode/decode of a u32 to/from a byte buffer. They
+ * compile to a single mov on LE and a load+bswap on BE. The previous
+ * file-local MDFN_de32lsb_ / MDFN_en32lsb_ were byte-shift open-codes
+ * of the same operation - identical behaviour, redundant source. */
 
 /* Read `len` bytes from the state stream into `buffer`. Returns the
  * number of bytes read (== len on success, 0 on failure / short stream).
@@ -188,10 +181,10 @@ static int32_t smem_seek(StateMem *st, uint32_t offset, int whence)
 static int smem_write32le(StateMem *st, uint32_t b)
 {
    uint8_t s[4];
-   s[0]=b;
-   s[1]=b>>8;
-   s[2]=b>>16;
-   s[3]=b>>24;
+   /* MDFN_en32lsb encodes b as a little-endian u32 into s[].  On LE
+    * this is a single mov; on BE a bswap + store. The previous code
+    * open-coded the byte-shift pattern. */
+   MDFN_en32lsb(s, b);
    return((smem_write(st, s, 4)<4)?0:4);
 }
 
@@ -202,7 +195,9 @@ static int smem_read32le(StateMem *st, uint32_t *b)
    if(smem_read(st, s, 4) < 4)
       return(0);
 
-   *b = s[0] | (s[1] << 8) | (s[2] << 16) | (s[3] << 24);
+   /* MDFN_de32lsb decodes a little-endian u32 from s[] - single load
+    * on LE, load + bswap on BE. */
+   *b = MDFN_de32lsb(s);
 
    return(4);
 }
@@ -210,12 +205,51 @@ static int smem_read32le(StateMem *st, uint32_t *b)
 #ifdef MSB_FIRST
 static void FlipByteOrder(uint8_t *src, uint32_t count)
 {
-   uint8_t *start = src;
+   uint8_t *start;
    uint8_t *end;
 
    if ((count & 1) || !count)
       return;     /* This shouldn't happen. */
 
+   /* SFVAR-tagged scalars dominate the call sites - they go through
+    * here with count == 2, 4, or 8 (sizeof of the underlying field).
+    * Dispatch those via __builtin_bswap* so the body collapses to a
+    * single load - bswap - store. The generic byte-reverse loop
+    * survives below for anything else (large RLSB blobs are rare but
+    * legal). */
+#if defined(__GNUC__) || defined(__clang__)
+   switch (count)
+   {
+      case 2:
+      {
+         uint16_t v;
+         memcpy(&v, src, 2);
+         v = __builtin_bswap16(v);
+         memcpy(src, &v, 2);
+         return;
+      }
+      case 4:
+      {
+         uint32_t v;
+         memcpy(&v, src, 4);
+         v = __builtin_bswap32(v);
+         memcpy(src, &v, 4);
+         return;
+      }
+      case 8:
+      {
+         uint64_t v;
+         memcpy(&v, src, 8);
+         v = __builtin_bswap64(v);
+         memcpy(src, &v, 8);
+         return;
+      }
+      default:
+         break;
+   }
+#endif
+
+   start = src;
    end = src + count - 1;
    /* Iterate while start < end, not 'count' times: the original loop
     * over-iterated and effectively performed a no-op on every even count.
@@ -582,9 +616,9 @@ int MDFNSS_SaveSM(void *st_p, int a, int b, const void *c, const void *d,
    memset(header, 0, sizeof(header));
    memcpy(header, header_magic, 8);
 
-   MDFN_en32lsb_(header + 16, MEDNAFEN_VERSION_NUMERIC);
-   MDFN_en32lsb_(header + 24, neowidth);
-   MDFN_en32lsb_(header + 28, neoheight);
+   MDFN_en32lsb(header + 16, MEDNAFEN_VERSION_NUMERIC);
+   MDFN_en32lsb(header + 24, neowidth);
+   MDFN_en32lsb(header + 28, neoheight);
 
    /* If the initial header write fails (out of memory), fail fast
     * rather than letting StateAction run and produce a corrupt
@@ -627,7 +661,7 @@ int MDFNSS_LoadSM(void *st_p, int a, int b)
          && memcmp(header, "MDFNSVST", 8))
       return(0);
 
-   stateversion = MDFN_de32lsb_(header + 16);
+   stateversion = MDFN_de32lsb(header + 16);
 
    return(StateAction(st, stateversion, 0));
 }

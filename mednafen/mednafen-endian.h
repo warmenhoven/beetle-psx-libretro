@@ -15,10 +15,12 @@
  * to/from byte buffers.
  *
  * Only the variants that have callers in this code base are kept.
- * Big-endian readers/writers, MDFN_de64lsb, MDFN_en64lsb,
- * MDFN_de24msb, and MDFN_bswap64 had zero external callers and have
- * been removed; if a future caller needs them they are trivially
- * derivable from the existing pattern.
+ * Previously dead helpers removed (no callers anywhere in tree):
+ *   - Big-endian readers/writers (de*msb / en*msb)
+ *   - MDFN_de64lsb, MDFN_en64lsb, MDFN_de24msb, MDFN_bswap64
+ *   - MDFN_densb_u32_aligned
+ * If a future caller needs any of them they're trivially derivable
+ * from the existing pattern.
  *
  * Host endianness is decided at preprocess time via MSB_FIRST (set
  * in mednafen-types.h based on __BYTE_ORDER__). On a little-endian
@@ -156,19 +158,6 @@ static INLINE uint32 MDFN_de32lsb_aligned(const void *ptr)
 #else
    return tmp;
 #endif
-}
-
-/*
- * Native-endian aligned u32 reader. Reads raw memory without any
- * swap regardless of host endianness; used for type-pun reads from
- * memory-mapped regions whose contents are already in host order.
- */
-
-static INLINE uint32 MDFN_densb_u32_aligned(const void *ptr)
-{
-   uint32 tmp;
-   memcpy(&tmp, MDFN_BUILTIN_ASSUME_ALIGNED(ptr, 4), sizeof(tmp));
-   return tmp;
 }
 
 /*

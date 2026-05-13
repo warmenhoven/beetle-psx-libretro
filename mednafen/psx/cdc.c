@@ -1320,8 +1320,9 @@ void PS_CDC_HandlePlayRead(PS_CDC *cdc)
             tr[5] = cdc->SubQBuf_Safe[0x9];  /* A F */
          }
 
-         tr[6] = abs_lev_max >> 0;
-         tr[7] = abs_lev_max >> 8;
+         /* abs_lev_max is the absolute-level peak; the CDC reports
+          * it as a little-endian u16 in tr[6..7]. */
+         MDFN_en16lsb(&tr[6], abs_lev_max);
 
          PS_CDC_SetAIP_Buf(cdc, CDCIRQ_DATA_READY, 8, tr);
       }
