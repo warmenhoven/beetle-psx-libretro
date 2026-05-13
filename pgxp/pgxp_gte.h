@@ -59,10 +59,6 @@ void	PGXP_GTE_CTC2(u32 instr, u32 rdVal, u32 rtVal);		// copy GPR reg to GTE ctr
 void	PGXP_GTE_LWC2(u32 instr, u32 rtVal, u32 addr);	// copy memory to GTE reg
 void	PGXP_GTE_SWC2(u32 instr, u32 rtVal, u32 addr);	// copy GTE reg to memory
 
-#ifndef max
-#   define max(a, b) ((a) > (b) ? (a) : (b))
-#endif
-
 #ifdef __cplusplus
 }
 #endif
