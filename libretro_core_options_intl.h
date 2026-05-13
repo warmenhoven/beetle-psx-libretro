@@ -1003,6 +1003,7 @@ struct retro_core_option_v2_definition option_defs_ar[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_AR,
@@ -1017,7 +1018,6 @@ struct retro_core_option_v2_definition option_defs_ar[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_AR,
@@ -3079,6 +3079,7 @@ struct retro_core_option_v2_definition option_defs_ast[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_AST,
@@ -3093,7 +3094,6 @@ struct retro_core_option_v2_definition option_defs_ast[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_AST,
@@ -5155,6 +5155,7 @@ struct retro_core_option_v2_definition option_defs_be[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_BE,
@@ -5169,7 +5170,6 @@ struct retro_core_option_v2_definition option_defs_be[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_BE,
@@ -7231,6 +7231,7 @@ struct retro_core_option_v2_definition option_defs_bg[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_BG,
@@ -7245,7 +7246,6 @@ struct retro_core_option_v2_definition option_defs_bg[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_BG,
@@ -9307,6 +9307,7 @@ struct retro_core_option_v2_definition option_defs_ca[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_CA,
@@ -9321,7 +9322,6 @@ struct retro_core_option_v2_definition option_defs_ca[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_CA,
@@ -11383,6 +11383,7 @@ struct retro_core_option_v2_definition option_defs_chs[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_CHS,
@@ -11397,7 +11398,6 @@ struct retro_core_option_v2_definition option_defs_chs[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_CHS,
@@ -13459,6 +13459,7 @@ struct retro_core_option_v2_definition option_defs_cht[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_CHT,
@@ -13473,7 +13474,6 @@ struct retro_core_option_v2_definition option_defs_cht[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_CHT,
@@ -15535,6 +15535,7 @@ struct retro_core_option_v2_definition option_defs_cs[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_CS,
@@ -15549,7 +15550,6 @@ struct retro_core_option_v2_definition option_defs_cs[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_CS,
@@ -17611,6 +17611,7 @@ struct retro_core_option_v2_definition option_defs_cy[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_CY,
@@ -17625,7 +17626,6 @@ struct retro_core_option_v2_definition option_defs_cy[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_CY,
@@ -19687,6 +19687,7 @@ struct retro_core_option_v2_definition option_defs_da[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_DA,
@@ -19701,7 +19702,6 @@ struct retro_core_option_v2_definition option_defs_da[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_DA,
@@ -21763,6 +21763,7 @@ struct retro_core_option_v2_definition option_defs_de[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_DE,
@@ -21777,7 +21778,6 @@ struct retro_core_option_v2_definition option_defs_de[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_DE,
@@ -23839,6 +23839,7 @@ struct retro_core_option_v2_definition option_defs_el[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_EL,
@@ -23853,7 +23854,6 @@ struct retro_core_option_v2_definition option_defs_el[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_EL,
@@ -25142,7 +25142,7 @@ struct retro_core_options_v2 options_el = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_EN NULL
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_EN NULL
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_EN NULL
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_EN "Replace native PS1 affine texture mapping with perspective correct texture mapping. Eliminates position-dependent distortion and warping of textures, resulting in properly aligned textures. This option is applied only when PGXP Operation Mode is enabled. Only supported by the hardware renderers."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_EN "Replace native PS1 affine texture mapping with perspective correct texture mapping. Eliminates position-dependent distortion and warping of textures, resulting in properly aligned textures. This option is applied only when PGXP Operation Mode is enabled. Supported by the hardware renderers and the software renderer."
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_EN NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_EN "Display the internal frame rate at which the emulated PlayStation system is rendering content. Note: Requires on-screen notifications to be enabled in the libretro front-end."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_EN NULL
@@ -25915,6 +25915,7 @@ struct retro_core_option_v2_definition option_defs_en[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_EN,
@@ -25929,7 +25930,6 @@ struct retro_core_option_v2_definition option_defs_en[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_EN,
@@ -27991,6 +27991,7 @@ struct retro_core_option_v2_definition option_defs_eo[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_EO,
@@ -28005,7 +28006,6 @@ struct retro_core_option_v2_definition option_defs_eo[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_EO,
@@ -30067,6 +30067,7 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_ES,
@@ -30081,7 +30082,6 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_ES,
@@ -32143,6 +32143,7 @@ struct retro_core_option_v2_definition option_defs_fa[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_FA,
@@ -32157,7 +32158,6 @@ struct retro_core_option_v2_definition option_defs_fa[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_FA,
@@ -34219,6 +34219,7 @@ struct retro_core_option_v2_definition option_defs_fi[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_FI,
@@ -34233,7 +34234,6 @@ struct retro_core_option_v2_definition option_defs_fi[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_FI,
@@ -36295,6 +36295,7 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_FR,
@@ -36309,7 +36310,6 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_FR,
@@ -38371,6 +38371,7 @@ struct retro_core_option_v2_definition option_defs_ga[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_GA,
@@ -38385,7 +38386,6 @@ struct retro_core_option_v2_definition option_defs_ga[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_GA,
@@ -40447,6 +40447,7 @@ struct retro_core_option_v2_definition option_defs_gl[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_GL,
@@ -40461,7 +40462,6 @@ struct retro_core_option_v2_definition option_defs_gl[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_GL,
@@ -42523,6 +42523,7 @@ struct retro_core_option_v2_definition option_defs_he[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_HE,
@@ -42537,7 +42538,6 @@ struct retro_core_option_v2_definition option_defs_he[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_HE,
@@ -44599,6 +44599,7 @@ struct retro_core_option_v2_definition option_defs_hr[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_HR,
@@ -44613,7 +44614,6 @@ struct retro_core_option_v2_definition option_defs_hr[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_HR,
@@ -46675,6 +46675,7 @@ struct retro_core_option_v2_definition option_defs_hu[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_HU,
@@ -46689,7 +46690,6 @@ struct retro_core_option_v2_definition option_defs_hu[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_HU,
@@ -48751,6 +48751,7 @@ struct retro_core_option_v2_definition option_defs_id[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_ID,
@@ -48765,7 +48766,6 @@ struct retro_core_option_v2_definition option_defs_id[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_ID,
@@ -50827,6 +50827,7 @@ struct retro_core_option_v2_definition option_defs_it[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_IT,
@@ -50841,7 +50842,6 @@ struct retro_core_option_v2_definition option_defs_it[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_IT,
@@ -52903,6 +52903,7 @@ struct retro_core_option_v2_definition option_defs_ja[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_JA,
@@ -52917,7 +52918,6 @@ struct retro_core_option_v2_definition option_defs_ja[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_JA,
@@ -54979,6 +54979,7 @@ struct retro_core_option_v2_definition option_defs_ko[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_KO,
@@ -54993,7 +54994,6 @@ struct retro_core_option_v2_definition option_defs_ko[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_KO,
@@ -57055,6 +57055,7 @@ struct retro_core_option_v2_definition option_defs_nl[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_NL,
@@ -57069,7 +57070,6 @@ struct retro_core_option_v2_definition option_defs_nl[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_NL,
@@ -59131,6 +59131,7 @@ struct retro_core_option_v2_definition option_defs_no[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_NO,
@@ -59145,7 +59146,6 @@ struct retro_core_option_v2_definition option_defs_no[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_NO,
@@ -61207,6 +61207,7 @@ struct retro_core_option_v2_definition option_defs_or[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_OR,
@@ -61221,7 +61222,6 @@ struct retro_core_option_v2_definition option_defs_or[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_OR,
@@ -63283,6 +63283,7 @@ struct retro_core_option_v2_definition option_defs_pl[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_PL,
@@ -63297,7 +63298,6 @@ struct retro_core_option_v2_definition option_defs_pl[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_PL,
@@ -65359,6 +65359,7 @@ struct retro_core_option_v2_definition option_defs_pt_br[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_PT_BR,
@@ -65373,7 +65374,6 @@ struct retro_core_option_v2_definition option_defs_pt_br[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_PT_BR,
@@ -67435,6 +67435,7 @@ struct retro_core_option_v2_definition option_defs_pt_pt[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_PT_PT,
@@ -67449,7 +67450,6 @@ struct retro_core_option_v2_definition option_defs_pt_pt[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_PT_PT,
@@ -69511,6 +69511,7 @@ struct retro_core_option_v2_definition option_defs_ru[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_RU,
@@ -69525,7 +69526,6 @@ struct retro_core_option_v2_definition option_defs_ru[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_RU,
@@ -71587,6 +71587,7 @@ struct retro_core_option_v2_definition option_defs_sk[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_SK,
@@ -71601,7 +71602,6 @@ struct retro_core_option_v2_definition option_defs_sk[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_SK,
@@ -73663,6 +73663,7 @@ struct retro_core_option_v2_definition option_defs_sr[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_SR,
@@ -73677,7 +73678,6 @@ struct retro_core_option_v2_definition option_defs_sr[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_SR,
@@ -75739,6 +75739,7 @@ struct retro_core_option_v2_definition option_defs_sv[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_SV,
@@ -75753,7 +75754,6 @@ struct retro_core_option_v2_definition option_defs_sv[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_SV,
@@ -77815,6 +77815,7 @@ struct retro_core_option_v2_definition option_defs_th[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_TH,
@@ -77829,7 +77830,6 @@ struct retro_core_option_v2_definition option_defs_th[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_TH,
@@ -79891,6 +79891,7 @@ struct retro_core_option_v2_definition option_defs_tr[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_TR,
@@ -79905,7 +79906,6 @@ struct retro_core_option_v2_definition option_defs_tr[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_TR,
@@ -81967,6 +81967,7 @@ struct retro_core_option_v2_definition option_defs_tt[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_TT,
@@ -81981,7 +81982,6 @@ struct retro_core_option_v2_definition option_defs_tt[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_TT,
@@ -84043,6 +84043,7 @@ struct retro_core_option_v2_definition option_defs_uk[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_UK,
@@ -84057,7 +84058,6 @@ struct retro_core_option_v2_definition option_defs_uk[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_UK,
@@ -86119,6 +86119,7 @@ struct retro_core_option_v2_definition option_defs_val[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_VAL,
@@ -86133,7 +86134,6 @@ struct retro_core_option_v2_definition option_defs_val[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_VAL,
@@ -88195,6 +88195,7 @@ struct retro_core_option_v2_definition option_defs_vn[] = {
       },
       "disabled"
    },
+#endif
    {
       BEETLE_OPT(pgxp_texture),
       BEETLE_OPT_PGXP_TEXTURE_LABEL_VN,
@@ -88209,7 +88210,6 @@ struct retro_core_option_v2_definition option_defs_vn[] = {
       },
       "disabled"
    },
-#endif
    {
       BEETLE_OPT(display_internal_fps),
       BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_VN,

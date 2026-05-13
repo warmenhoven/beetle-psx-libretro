@@ -56,6 +56,15 @@ extern "C" {
           return (PGXP_GetModes() & (PGXP_MODE_MEMORY | PGXP_VERTEX_CACHE)) != 0;
         }
 
+        /* True if the user has enabled perspective-correct texturing.
+         * Used by the software polygon rasteriser to decide whether to
+         * take the perspective UV path (added in the libretro fork);
+         * the GL / Vulkan backends consult it in their own vertex push
+         * code. */
+        static inline int PGXP_texture_correction_enabled(void) {
+          return (PGXP_GetModes() & PGXP_TEXTURE_CORRECTION) != 0;
+        }
+
 #ifdef __cplusplus
 }//extern "C"
 #endif

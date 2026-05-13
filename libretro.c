@@ -5053,8 +5053,10 @@ bool retro_load_game(const struct retro_game_info *info)
          environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
          option_display.key = BEETLE_OPT(pgxp_vertex);
          environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
-         option_display.key = BEETLE_OPT(pgxp_texture);
-         environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+         /* pgxp_texture is no longer hidden in SW mode: the SW
+          * rasteriser implements perspective-correct texturing
+          * via the precise[2] (w) PGXP carries on every vertex.
+          * pgxp_vertex above stays hidden - it's still HW-only. */
 
          option_display.key = BEETLE_OPT(image_offset_cycles);
          environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
