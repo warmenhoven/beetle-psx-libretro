@@ -208,7 +208,6 @@ endif
    SOURCES_C +=   $(MEDNAFEN_DIR)/mempatcher.c \
                   $(MEDNAFEN_DIR)/general.c \
                   $(MEDNAFEN_DIR)/error.c \
-                  $(MEDNAFEN_DIR)/mednafen-endian.c \
                   $(MEDNAFEN_DIR)/video/Deinterlacer.c \
                   $(CORE_DIR)/input.c \
                   $(CORE_EMU_DIR)/dma.c \

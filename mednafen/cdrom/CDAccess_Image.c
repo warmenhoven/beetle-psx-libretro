@@ -32,7 +32,6 @@
 #include <streams/file_stream.h>
 
 #include "../mednafen.h"
-#include "../mednafen-endian.h"
 #include "../error.h"
 
 #include <sys/types.h>
@@ -1173,7 +1172,16 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
                 * already have correct bytes and no further work is
                 * needed. */
 #ifdef MSB_FIRST
-               Endian_A16_Swap(buf, 588 * 2);
+               {
+                  uint8 *_s = (uint8 *)buf;
+                  int32  _i;
+                  for (_i = 0; _i < 588 * 2 * 2; _i += 2)
+                  {
+                     uint8 _t = _s[_i];
+                     _s[_i]     = _s[_i + 1];
+                     _s[_i + 1] = _t;
+                  }
+               }
 #endif
             }
             else	/* Binary, woo. */
@@ -1194,7 +1202,16 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
                      cdstream_read(ct->fp, buf, 2352);
 
                      if(ct->RawAudioMSBFirst)
-                        Endian_A16_Swap(buf, 588 * 2);
+                     {
+                        uint8 *_s = (uint8 *)buf;
+                        int32  _i;
+                        for (_i = 0; _i < 588 * 2 * 2; _i += 2)
+                        {
+                           uint8 _t = _s[_i];
+                           _s[_i]     = _s[_i + 1];
+                           _s[_i + 1] = _t;
+                        }
+                     }
                      break;
 
                   case DI_FORMAT_MODE1:

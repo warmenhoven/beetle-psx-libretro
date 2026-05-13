@@ -23,7 +23,6 @@
 #include "parallel-psx/custom-textures/dbg_input_callback.h"
 retro_input_state_t dbg_input_state_cb = 0;
 
-#include "mednafen/mednafen-endian.h"
 #include "mednafen/mednafen-types.h"
 #include "mednafen/psx/psx.h"
 #include "mednafen/error.h"

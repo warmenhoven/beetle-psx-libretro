@@ -36,7 +36,6 @@
 #include "../math_ops.h"
 #include "../mednafen.h"
 #include "../../osd_message.h"
-#include "../mednafen-endian.h"
 
 /* PGXP */
 #include "../pgxp/pgxp_cpu.h"

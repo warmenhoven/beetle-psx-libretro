@@ -35,7 +35,6 @@ extern uint8_t analog_combo_hold;
 
 #include "../state_helpers.h"
 #include "../mednafen.h"
-#include "../mednafen-endian.h"
 #include "../../osd_message.h"
 #include "../video/surface.h"
 

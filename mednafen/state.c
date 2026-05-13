@@ -27,7 +27,6 @@
 #include <retro_inline.h>
 
 #include "state.h"
-#include "mednafen-endian.h"
 
 #define SSEEK_END	2
 #define SSEEK_CUR	1
@@ -312,11 +311,40 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
       /* Flip the byte order... */
       if(sf->flags & MDFNSTATE_BOOL) { }
       else if(sf->flags & MDFNSTATE_RLSB64)
-         Endian_A64_Swap(sf->v, bytesize / sizeof(uint64_t));
+      {
+         uint8_t *_s = (uint8_t *)sf->v;
+         int32_t  _i;
+         for (_i = 0; _i + 7 < bytesize; _i += 8)
+         {
+            uint8_t _t;
+            _t = _s[_i];     _s[_i]     = _s[_i + 7]; _s[_i + 7] = _t;
+            _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 6]; _s[_i + 6] = _t;
+            _t = _s[_i + 2]; _s[_i + 2] = _s[_i + 5]; _s[_i + 5] = _t;
+            _t = _s[_i + 3]; _s[_i + 3] = _s[_i + 4]; _s[_i + 4] = _t;
+         }
+      }
       else if(sf->flags & MDFNSTATE_RLSB32)
-         Endian_A32_Swap(sf->v, bytesize / sizeof(uint32_t));
+      {
+         uint8_t *_s = (uint8_t *)sf->v;
+         int32_t  _i;
+         for (_i = 0; _i + 3 < bytesize; _i += 4)
+         {
+            uint8_t _t;
+            _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
+            _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+         }
+      }
       else if(sf->flags & MDFNSTATE_RLSB16)
-         Endian_A16_Swap(sf->v, bytesize / sizeof(uint16_t));
+      {
+         uint8_t *_s = (uint8_t *)sf->v;
+         int32_t  _i;
+         for (_i = 0; _i + 1 < bytesize; _i += 2)
+         {
+            uint8_t _t = _s[_i];
+            _s[_i]     = _s[_i + 1];
+            _s[_i + 1] = _t;
+         }
+      }
       else if(sf->flags & RLSB)
          FlipByteOrder((uint8_t*)sf->v, bytesize);
 #endif
@@ -335,11 +363,40 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
                /* Restore the byte order before bailing so we don't
                 * leave the live emulator state byte-flipped. */
                if(sf->flags & MDFNSTATE_RLSB64)
-                  Endian_A64_Swap(sf->v, bytesize / sizeof(uint64_t));
+               {
+                  uint8_t *_s = (uint8_t *)sf->v;
+                  int32_t  _i;
+                  for (_i = 0; _i + 7 < bytesize; _i += 8)
+                  {
+                     uint8_t _t;
+                     _t = _s[_i];     _s[_i]     = _s[_i + 7]; _s[_i + 7] = _t;
+                     _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 6]; _s[_i + 6] = _t;
+                     _t = _s[_i + 2]; _s[_i + 2] = _s[_i + 5]; _s[_i + 5] = _t;
+                     _t = _s[_i + 3]; _s[_i + 3] = _s[_i + 4]; _s[_i + 4] = _t;
+                  }
+               }
                else if(sf->flags & MDFNSTATE_RLSB32)
-                  Endian_A32_Swap(sf->v, bytesize / sizeof(uint32_t));
+               {
+                  uint8_t *_s = (uint8_t *)sf->v;
+                  int32_t  _i;
+                  for (_i = 0; _i + 3 < bytesize; _i += 4)
+                  {
+                     uint8_t _t;
+                     _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
+                     _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+                  }
+               }
                else if(sf->flags & MDFNSTATE_RLSB16)
-                  Endian_A16_Swap(sf->v, bytesize / sizeof(uint16_t));
+               {
+                  uint8_t *_s = (uint8_t *)sf->v;
+                  int32_t  _i;
+                  for (_i = 0; _i + 1 < bytesize; _i += 2)
+                  {
+                     uint8_t _t = _s[_i];
+                     _s[_i]     = _s[_i + 1];
+                     _s[_i + 1] = _t;
+                  }
+               }
                else if(sf->flags & RLSB)
                   FlipByteOrder((uint8_t*)sf->v, bytesize);
 #endif
@@ -354,11 +411,40 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
 #ifdef MSB_FIRST
             if(sf->flags & MDFNSTATE_BOOL) { }
             else if(sf->flags & MDFNSTATE_RLSB64)
-               Endian_A64_Swap(sf->v, bytesize / sizeof(uint64_t));
+            {
+               uint8_t *_s = (uint8_t *)sf->v;
+               int32_t  _i;
+               for (_i = 0; _i + 7 < bytesize; _i += 8)
+               {
+                  uint8_t _t;
+                  _t = _s[_i];     _s[_i]     = _s[_i + 7]; _s[_i + 7] = _t;
+                  _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 6]; _s[_i + 6] = _t;
+                  _t = _s[_i + 2]; _s[_i + 2] = _s[_i + 5]; _s[_i + 5] = _t;
+                  _t = _s[_i + 3]; _s[_i + 3] = _s[_i + 4]; _s[_i + 4] = _t;
+               }
+            }
             else if(sf->flags & MDFNSTATE_RLSB32)
-               Endian_A32_Swap(sf->v, bytesize / sizeof(uint32_t));
+            {
+               uint8_t *_s = (uint8_t *)sf->v;
+               int32_t  _i;
+               for (_i = 0; _i + 3 < bytesize; _i += 4)
+               {
+                  uint8_t _t;
+                  _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
+                  _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+               }
+            }
             else if(sf->flags & MDFNSTATE_RLSB16)
-               Endian_A16_Swap(sf->v, bytesize / sizeof(uint16_t));
+            {
+               uint8_t *_s = (uint8_t *)sf->v;
+               int32_t  _i;
+               for (_i = 0; _i + 1 < bytesize; _i += 2)
+               {
+                  uint8_t _t = _s[_i];
+                  _s[_i]     = _s[_i + 1];
+                  _s[_i + 1] = _t;
+               }
+            }
             else if(sf->flags & RLSB)
                FlipByteOrder((uint8_t*)sf->v, bytesize);
 #endif
@@ -370,11 +456,40 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
       /* Now restore the original byte order. */
       if(sf->flags & MDFNSTATE_BOOL) { }
       else if(sf->flags & MDFNSTATE_RLSB64)
-         Endian_A64_Swap(sf->v, bytesize / sizeof(uint64_t));
+      {
+         uint8_t *_s = (uint8_t *)sf->v;
+         int32_t  _i;
+         for (_i = 0; _i + 7 < bytesize; _i += 8)
+         {
+            uint8_t _t;
+            _t = _s[_i];     _s[_i]     = _s[_i + 7]; _s[_i + 7] = _t;
+            _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 6]; _s[_i + 6] = _t;
+            _t = _s[_i + 2]; _s[_i + 2] = _s[_i + 5]; _s[_i + 5] = _t;
+            _t = _s[_i + 3]; _s[_i + 3] = _s[_i + 4]; _s[_i + 4] = _t;
+         }
+      }
       else if(sf->flags & MDFNSTATE_RLSB32)
-         Endian_A32_Swap(sf->v, bytesize / sizeof(uint32_t));
+      {
+         uint8_t *_s = (uint8_t *)sf->v;
+         int32_t  _i;
+         for (_i = 0; _i + 3 < bytesize; _i += 4)
+         {
+            uint8_t _t;
+            _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
+            _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+         }
+      }
       else if(sf->flags & MDFNSTATE_RLSB16)
-         Endian_A16_Swap(sf->v, bytesize / sizeof(uint16_t));
+      {
+         uint8_t *_s = (uint8_t *)sf->v;
+         int32_t  _i;
+         for (_i = 0; _i + 1 < bytesize; _i += 2)
+         {
+            uint8_t _t = _s[_i];
+            _s[_i]     = _s[_i + 1];
+            _s[_i + 1] = _t;
+         }
+      }
       else if(sf->flags & RLSB)
          FlipByteOrder((uint8_t*)sf->v, bytesize);
 #endif
@@ -521,11 +636,40 @@ static int ReadStateChunk(StateMem *st, SFORMAT *sf, int size)
             }
 #ifdef MSB_FIRST
             if(tmp->flags & MDFNSTATE_RLSB64)
-               Endian_A64_Swap(tmp->v, expected_size / sizeof(uint64_t));
+            {
+               uint8_t *_s = (uint8_t *)tmp->v;
+               int32_t  _i;
+               for (_i = 0; _i + 7 < (int32_t)expected_size; _i += 8)
+               {
+                  uint8_t _t;
+                  _t = _s[_i];     _s[_i]     = _s[_i + 7]; _s[_i + 7] = _t;
+                  _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 6]; _s[_i + 6] = _t;
+                  _t = _s[_i + 2]; _s[_i + 2] = _s[_i + 5]; _s[_i + 5] = _t;
+                  _t = _s[_i + 3]; _s[_i + 3] = _s[_i + 4]; _s[_i + 4] = _t;
+               }
+            }
             else if(tmp->flags & MDFNSTATE_RLSB32)
-               Endian_A32_Swap(tmp->v, expected_size / sizeof(uint32_t));
+            {
+               uint8_t *_s = (uint8_t *)tmp->v;
+               int32_t  _i;
+               for (_i = 0; _i + 3 < (int32_t)expected_size; _i += 4)
+               {
+                  uint8_t _t;
+                  _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
+                  _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+               }
+            }
             else if(tmp->flags & MDFNSTATE_RLSB16)
-               Endian_A16_Swap(tmp->v, expected_size / sizeof(uint16_t));
+            {
+               uint8_t *_s = (uint8_t *)tmp->v;
+               int32_t  _i;
+               for (_i = 0; _i + 1 < (int32_t)expected_size; _i += 2)
+               {
+                  uint8_t _t = _s[_i];
+                  _s[_i]     = _s[_i + 1];
+                  _s[_i + 1] = _t;
+               }
+            }
             else if(tmp->flags & RLSB)
                FlipByteOrder((uint8_t*)tmp->v, expected_size);
 #endif

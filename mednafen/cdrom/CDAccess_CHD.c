@@ -26,7 +26,6 @@
 #include <libretro.h>
 
 #include "../mednafen.h"
-#include "../mednafen-endian.h"
 #include "../error.h"
 #include "../general_c.h"
 
@@ -522,7 +521,16 @@ static bool CDAccess_CHD_Read_Raw_Sector(CDAccess *base_self, uint8_t *buf,
       memcpy(buf, self->hunkmem + hunkofs * (2352 + 96), 2352);
 
       if (ct->DIFormat == DI_FORMAT_AUDIO && ct->RawAudioMSBFirst)
-         Endian_A16_Swap(buf, 588 * 2);
+      {
+         uint8_t *_s = (uint8_t *)buf;
+         int32_t  _i;
+         for (_i = 0; _i < 588 * 2 * 2; _i += 2)
+         {
+            uint8_t _t = _s[_i];
+            _s[_i]     = _s[_i + 1];
+            _s[_i + 1] = _t;
+         }
+      }
    }
    return true;
 }

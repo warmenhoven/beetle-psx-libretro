@@ -54,7 +54,6 @@
 #include "spu_c.h"
 
 #include "../mednafen-types.h"
-#include "../mednafen-endian.h"
 #include "../../osd_message.h"
 #include "../state_helpers.h"
 #include "../cdrom/cdromif.h"
