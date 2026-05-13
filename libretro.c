@@ -1558,101 +1558,140 @@ static bool TestMagic(const char *name, RFILE *fp, int64_t size)
 
 static const char *CalcDiscSCEx_BySYSTEMCNF(CDIF *c, unsigned *rr)
 {
+   /* Find SYSTEM.CNF on the disc and pull the PSX serial out of its
+    * BOOT= line.
+    *
+    * Used to go through CDIF_MakeStream + the abstract Stream API.
+    * That abstraction is gone; we now talk to CDIF_ReadSector
+    * directly, tracking position in whole sectors.  Every read in
+    * this function is naturally sector-aligned (PVD scan, root
+    * directory walk, SYSTEM.CNF fetch), so a sector-granular cursor
+    * is the right primitive here. */
    uint8_t pvd[2048];
+   uint8_t dir_sector[2048];   /* one-sector cache for the root dir walk */
    uint32_t rdel, rdel_len;
-   const char *ret = NULL;
-   struct Stream *fp = NULL;
-   unsigned pvd_search_count = 0;
+   uint32_t dir_cursor_sector = 0;   /* LBA of the sector currently in dir_sector */
+   uint32_t dir_walked        = 0;   /* bytes of dir walked so far */
+   uint32_t dir_off_in_sector = 0;   /* byte offset within dir_sector */
+   bool dir_have_sector       = false;
+   const char *ret            = NULL;
+   unsigned pvd_search_count  = 0;
+   uint32_t pvd_sector;
 
-   fp = CDIF_MakeStream(c, 0, ~0U);
-   if (!fp)
-      return NULL;
-   stream_seek(fp, 0x8000, SEEK_SET);
-
-   do
+   /* PVD scan: ISO 9660 places volume descriptors starting at LBA 16
+    * (0x8000 bytes in).  Read one sector at a time until we find
+    * type 0x01 (Primary VD) or hit the 32-sector safety cap. */
+   for (pvd_sector = 16; ; pvd_sector++)
    {
-      if((pvd_search_count++) == 32)
+      if ((pvd_search_count++) == 32)
       {
          log_cb(RETRO_LOG_ERROR, "PVD search count limit met.\n");
-         goto Breakout;
+         return NULL;
       }
 
-      stream_read(fp, pvd, 2048);
+      if (!CDIF_ReadSector(c, pvd, pvd_sector, 1))
+         return NULL;
 
-      if(memcmp(&pvd[1], "CD001", 5))
+      if (memcmp(&pvd[1], "CD001", 5))
       {
          log_cb(RETRO_LOG_ERROR, "Not ISO-9660\n");
-         goto Breakout;
+         return NULL;
       }
 
-      if(pvd[0] == 0xFF)
+      if (pvd[0] == 0xFF)
       {
          log_cb(RETRO_LOG_ERROR, "Missing Primary Volume Descriptor\n");
-         goto Breakout;
+         return NULL;
       }
-   } while(pvd[0] != 0x01);
+
+      if (pvd[0] == 0x01)
+         break;
+   }
 
    /* [156 ... 189], 34 bytes - Root directory record */
    rdel     = MDFN_de32lsb(&pvd[0x9E]);
    rdel_len = MDFN_de32lsb(&pvd[0xA6]);
 
-   if(rdel_len >= (1024 * 1024 * 10))  /* Arbitrary sanity check. */
+   if (rdel_len >= (1024 * 1024 * 10))  /* Arbitrary sanity check. */
    {
       log_cb(RETRO_LOG_ERROR, "Root directory table too large\n");
-      goto Breakout;
+      return NULL;
    }
 
-   stream_seek(fp, (int64)rdel * 2048, SEEK_SET);
-
-   while(stream_tell(fp) < (((int64)rdel * 2048) + rdel_len))
+   /* Walk the root directory: each record starts with its own
+    * length byte (len_dr), and records never cross sector boundaries
+    * (ISO 9660 zero-pads the tail of the sector if the next record
+    * wouldn't fit).  We cache one sector at a time and advance to
+    * the next when the current cursor would read past the end. */
+   while (dir_walked < rdel_len)
    {
-      uint8_t dr[256 + 1];
-      uint8_t len_dr = stream_get_u8(fp);
-      uint8_t len_fi;
+      uint8_t  dr[256 + 1];
+      uint32_t needed_sector = rdel + (dir_walked / 2048);
+      uint32_t off_in_sector = dir_walked % 2048;
+      uint8_t  len_dr;
+      uint8_t  len_fi;
 
-      if(!len_dr)
+      if (!dir_have_sector || dir_cursor_sector != needed_sector)
+      {
+         if (!CDIF_ReadSector(c, dir_sector, needed_sector, 1))
+            return NULL;
+         dir_cursor_sector = needed_sector;
+         dir_have_sector   = true;
+      }
+      dir_off_in_sector = off_in_sector;
+
+      len_dr = dir_sector[dir_off_in_sector];
+
+      /* Preserve the historical Stream-based walk's break-on-zero
+       * behaviour.  ISO 9660 zero-pads the tail of a sector when the
+       * next directory record wouldn't fit, but PS1 SYSTEM.CNF is
+       * always in the first sector of the root directory in practice,
+       * so the loop never had to span sectors. */
+      if (!len_dr)
          break;
 
-      /* len_dr counts the directory record header byte itself, so we
-       * read len_dr-1 more bytes. Cap at sizeof(dr)-1 (=256) to be safe. */
-      if (len_dr - 1 > (int)sizeof(dr) - 1)
+      /* Cap dr at sizeof(dr)-1 (=256) to be safe.  len_dr counts the
+       * header byte itself, so we copy len_dr bytes starting at the
+       * len_dr byte. */
+      if ((size_t)len_dr > sizeof(dr))
       {
-         log_cb(RETRO_LOG_ERROR, "Directory record length out of range: %u\n", len_dr);
-         goto Breakout;
+         log_cb(RETRO_LOG_ERROR,
+               "Directory record length out of range: %u\n", len_dr);
+         return NULL;
       }
 
       memset(dr, 0, sizeof(dr));
-      dr[0] = len_dr;
-      stream_read(fp, dr + 1, len_dr - 1);
+      memcpy(dr, &dir_sector[dir_off_in_sector], len_dr);
 
-      len_fi = dr[0x20];
+      dir_walked += len_dr;
+      len_fi      = dr[0x20];
 
-      if(len_fi == 12 && !memcmp(&dr[0x21], "SYSTEM.CNF;1", 12))
+      if (len_fi == 12 && !memcmp(&dr[0x21], "SYSTEM.CNF;1", 12))
       {
          uint32_t file_lba = MDFN_de32lsb(&dr[0x02]);
-         uint8_t fb[2048 + 1];
-         char *bootpos;
-         char *tmp;
+         uint8_t  fb[2048 + 1];
+         char    *bootpos;
+         char    *tmp;
 
          memset(fb, 0, sizeof(fb));
-         stream_seek(fp, file_lba * 2048, SEEK_SET);
-         stream_read(fp, fb, 2048);
+         if (!CDIF_ReadSector(c, fb, file_lba, 1))
+            return NULL;
 
          /* Find "BOOT" in the SYSTEM.CNF buffer; bail out if missing
           * rather than dereferencing strstr's NULL return. */
          bootpos = strstr((char*)fb, "BOOT");
          if (!bootpos)
-            goto Breakout;
+            return NULL;
          bootpos += 4;
 
-         while(*bootpos == ' ' || *bootpos == '\t') bootpos++;
+         while (*bootpos == ' ' || *bootpos == '\t') bootpos++;
          if (*bootpos != '=')
-            goto Breakout;
+            return NULL;
 
          bootpos++;
-         while(*bootpos == ' ' || *bootpos == '\t') bootpos++;
+         while (*bootpos == ' ' || *bootpos == '\t') bootpos++;
          if (strncasecmp(bootpos, "cdrom:\\", 7) != 0)
-            goto Breakout;
+            return NULL;
 
          bootpos += 7;
 
@@ -1715,37 +1754,34 @@ static const char *CalcDiscSCEx_BySYSTEMCNF(CDIF *c, unsigned *rr)
          if ((tmp = strchr(bootpos, '.'))) *tmp = 0;
          if ((tmp = strchr(bootpos, ';'))) *tmp = 0;
 
-         if(strlen(bootpos) == 4 && bootpos[0] == 'S' &&
+         if (strlen(bootpos) == 4 && bootpos[0] == 'S' &&
             (bootpos[1] == 'C' || bootpos[1] == 'L' || bootpos[1] == 'I'))
          {
-            switch(bootpos[2])
+            switch (bootpos[2])
             {
                case 'E':
                   if (rr) *rr = REGION_EU;
                   ret = "SCEE";
-                  goto Breakout;
+                  return ret;
 
                case 'U':
                   if (rr) *rr = REGION_NA;
                   ret = "SCEA";
-                  goto Breakout;
+                  return ret;
 
                case 'K':   /* Korea? */
                case 'B':
                case 'P':
                   if (rr) *rr = REGION_JP;
                   ret = "SCEI";
-                  goto Breakout;
+                  return ret;
             }
          }
-      }
-   }
 
-Breakout:
-   if(fp)
-   {
-      stream_destroy(fp);
-      fp = NULL;
+         /* SYSTEM.CNF found but the BOOT line wasn't a recognized
+          * SC/SL/SI serial format; nothing more to find. */
+         return NULL;
+      }
    }
 
    return ret;

@@ -221,9 +221,7 @@ endif
                   $(CORE_EMU_DIR)/timer.c \
                   $(CORE_DIR)/rsx/rsx_intf.c \
                   $(CORE_DIR)/rsx/rsx_defer.c \
-                  $(MEDNAFEN_DIR)/FileStream.c \
-                  $(MEDNAFEN_DIR)/MemoryStream.c \
-                  $(MEDNAFEN_DIR)/Stream.c \
+                  $(MEDNAFEN_DIR)/cdstream.c \
                   $(MEDNAFEN_DIR)/settings.c \
                   $(MEDNAFEN_DIR)/state.c
 
