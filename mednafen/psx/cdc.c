@@ -1187,21 +1187,20 @@ void PS_CDC_EnbufferizeCDDASector(PS_CDC *cdc, const uint8 *buf)
    }
    else
    {
+      /* Path 2 contract: buf holds host-endian int16 stereo samples
+       * (the read-side normalized source-vs-host endianness). A
+       * native 2-byte load is correct on both LE and BE; the
+       * memcpy collapses to a single mov / lhz on every compiler
+       * we target. */
       {
          int i;
          for (i = 0; i < 588; i++)
       {
-         const uint8 *_p = &buf[i * sizeof(int16) * 2];
-#ifdef MSB_FIRST
-         ab->Samples[0][i] = (int16)((uint16)_p[0] | ((uint16)_p[1] << 8));
-         ab->Samples[1][i] = (int16)((uint16)_p[2] | ((uint16)_p[3] << 8));
-#else
-         uint16 _l, _r;
-         memcpy(&_l, _p + 0, 2);
-         memcpy(&_r, _p + 2, 2);
-         ab->Samples[0][i] = (int16)_l;
-         ab->Samples[1][i] = (int16)_r;
-#endif
+         int16 _l, _r;
+         memcpy(&_l, &buf[i * 4 + 0], 2);
+         memcpy(&_r, &buf[i * 4 + 2], 2);
+         ab->Samples[0][i] = _l;
+         ab->Samples[1][i] = _r;
       }
       }
    }
@@ -1211,7 +1210,14 @@ void PS_CDC_EnbufferizeCDDASector(PS_CDC *cdc, const uint8 *buf)
 
 void PS_CDC_HandlePlayRead(PS_CDC *cdc)
 {
-   uint8 read_buf[2352 + 96];
+   /* Target slot for the new sector: SectorPipe_Pos is the write
+    * position, which is also the position of the OLDEST entry when
+    * the pipe is full (ring buffer). When full we process the old
+    * content out of this slot BEFORE reading the new sector over
+    * it, so SectorPipe_In is not decremented during the eviction;
+    * the slot stays "occupied" across the replace. */
+   uint8 * const target = cdc->SectorPipe[cdc->SectorPipe_Pos];
+   const bool was_full  = (cdc->SectorPipe_In >= CDC_SECTOR_PIPE_COUNT);
    unsigned speed_mul;
 
 
@@ -1223,134 +1229,28 @@ void PS_CDC_HandlePlayRead(PS_CDC *cdc)
       return;
    }
 
-   if (cd_async && cdc->SeekRetryCounter)
+   /* Process the entry being evicted before we read over it. The
+    * processing has side effects (audio enbuffering, data-sector
+    * decode) that must commit even if the upcoming read causes an
+    * early return below.
+    *
+    * Decrement SectorPipe_In tentatively here and re-increment at
+    * commit. On a failed read that returns early, In stays at
+    * COUNT-1, was_full will be false on the retry call, and we
+    * won't double-evict. The eviction-subq for the dropped slot
+    * comes from the read that preceded this failure (i.e. the
+    * SubQBuf_Safe at entry to this call) instead of the eventual
+    * successful read - a small semantic deviation from upstream
+    * that only manifests when failed reads coincide with track
+    * boundaries. */
+   if (was_full)
    {
-      if (!CDIF_ReadRawSector(cdc->Cur_CDIF, read_buf, cdc->CurSector, 0))
-      {
-         cdc->SeekRetryCounter--;
-         cdc->PSRCounter = 33868800 / 75;
-         return;
-      }
-   }
-   else if (cd_warned_slow)
-   {
-      /* Return value intentionally discarded - on failure CDIF_ST
-       * zeroes read_buf via cdromif.cpp:641 and CDAccess_Image always
-       * populates it to a defined state via MakeSubPQ + memset, so
-       * DecodeSubQ below is safe to run on the buffer regardless. */
-      (void)CDIF_ReadRawSector(cdc->Cur_CDIF, read_buf, cdc->CurSector, -1);
-   }
-   else if (!CDIF_ReadRawSector(cdc->Cur_CDIF, read_buf, cdc->CurSector, cd_slow_timeout))
-   {
-      if (cd_async)
-         osd_message(3, RETRO_LOG_WARN,
-               RETRO_MESSAGE_TARGET_ALL, RETRO_MESSAGE_TYPE_NOTIFICATION,
-               "*Really* slow CD image read detected: consider using precache CD Access Method");
-      else
-         osd_message(3, RETRO_LOG_WARN,
-               RETRO_MESSAGE_TARGET_ALL, RETRO_MESSAGE_TYPE_NOTIFICATION,
-               "Slow CD image read detected: consider using async or precache CD Access Method");
-
-      cd_warned_slow = true;
-      /* Same intentional-discard contract as above. */
-      (void)CDIF_ReadRawSector(cdc->Cur_CDIF, read_buf, cdc->CurSector, -1);
-   }
-
-   PS_CDC_DecodeSubQ(cdc, read_buf + 2352);
-
-   if(cdc->SubQBuf_Safe[1] == 0xAA && (cdc->DriveStatus == DS_PLAYING || (!(cdc->SubQBuf_Safe[0] & 0x40) && (cdc->Mode & MODE_CDDA))))
-   {
-      cdc->HeaderBufValid = false;
-
-
-      /* Status in this end-of-disc context here should be generated after we're in the pause state. */
-      cdc->DriveStatus = DS_PAUSED;
-      cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
-      cdc->SectorsRead = 0;
-      PS_CDC_SetAIP1(cdc, CDCIRQ_DATA_END, PS_CDC_MakeStatus(cdc, false));
-
-      return;
-   }
-
-   if(cdc->DriveStatus == DS_PLAYING)
-   {
-      /* Note: Some game(s) start playing in the pregap of a track(so don't replace this with a simple subq index == 0 check for autopause). */
-      if(cdc->PlayTrackMatch == -1 && cdc->SubQChecksumOK)
-         cdc->PlayTrackMatch = cdc->SubQBuf_Safe[0x1];
-
-      if((cdc->Mode & MODE_AUTOPAUSE) && cdc->PlayTrackMatch != -1 && cdc->SubQBuf_Safe[0x1] != cdc->PlayTrackMatch)
-      {
-         /* Status needs to be taken before we're paused(IE it should still report playing). */
-         PS_CDC_SetAIP1(cdc, CDCIRQ_DATA_END, PS_CDC_MakeStatus(cdc, false));
-
-         cdc->DriveStatus = DS_PAUSED;
-         cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
-         cdc->SectorsRead = 0;
-         cdc->PSRCounter = 0;
-         return;
-      }
-
-      if((cdc->Mode & MODE_REPORT) && (((cdc->SubQBuf_Safe[0x9] >> 4) != cdc->ReportLastF) || cdc->Forward || cdc->Backward) && cdc->SubQChecksumOK)
-      {
-         uint8 tr[8];
-#if 1
-         uint16 abs_lev_max = 0;
-         bool abs_lev_chselect = cdc->SubQBuf_Safe[0x8] & 0x01;
-
-         {
-            int i;
-            for (i = 0; i < 588; i++)
-            {
-               const uint8 *_p = &read_buf[i * 4 + (abs_lev_chselect * 2)];
-               int v;
-#ifdef MSB_FIRST
-               v = abs((int16)((uint16)_p[0] | ((uint16)_p[1] << 8)));
-#else
-               uint16 _s;
-               memcpy(&_s, _p, 2);
-               v = abs((int16)_s);
-#endif
-               if (v > 32767) v = 32767;
-               if ((uint16)v > abs_lev_max) abs_lev_max = (uint16)v;
-            }
-         }
-         abs_lev_max |= abs_lev_chselect << 15;
-#endif
-
-         cdc->ReportLastF = cdc->SubQBuf_Safe[0x9] >> 4;
-
-         tr[0] = PS_CDC_MakeStatus(cdc, false);
-         tr[1] = cdc->SubQBuf_Safe[0x1];  /* Track */
-         tr[2] = cdc->SubQBuf_Safe[0x2];  /* Index */
-
-         if(cdc->SubQBuf_Safe[0x9] & 0x10)
-         {
-            tr[3] = cdc->SubQBuf_Safe[0x3];  /* R M */
-            tr[4] = cdc->SubQBuf_Safe[0x4] | 0x80;  /* R S */
-            tr[5] = cdc->SubQBuf_Safe[0x5];  /* R F */
-         }
-         else	
-         {
-            tr[3] = cdc->SubQBuf_Safe[0x7];  /* A M */
-            tr[4] = cdc->SubQBuf_Safe[0x8];  /* A S */
-            tr[5] = cdc->SubQBuf_Safe[0x9];  /* A F */
-         }
-
-         tr[6] = abs_lev_max >> 0;
-         tr[7] = abs_lev_max >> 8;
-
-         PS_CDC_SetAIP_Buf(cdc, CDCIRQ_DATA_READY, 8, tr);
-      }
-   }
-
-   if(cdc->SectorPipe_In >= CDC_SECTOR_PIPE_COUNT)
-   {
-      uint8* buf = cdc->SectorPipe[cdc->SectorPipe_Pos];
+      uint8 *buf = target;
       cdc->SectorPipe_In--;
 
       if(cdc->DriveStatus == DS_READING)
       {
-         if(cdc->SubQBuf_Safe[0] & 0x40)  /*) || !(Mode & MODE_CDDA)) */
+         if(cdc->SubQBuf_Safe[0] & 0x40)
          {
             memcpy(cdc->HeaderBuf, buf + 12, 12);
             cdc->HeaderBufValid = true;
@@ -1401,7 +1301,131 @@ void PS_CDC_HandlePlayRead(PS_CDC *cdc)
       }
    }
 
-   memcpy(cdc->SectorPipe[cdc->SectorPipe_Pos], read_buf, 2352);
+   /* Read the new sector directly into the target slot. The slot
+    * is CDC_SECTOR_PIPE_BYTES wide (= 2448), with audio/data in
+    * the first 2352 and P-W subchannel in the trailing 96. */
+   if (cd_async && cdc->SeekRetryCounter)
+   {
+      if (!CDIF_ReadRawSector(cdc->Cur_CDIF, target, cdc->CurSector, 0))
+      {
+         cdc->SeekRetryCounter--;
+         cdc->PSRCounter = 33868800 / 75;
+         return;
+      }
+   }
+   else if (cd_warned_slow)
+   {
+      /* Return value intentionally discarded - on failure CDIF_ST
+       * zeroes the buffer via cdromif.c and CDAccess_Image always
+       * populates it to a defined state via MakeSubPQ + memset, so
+       * DecodeSubQ below is safe to run on the buffer regardless. */
+      (void)CDIF_ReadRawSector(cdc->Cur_CDIF, target, cdc->CurSector, -1);
+   }
+   else if (!CDIF_ReadRawSector(cdc->Cur_CDIF, target, cdc->CurSector, cd_slow_timeout))
+   {
+      if (cd_async)
+         osd_message(3, RETRO_LOG_WARN,
+               RETRO_MESSAGE_TARGET_ALL, RETRO_MESSAGE_TYPE_NOTIFICATION,
+               "*Really* slow CD image read detected: consider using precache CD Access Method");
+      else
+         osd_message(3, RETRO_LOG_WARN,
+               RETRO_MESSAGE_TARGET_ALL, RETRO_MESSAGE_TYPE_NOTIFICATION,
+               "Slow CD image read detected: consider using async or precache CD Access Method");
+
+      cd_warned_slow = true;
+      /* Same intentional-discard contract as above. */
+      (void)CDIF_ReadRawSector(cdc->Cur_CDIF, target, cdc->CurSector, -1);
+   }
+
+   PS_CDC_DecodeSubQ(cdc, target + 2352);
+
+   if(cdc->SubQBuf_Safe[1] == 0xAA && (cdc->DriveStatus == DS_PLAYING || (!(cdc->SubQBuf_Safe[0] & 0x40) && (cdc->Mode & MODE_CDDA))))
+   {
+      cdc->HeaderBufValid = false;
+
+
+      /* Status in this end-of-disc context here should be generated after we're in the pause state. */
+      cdc->DriveStatus = DS_PAUSED;
+      cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
+      cdc->SectorsRead = 0;
+      PS_CDC_SetAIP1(cdc, CDCIRQ_DATA_END, PS_CDC_MakeStatus(cdc, false));
+
+      return;
+   }
+
+   if(cdc->DriveStatus == DS_PLAYING)
+   {
+      /* Note: Some game(s) start playing in the pregap of a track(so don't replace this with a simple subq index == 0 check for autopause). */
+      if(cdc->PlayTrackMatch == -1 && cdc->SubQChecksumOK)
+         cdc->PlayTrackMatch = cdc->SubQBuf_Safe[0x1];
+
+      if((cdc->Mode & MODE_AUTOPAUSE) && cdc->PlayTrackMatch != -1 && cdc->SubQBuf_Safe[0x1] != cdc->PlayTrackMatch)
+      {
+         /* Status needs to be taken before we're paused(IE it should still report playing). */
+         PS_CDC_SetAIP1(cdc, CDCIRQ_DATA_END, PS_CDC_MakeStatus(cdc, false));
+
+         cdc->DriveStatus = DS_PAUSED;
+         cdc->SectorPipe_Pos = cdc->SectorPipe_In = 0;
+         cdc->SectorsRead = 0;
+         cdc->PSRCounter = 0;
+         return;
+      }
+
+      if((cdc->Mode & MODE_REPORT) && (((cdc->SubQBuf_Safe[0x9] >> 4) != cdc->ReportLastF) || cdc->Forward || cdc->Backward) && cdc->SubQChecksumOK)
+      {
+         uint8 tr[8];
+#if 1
+         uint16 abs_lev_max = 0;
+         bool abs_lev_chselect = cdc->SubQBuf_Safe[0x8] & 0x01;
+
+         /* CDDA buffer holds host-endian int16 samples (Path 2
+          * contract: read-side did the source-vs-host endian
+          * normalization). Native int16 load on both LE and BE. */
+         {
+            int i;
+            for (i = 0; i < 588; i++)
+            {
+               int16 _s;
+               int   v;
+               memcpy(&_s, &target[i * 4 + (abs_lev_chselect * 2)], 2);
+               v = abs((int32)_s);
+               if (v > 32767) v = 32767;
+               if ((uint16)v > abs_lev_max) abs_lev_max = (uint16)v;
+            }
+         }
+         abs_lev_max |= abs_lev_chselect << 15;
+#endif
+
+         cdc->ReportLastF = cdc->SubQBuf_Safe[0x9] >> 4;
+
+         tr[0] = PS_CDC_MakeStatus(cdc, false);
+         tr[1] = cdc->SubQBuf_Safe[0x1];  /* Track */
+         tr[2] = cdc->SubQBuf_Safe[0x2];  /* Index */
+
+         if(cdc->SubQBuf_Safe[0x9] & 0x10)
+         {
+            tr[3] = cdc->SubQBuf_Safe[0x3];  /* R M */
+            tr[4] = cdc->SubQBuf_Safe[0x4] | 0x80;  /* R S */
+            tr[5] = cdc->SubQBuf_Safe[0x5];  /* R F */
+         }
+         else	
+         {
+            tr[3] = cdc->SubQBuf_Safe[0x7];  /* A M */
+            tr[4] = cdc->SubQBuf_Safe[0x8];  /* A S */
+            tr[5] = cdc->SubQBuf_Safe[0x9];  /* A F */
+         }
+
+         tr[6] = abs_lev_max >> 0;
+         tr[7] = abs_lev_max >> 8;
+
+         PS_CDC_SetAIP_Buf(cdc, CDCIRQ_DATA_READY, 8, tr);
+      }
+   }
+
+   /* Commit the new sector: advance write position and increment
+    * the count. Paired with the optional pre-pop decrement above:
+    *   was_full   -> --,++ net zero, In stays at COUNT
+    *   not full   -> ++ only,        In grows by 1 */
    cdc->SectorPipe_Pos = (cdc->SectorPipe_Pos + 1) % CDC_SECTOR_PIPE_COUNT;
    cdc->SectorPipe_In++;
 

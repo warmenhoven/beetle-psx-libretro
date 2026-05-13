@@ -520,7 +520,17 @@ static bool CDAccess_CHD_Read_Raw_Sector(CDAccess *base_self, uint8_t *buf,
 
       memcpy(buf, self->hunkmem + hunkofs * (2352 + 96), 2352);
 
-      if (ct->DIFormat == DI_FORMAT_AUDIO && ct->RawAudioMSBFirst)
+      /* Path 2 contract: buf holds host-endian int16 stereo
+       * samples. Swap iff source byte order differs from host
+       * byte order. CHD AUDIO tracks are always BE-stored
+       * (RawAudioMSBFirst = true). */
+      if (ct->DIFormat == DI_FORMAT_AUDIO
+#ifdef MSB_FIRST
+            && !ct->RawAudioMSBFirst
+#else
+            && ct->RawAudioMSBFirst
+#endif
+         )
       {
          uint8_t *_s = (uint8_t *)buf;
          int32_t  _i;

@@ -1166,23 +1166,10 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
                if(frames_read < 588)
                   memset(buf + frames_read * 2 * sizeof(int16), 0, (588 - frames_read) * 2 * sizeof(int16));
 
-               /* Raw CDDA sector format requires little-endian
-                * samples; AR_Read gave us host-endian, so on a BE
-                * host we still need an in-place byteswap. On LE we
-                * already have correct bytes and no further work is
-                * needed. */
-#ifdef MSB_FIRST
-               {
-                  uint8 *_s = (uint8 *)buf;
-                  int32  _i;
-                  for (_i = 0; _i < 588 * 2 * 2; _i += 2)
-                  {
-                     uint8 _t = _s[_i];
-                     _s[_i]     = _s[_i + 1];
-                     _s[_i + 1] = _t;
-                  }
-               }
-#endif
+               /* Path 2 contract: buf holds host-endian int16
+                * stereo samples. AR_Read already wrote host-endian
+                * int16 into buf, so we're done - no swap on any
+                * host. */
             }
             else	/* Binary, woo. */
             {
@@ -1201,7 +1188,20 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
                   case DI_FORMAT_AUDIO:
                      cdstream_read(ct->fp, buf, 2352);
 
+                     /* Path 2 contract: buf holds host-endian int16
+                      * stereo samples. Swap iff source byte order
+                      * differs from host byte order:
+                      *   LE host + LE source (default BIN)   -> no swap
+                      *   LE host + BE source (cdrdao TOC)    -> swap
+                      *   BE host + LE source                 -> swap
+                      *   BE host + BE source                 -> no swap
+                      * Compile-time #ifdef collapses to a single
+                      * runtime branch on RawAudioMSBFirst. */
+#ifdef MSB_FIRST
+                     if(!ct->RawAudioMSBFirst)
+#else
                      if(ct->RawAudioMSBFirst)
+#endif
                      {
                         uint8 *_s = (uint8 *)buf;
                         int32  _i;

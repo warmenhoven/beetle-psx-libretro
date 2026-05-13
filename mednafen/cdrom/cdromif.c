@@ -544,6 +544,11 @@ bool CDIF_ValidateRawSector(uint8_t *buf)
 
 int CDIF_ReadSector(CDIF *cdif, uint8_t *pBuf, uint32_t lba, uint32_t nSectors)
 {
+   /* Stack scratch for the raw 2352+96 sector. Hoisted above the
+    * loop to make the intent (one reusable buffer across all
+    * iterations) explicit; gcc already frame-allocated this once
+    * per function call regardless of declaration position. */
+   uint8_t tmpbuf[SECTOR_RAW_BYTES];
    int ret = 0;
 
    if (cdif->UnrecoverableError)
@@ -551,7 +556,6 @@ int CDIF_ReadSector(CDIF *cdif, uint8_t *pBuf, uint32_t lba, uint32_t nSectors)
 
    while (nSectors--)
    {
-      uint8_t tmpbuf[SECTOR_RAW_BYTES];
       int     mode;
 
       if (!CDIF_ReadRawSector(cdif, tmpbuf, lba, -1))
