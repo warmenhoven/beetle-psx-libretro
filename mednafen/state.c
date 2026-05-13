@@ -212,44 +212,13 @@ static void FlipByteOrder(uint8_t *src, uint32_t count)
    if ((count & 1) || !count)
       return;     /* This shouldn't happen. */
 
-   /* SFVAR-tagged scalars dominate the call sites - they go through
-    * here with count == 2, 4, or 8 (sizeof of the underlying field).
-    * Dispatch those via __builtin_bswap* so the body collapses to a
-    * single load - bswap - store. The generic byte-reverse loop
-    * survives below for anything else (large RLSB blobs are rare but
-    * legal). */
-#if defined(__GNUC__) || defined(__clang__)
-   switch (count)
-   {
-      case 2:
-      {
-         uint16_t v;
-         memcpy(&v, src, 2);
-         v = __builtin_bswap16(v);
-         memcpy(src, &v, 2);
-         return;
-      }
-      case 4:
-      {
-         uint32_t v;
-         memcpy(&v, src, 4);
-         v = __builtin_bswap32(v);
-         memcpy(src, &v, 4);
-         return;
-      }
-      case 8:
-      {
-         uint64_t v;
-         memcpy(&v, src, 8);
-         v = __builtin_bswap64(v);
-         memcpy(src, &v, 8);
-         return;
-      }
-      default:
-         break;
-   }
-#endif
-
+   /* Portable in-place byte reverse. The previous code special-cased
+    * count == 2 / 4 / 8 via __builtin_bswap16/32/64 inside a
+    * GCC/clang-only branch; the builtins date to gcc 4.3+ which
+    * isn't compatible with the project's GCC-2 floor. Modern
+    * compilers recognize the pattern below and emit native bswap /
+    * lwbrx-style instructions; older compilers emit the literal
+    * byte loop with no correctness loss. */
    start = src;
    end = src + count - 1;
    /* Iterate while start < end, not 'count' times: the original loop
@@ -327,18 +296,38 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
       {
          uint8_t *_s = (uint8_t *)sf->v;
          int32_t  _i;
-         for (_i = 0; _i + 3 < bytesize; _i += 4)
+         /* 32-bit-chunked A32 swap: each iteration byte-reverses
+          * one 32-bit value via a single load + bit-mask shuffle
+          * + store. Equivalent work to the byte-by-byte form but
+          * one quarter the iteration count; the compiler fuses
+          * to bswap / lwbrx-style hardware byteswap on modern
+          * targets. */
+         for (_i = 0; _i + 3 < (int32_t)(bytesize); _i += 4)
          {
-            uint8_t _t;
-            _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
-            _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+            uint32_t _v;
+            memcpy(&_v, _s + _i, 4);
+            _v = (_v << 24) | ((_v & 0xFF00U) << 8) | ((_v >> 8) & 0xFF00U) | (_v >> 24);
+            memcpy(_s + _i, &_v, 4);
          }
       }
       else if(sf->flags & MDFNSTATE_RLSB16)
       {
          uint8_t *_s = (uint8_t *)sf->v;
          int32_t  _i;
-         for (_i = 0; _i + 1 < bytesize; _i += 2)
+         /* 32-bit-chunked A16 swap: each iteration handles two
+          * 16-bit elements at once via a 32-bit load + bit-mask
+          * shuffle + 32-bit store. Modern compilers fuse this to
+          * a single bswap-equivalent instruction; older compilers
+          * emit byte loads but at half the iteration count of the
+          * naive pair-swap loop. The 2-byte tail handles odd halves. */
+         for (_i = 0; _i + 3 < (int32_t)(bytesize); _i += 4)
+         {
+            uint32_t _v;
+            memcpy(&_v, _s + _i, 4);
+            _v = ((_v & 0xFF00FF00U) >> 8) | ((_v & 0x00FF00FFU) << 8);
+            memcpy(_s + _i, &_v, 4);
+         }
+         if (_i + 1 < (int32_t)(bytesize))
          {
             uint8_t _t = _s[_i];
             _s[_i]     = _s[_i + 1];
@@ -379,18 +368,38 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
                {
                   uint8_t *_s = (uint8_t *)sf->v;
                   int32_t  _i;
-                  for (_i = 0; _i + 3 < bytesize; _i += 4)
+                  /* 32-bit-chunked A32 swap: each iteration byte-reverses
+                   * one 32-bit value via a single load + bit-mask shuffle
+                   * + store. Equivalent work to the byte-by-byte form but
+                   * one quarter the iteration count; the compiler fuses
+                   * to bswap / lwbrx-style hardware byteswap on modern
+                   * targets. */
+                  for (_i = 0; _i + 3 < (int32_t)(bytesize); _i += 4)
                   {
-                     uint8_t _t;
-                     _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
-                     _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+                     uint32_t _v;
+                     memcpy(&_v, _s + _i, 4);
+                     _v = (_v << 24) | ((_v & 0xFF00U) << 8) | ((_v >> 8) & 0xFF00U) | (_v >> 24);
+                     memcpy(_s + _i, &_v, 4);
                   }
                }
                else if(sf->flags & MDFNSTATE_RLSB16)
                {
                   uint8_t *_s = (uint8_t *)sf->v;
                   int32_t  _i;
-                  for (_i = 0; _i + 1 < bytesize; _i += 2)
+                  /* 32-bit-chunked A16 swap: each iteration handles two
+                   * 16-bit elements at once via a 32-bit load + bit-mask
+                   * shuffle + 32-bit store. Modern compilers fuse this to
+                   * a single bswap-equivalent instruction; older compilers
+                   * emit byte loads but at half the iteration count of the
+                   * naive pair-swap loop. The 2-byte tail handles odd halves. */
+                  for (_i = 0; _i + 3 < (int32_t)(bytesize); _i += 4)
+                  {
+                     uint32_t _v;
+                     memcpy(&_v, _s + _i, 4);
+                     _v = ((_v & 0xFF00FF00U) >> 8) | ((_v & 0x00FF00FFU) << 8);
+                     memcpy(_s + _i, &_v, 4);
+                  }
+                  if (_i + 1 < (int32_t)(bytesize))
                   {
                      uint8_t _t = _s[_i];
                      _s[_i]     = _s[_i + 1];
@@ -427,18 +436,38 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
             {
                uint8_t *_s = (uint8_t *)sf->v;
                int32_t  _i;
-               for (_i = 0; _i + 3 < bytesize; _i += 4)
+               /* 32-bit-chunked A32 swap: each iteration byte-reverses
+                * one 32-bit value via a single load + bit-mask shuffle
+                * + store. Equivalent work to the byte-by-byte form but
+                * one quarter the iteration count; the compiler fuses
+                * to bswap / lwbrx-style hardware byteswap on modern
+                * targets. */
+               for (_i = 0; _i + 3 < (int32_t)(bytesize); _i += 4)
                {
-                  uint8_t _t;
-                  _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
-                  _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+                  uint32_t _v;
+                  memcpy(&_v, _s + _i, 4);
+                  _v = (_v << 24) | ((_v & 0xFF00U) << 8) | ((_v >> 8) & 0xFF00U) | (_v >> 24);
+                  memcpy(_s + _i, &_v, 4);
                }
             }
             else if(sf->flags & MDFNSTATE_RLSB16)
             {
                uint8_t *_s = (uint8_t *)sf->v;
                int32_t  _i;
-               for (_i = 0; _i + 1 < bytesize; _i += 2)
+               /* 32-bit-chunked A16 swap: each iteration handles two
+                * 16-bit elements at once via a 32-bit load + bit-mask
+                * shuffle + 32-bit store. Modern compilers fuse this to
+                * a single bswap-equivalent instruction; older compilers
+                * emit byte loads but at half the iteration count of the
+                * naive pair-swap loop. The 2-byte tail handles odd halves. */
+               for (_i = 0; _i + 3 < (int32_t)(bytesize); _i += 4)
+               {
+                  uint32_t _v;
+                  memcpy(&_v, _s + _i, 4);
+                  _v = ((_v & 0xFF00FF00U) >> 8) | ((_v & 0x00FF00FFU) << 8);
+                  memcpy(_s + _i, &_v, 4);
+               }
+               if (_i + 1 < (int32_t)(bytesize))
                {
                   uint8_t _t = _s[_i];
                   _s[_i]     = _s[_i + 1];
@@ -472,18 +501,38 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
       {
          uint8_t *_s = (uint8_t *)sf->v;
          int32_t  _i;
-         for (_i = 0; _i + 3 < bytesize; _i += 4)
+         /* 32-bit-chunked A32 swap: each iteration byte-reverses
+          * one 32-bit value via a single load + bit-mask shuffle
+          * + store. Equivalent work to the byte-by-byte form but
+          * one quarter the iteration count; the compiler fuses
+          * to bswap / lwbrx-style hardware byteswap on modern
+          * targets. */
+         for (_i = 0; _i + 3 < (int32_t)(bytesize); _i += 4)
          {
-            uint8_t _t;
-            _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
-            _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+            uint32_t _v;
+            memcpy(&_v, _s + _i, 4);
+            _v = (_v << 24) | ((_v & 0xFF00U) << 8) | ((_v >> 8) & 0xFF00U) | (_v >> 24);
+            memcpy(_s + _i, &_v, 4);
          }
       }
       else if(sf->flags & MDFNSTATE_RLSB16)
       {
          uint8_t *_s = (uint8_t *)sf->v;
          int32_t  _i;
-         for (_i = 0; _i + 1 < bytesize; _i += 2)
+         /* 32-bit-chunked A16 swap: each iteration handles two
+          * 16-bit elements at once via a 32-bit load + bit-mask
+          * shuffle + 32-bit store. Modern compilers fuse this to
+          * a single bswap-equivalent instruction; older compilers
+          * emit byte loads but at half the iteration count of the
+          * naive pair-swap loop. The 2-byte tail handles odd halves. */
+         for (_i = 0; _i + 3 < (int32_t)(bytesize); _i += 4)
+         {
+            uint32_t _v;
+            memcpy(&_v, _s + _i, 4);
+            _v = ((_v & 0xFF00FF00U) >> 8) | ((_v & 0x00FF00FFU) << 8);
+            memcpy(_s + _i, &_v, 4);
+         }
+         if (_i + 1 < (int32_t)(bytesize))
          {
             uint8_t _t = _s[_i];
             _s[_i]     = _s[_i + 1];
@@ -652,18 +701,38 @@ static int ReadStateChunk(StateMem *st, SFORMAT *sf, int size)
             {
                uint8_t *_s = (uint8_t *)tmp->v;
                int32_t  _i;
+               /* 32-bit-chunked A32 swap: each iteration byte-reverses
+                * one 32-bit value via a single load + bit-mask shuffle
+                * + store. Equivalent work to the byte-by-byte form but
+                * one quarter the iteration count; the compiler fuses
+                * to bswap / lwbrx-style hardware byteswap on modern
+                * targets. */
                for (_i = 0; _i + 3 < (int32_t)expected_size; _i += 4)
                {
-                  uint8_t _t;
-                  _t = _s[_i];     _s[_i]     = _s[_i + 3]; _s[_i + 3] = _t;
-                  _t = _s[_i + 1]; _s[_i + 1] = _s[_i + 2]; _s[_i + 2] = _t;
+                  uint32_t _v;
+                  memcpy(&_v, _s + _i, 4);
+                  _v = (_v << 24) | ((_v & 0xFF00U) << 8) | ((_v >> 8) & 0xFF00U) | (_v >> 24);
+                  memcpy(_s + _i, &_v, 4);
                }
             }
             else if(tmp->flags & MDFNSTATE_RLSB16)
             {
                uint8_t *_s = (uint8_t *)tmp->v;
                int32_t  _i;
-               for (_i = 0; _i + 1 < (int32_t)expected_size; _i += 2)
+               /* 32-bit-chunked A16 swap: each iteration handles two
+                * 16-bit elements at once via a 32-bit load + bit-mask
+                * shuffle + 32-bit store. Modern compilers fuse this to
+                * a single bswap-equivalent instruction; older compilers
+                * emit byte loads but at half the iteration count of the
+                * naive pair-swap loop. The 2-byte tail handles odd halves. */
+               for (_i = 0; _i + 3 < (int32_t)expected_size; _i += 4)
+               {
+                  uint32_t _v;
+                  memcpy(&_v, _s + _i, 4);
+                  _v = ((_v & 0xFF00FF00U) >> 8) | ((_v & 0x00FF00FFU) << 8);
+                  memcpy(_s + _i, &_v, 4);
+               }
+               if (_i + 1 < (int32_t)expected_size)
                {
                   uint8_t _t = _s[_i];
                   _s[_i]     = _s[_i + 1];

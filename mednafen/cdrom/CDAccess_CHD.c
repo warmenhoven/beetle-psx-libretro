@@ -532,13 +532,17 @@ static bool CDAccess_CHD_Read_Raw_Sector(CDAccess *base_self, uint8_t *buf,
 #endif
          )
       {
+         /* 32-bit-chunked A16 swap; see CDAccess_Image.c
+          * counterpart for the rationale. 588 iterations
+          * over 2352 bytes of stereo 16-bit samples. */
          uint8_t *_s = (uint8_t *)buf;
          int32_t  _i;
-         for (_i = 0; _i < 588 * 2 * 2; _i += 2)
+         for (_i = 0; _i + 3 < 588 * 2 * 2; _i += 4)
          {
-            uint8_t _t = _s[_i];
-            _s[_i]     = _s[_i + 1];
-            _s[_i + 1] = _t;
+            uint32_t _v;
+            memcpy(&_v, _s + _i, 4);
+            _v = ((_v & 0xFF00FF00U) >> 8) | ((_v & 0x00FF00FFU) << 8);
+            memcpy(_s + _i, &_v, 4);
          }
       }
    }

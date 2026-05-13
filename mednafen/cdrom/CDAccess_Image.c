@@ -1203,13 +1203,19 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
                      if(ct->RawAudioMSBFirst)
 #endif
                      {
+                        /* 32-bit-chunked A16 swap: 2352 bytes / 4 =
+                         * 588 iterations, each handling two 16-bit
+                         * samples via a 32-bit load + bit-mask shuffle
+                         * + 32-bit store. Halves the loop count vs
+                         * the per-pair byte swap. */
                         uint8 *_s = (uint8 *)buf;
                         int32  _i;
-                        for (_i = 0; _i < 588 * 2 * 2; _i += 2)
+                        for (_i = 0; _i + 3 < 588 * 2 * 2; _i += 4)
                         {
-                           uint8 _t = _s[_i];
-                           _s[_i]     = _s[_i + 1];
-                           _s[_i + 1] = _t;
+                           uint32_t _v;
+                           memcpy(&_v, _s + _i, 4);
+                           _v = ((_v & 0xFF00FF00U) >> 8) | ((_v & 0x00FF00FFU) << 8);
+                           memcpy(_s + _i, &_v, 4);
                         }
                      }
                      break;
