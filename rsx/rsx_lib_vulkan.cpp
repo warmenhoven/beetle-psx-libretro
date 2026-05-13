@@ -797,11 +797,15 @@ void rsx_vulkan_set_draw_area(uint16_t x0, uint16_t y0,
 {
    int width  = x1 - x0 + 1;
    int height = y1 - y0 + 1;
-   width  = max(width, 0);
-   height = max(height, 0);
+   if (width  < 0) width  = 0;
+   if (height < 0) height = 0;
 
-   width  = min(width, int(FB_WIDTH - x0));
-   height = min(height, int(FB_HEIGHT - y0));
+   {
+      int w_max = int(FB_WIDTH  - x0);
+      int h_max = int(FB_HEIGHT - y0);
+      if (width  > w_max) width  = w_max;
+      if (height > h_max) height = h_max;
+   }
 
    if (renderer)
    {

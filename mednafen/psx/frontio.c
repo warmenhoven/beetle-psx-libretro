@@ -372,8 +372,13 @@ INLINE void InputDevice_DrawCrosshairs(InputDevice *self_, uint32 *pixels, const
 				ic = 0;
 			}
 
-			x_start = MAX(0, (self->chair_x - ic) * upscale_factor);
-			x_bound = MIN(width * upscale_factor, (self->chair_x + ic + 1) * upscale_factor);
+			x_start = (self->chair_x - ic) * upscale_factor;
+			if (x_start < 0) x_start = 0;
+			x_bound = (self->chair_x + ic + 1) * upscale_factor;
+			{
+				int32 _max = width * upscale_factor;
+				if (x_bound > _max) x_bound = _max;
+			}
 
 			for (x = x_start; x < x_bound; x++ )
 			{
@@ -395,8 +400,13 @@ INLINE void InputDevice_DrawCrosshairs(InputDevice *self_, uint32 *pixels, const
 
 			ic = pix_clock / ( 762925 * 6 );
 
-			x_start = MAX(0, (self->chair_x - ic) * upscale_factor);
-			x_bound = MIN(width * upscale_factor, (self->chair_x + ic) * upscale_factor);
+			x_start = (self->chair_x - ic) * upscale_factor;
+			if (x_start < 0) x_start = 0;
+			x_bound = (self->chair_x + ic) * upscale_factor;
+			{
+				int32 _max = width * upscale_factor;
+				if (x_bound > _max) x_bound = _max;
+			}
 
 			for (x = x_start; x < x_bound; x++ )
 			{
@@ -6020,7 +6030,9 @@ static bool InputDevice_Multitap_Clock(InputDevice *self_, bool TxD, int32_t *ds
       {
          if((unsigned)self->selected_device < 4)
          {
-            *dsr_pulse_delay = MAX(tmp_pulse_delay[0][self->selected_device], tmp_pulse_delay[1][self->selected_device]);
+            uint32 _a = tmp_pulse_delay[0][self->selected_device];
+            uint32 _b = tmp_pulse_delay[1][self->selected_device];
+            *dsr_pulse_delay = (_a > _b) ? _a : _b;
          }
       }
 

@@ -308,7 +308,13 @@ static INLINE void RecalcTexWindowStuff(PS_GPU *g)
    uint8_t twy = g->twy;
 
    g->SUCV.TWX_AND = ~(tww << 3);
-   g->SUCV.TWX_ADD = ((twx & tww) << 3) + (g->TexPageX << (2 - MIN(2u, g->TexMode)));
+   {
+      /* PSX TexMode field is 2 bits; value 3 ("reserved") is folded
+       * to 2 here so the shift below stays in range. */
+      uint8_t _tm = g->TexMode;
+      if (_tm > 2) _tm = 2;
+      g->SUCV.TWX_ADD = ((twx & tww) << 3) + (g->TexPageX << (2 - _tm));
+   }
 
    g->SUCV.TWY_AND = ~(twh << 3);
    g->SUCV.TWY_ADD = ((twy & twh) << 3) + g->TexPageY;

@@ -378,8 +378,10 @@ static void EncodeImage(const unsigned ybn)
             {
                for(x = 0; x < 8; x += 2)
                {
-                  uint8 p0 = MIN(127, block_y[y][x + 0] + 8);
-                  uint8 p1 = MIN(127, block_y[y][x + 1] + 8);
+                  int v0 = block_y[y][x + 0] + 8;
+                  int v1 = block_y[y][x + 1] + 8;
+                  uint8 p0 = (uint8)(v0 > 127 ? 127 : v0);
+                  uint8 p1 = (uint8)(v1 > 127 ? 127 : v1);
 
                   *pix_out = ((p0 >> 4) | (p1 & 0xF0)) ^ us_xor;
                   pix_out++;
@@ -490,7 +492,7 @@ static INLINE void WriteImageData(uint16 V, int32* eat_cycles)
             tmp = (uint32)(ci * 2) << 4;
 
          /* Not sure if it should be 0x3FFF or 0x3FF0 or maybe 0x3FF8? */
-         Coeff[ZigZag[0]] = MIN(0x3FFF, MAX(-0x4000, tmp));
+         { int _v = tmp; if (_v < -0x4000) _v = -0x4000; if (_v > 0x3FFF) _v = 0x3FFF; Coeff[ZigZag[0]] = _v; }
          CoeffIndex++;
       }
    }
@@ -524,7 +526,7 @@ static INLINE void WriteImageData(uint16 V, int32* eat_cycles)
                tmp = (uint32)(ci * 2) << 4;
 
             /* Not sure if it should be 0x3FFF or 0x3FF0 or maybe 0x3FF8? */
-            Coeff[ZigZag[CoeffIndex]] = MIN(0x3FFF, MAX(-0x4000, tmp));
+            { int _v = tmp; if (_v < -0x4000) _v = -0x4000; if (_v > 0x3FFF) _v = 0x3FFF; Coeff[ZigZag[CoeffIndex]] = _v; }
             CoeffIndex++;
          }
       }

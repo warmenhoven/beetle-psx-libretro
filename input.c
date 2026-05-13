@@ -934,16 +934,24 @@ void input_update(bool libretro_supports_bitmasks, retro_input_state_t input_sta
 
             /*  Analog Inputs */
             {
-               uint16_t button_ii = MAX(
-                     get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_L2 ),
-                     get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_Y )
-                     );
+               /* Hoist each get_analog_button call into a temp so it
+                * fires exactly once per neGcon button. The previous
+                * MAX(f(), g()) macro expansion re-evaluated the
+                * winning side, costing an extra input_state_cb call
+                * through the libretro frontend per MAX (function
+                * pointer, can't be CSE'd by the compiler). */
+               uint16_t a, b;
+               uint16_t button_ii, button_i, left_shoulder;
 
-               uint16_t button_i = MAX(
-                     get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_R2 ),
-                     get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_B )
-                     );
-               uint16_t left_shoulder = get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_L );
+               a = get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_L2 );
+               b = get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_Y );
+               button_ii = (a > b) ? a : b;
+
+               a = get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_R2 );
+               b = get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_B );
+               button_i  = (a > b) ? a : b;
+
+               left_shoulder = get_analog_button( input_state_cb, iplayer, RETRO_DEVICE_ID_JOYPAD_L );
 
                p_input->u32[ 3 ] = button_i;      /* Analog button I */
                p_input->u32[ 4 ] = button_ii;     /* Analog button II */

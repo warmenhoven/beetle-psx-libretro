@@ -485,8 +485,9 @@ static void Command_FBCopy(PS_GPU* g, const uint32 *cb)
 
          for(x = 0; x < (unsigned)width; x += 128)
          {
-            const int32 chunk_x_max = MIN((int32)(width - x), 128);
+            int32 chunk_x_max = (int32)(width - x);
             uint16 tmpbuf[128]; /* TODO: Check and see if the GPU is actually (ab)using the CLUT or texture cache. */
+            if (chunk_x_max > 128) chunk_x_max = 128;
 
             for(int32 chunk_x = 0; chunk_x < chunk_x_max; chunk_x++)
             {
@@ -2218,8 +2219,8 @@ TheEnd:
 
    next_dt = (((int64)next_dt << 16) - GPU.GPUClockCounter + GPU.GPUClockRatio - 1) / GPU.GPUClockRatio;
 
-   next_dt = MAX(1, next_dt);
-   next_dt = MIN(EventCycles, next_dt);
+   if (next_dt < 1)          next_dt = 1;
+   if (next_dt > EventCycles) next_dt = EventCycles;
 
    return(sys_timestamp + next_dt);
 }

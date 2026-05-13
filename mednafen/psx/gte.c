@@ -1126,7 +1126,11 @@ static INLINE uint32_t Divide(uint32_t dividend, uint32_t divisor)
       dividend <<= shift_bias;
       divisor <<= shift_bias;
 
-      return MIN((uint32_t)0x1FFFF, (uint32_t)(((uint64_t)dividend * CalcRecip(divisor | 0x8000) + 32768) >> 16));
+      {
+         uint32_t _r = (uint32_t)(((uint64_t)dividend * CalcRecip(divisor | 0x8000) + 32768) >> 16);
+         if (_r > 0x1FFFF) _r = 0x1FFFF;
+         return _r;
+      }
    }
 
    /* If the Z coordinate is smaller than or equal to half the 

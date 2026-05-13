@@ -318,8 +318,10 @@ static int CDIF_ReadThread(void *v_arg)
                   int how_far_ahead = (int)(cdif->ra_lba - new_lba);
 
                   if (how_far_ahead <= max_ra)
-                     cdif->ra_count = MIN(speedmult_ra,
-                           1 + max_ra - how_far_ahead);
+                  {
+                     int _v = 1 + max_ra - how_far_ahead;
+                     cdif->ra_count = (speedmult_ra < _v) ? speedmult_ra : _v;
+                  }
                   else
                      cdif->ra_count++;
                }

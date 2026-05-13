@@ -190,10 +190,10 @@ void Extend_UVLimits(PS_GPU *gpu, tri_vertex *vertices, unsigned count)
 		{
 			uint16_t u = (uint16_t)vertices[i].u;
 			uint16_t v = (uint16_t)vertices[i].v;
-			min_u = MIN(min_u, u);
-			min_v = MIN(min_v, v);
-			max_u = MAX(max_u, u);
-			max_v = MAX(max_v, v);
+			if (u < min_u) min_u = u;
+			if (v < min_v) min_v = v;
+			if (u > max_u) max_u = u;
+			if (v > max_v) max_v = v;
 		}
 	}
 	else
