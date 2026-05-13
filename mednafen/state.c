@@ -44,12 +44,6 @@ int StateAction(StateMem *sm, int load, int data_only);
 
 bool FastSaveStates = false;
 
-/* MDFN_de32lsb / MDFN_en32lsb from mednafen-endian.h handle the
- * little-endian encode/decode of a u32 to/from a byte buffer. They
- * compile to a single mov on LE and a load+bswap on BE. The previous
- * file-local MDFN_de32lsb_ / MDFN_en32lsb_ were byte-shift open-codes
- * of the same operation - identical behaviour, redundant source. */
-
 /* Read `len` bytes from the state stream into `buffer`. Returns the
  * number of bytes read (== len on success, 0 on failure / short stream).
  *
@@ -181,10 +175,14 @@ static int32_t smem_seek(StateMem *st, uint32_t offset, int whence)
 static int smem_write32le(StateMem *st, uint32_t b)
 {
    uint8_t s[4];
-   /* MDFN_en32lsb encodes b as a little-endian u32 into s[].  On LE
-    * this is a single mov; on BE a bswap + store. The previous code
-    * open-coded the byte-shift pattern. */
-   MDFN_en32lsb(s, b);
+#ifdef MSB_FIRST
+   s[0] = b;
+   s[1] = b >> 8;
+   s[2] = b >> 16;
+   s[3] = b >> 24;
+#else
+   memcpy(s, &b, 4);
+#endif
    return((smem_write(st, s, 4)<4)?0:4);
 }
 
@@ -195,10 +193,14 @@ static int smem_read32le(StateMem *st, uint32_t *b)
    if(smem_read(st, s, 4) < 4)
       return(0);
 
-   /* MDFN_de32lsb decodes a little-endian u32 from s[] - single load
-    * on LE, load + bswap on BE. */
-   *b = MDFN_de32lsb(s);
-
+#ifdef MSB_FIRST
+   *b = (uint32_t)s[0]
+      | ((uint32_t)s[1] << 8)
+      | ((uint32_t)s[2] << 16)
+      | ((uint32_t)s[3] << 24);
+#else
+   memcpy(b, s, 4);
+#endif
    return(4);
 }
 
@@ -616,9 +618,24 @@ int MDFNSS_SaveSM(void *st_p, int a, int b, const void *c, const void *d,
    memset(header, 0, sizeof(header));
    memcpy(header, header_magic, 8);
 
-   MDFN_en32lsb(header + 16, MEDNAFEN_VERSION_NUMERIC);
-   MDFN_en32lsb(header + 24, neowidth);
-   MDFN_en32lsb(header + 28, neoheight);
+   /* Write three u32 header fields in little-endian byte order. */
+   {
+      uint32_t v_ver = MEDNAFEN_VERSION_NUMERIC;
+      uint32_t v_w   = (uint32_t)neowidth;
+      uint32_t v_h   = (uint32_t)neoheight;
+#ifdef MSB_FIRST
+      header[16] = v_ver;  header[17] = v_ver >> 8;
+      header[18] = v_ver >> 16;  header[19] = v_ver >> 24;
+      header[24] = v_w;    header[25] = v_w   >> 8;
+      header[26] = v_w   >> 16;  header[27] = v_w   >> 24;
+      header[28] = v_h;    header[29] = v_h   >> 8;
+      header[30] = v_h   >> 16;  header[31] = v_h   >> 24;
+#else
+      memcpy(header + 16, &v_ver, 4);
+      memcpy(header + 24, &v_w,   4);
+      memcpy(header + 28, &v_h,   4);
+#endif
+   }
 
    /* If the initial header write fails (out of memory), fail fast
     * rather than letting StateAction run and produce a corrupt
@@ -661,7 +678,14 @@ int MDFNSS_LoadSM(void *st_p, int a, int b)
          && memcmp(header, "MDFNSVST", 8))
       return(0);
 
-   stateversion = MDFN_de32lsb(header + 16);
+#ifdef MSB_FIRST
+   stateversion = (uint32_t)header[16]
+                | ((uint32_t)header[17] << 8)
+                | ((uint32_t)header[18] << 16)
+                | ((uint32_t)header[19] << 24);
+#else
+   memcpy(&stateversion, header + 16, 4);
+#endif
 
    return(StateAction(st, stateversion, 0));
 }

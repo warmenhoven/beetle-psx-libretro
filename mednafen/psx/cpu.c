@@ -718,7 +718,15 @@ static INLINE uint32_t ReadInstruction(pscpu_timestamp_t *timestamp, uint32_t ad
 
       if (address >= 0xA0000000 || !(BIU & 0x800))
       {
-         instr = MDFN_de32lsb_aligned((uint8 *)(FastMap[address >> FAST_MAP_SHIFT] + address));
+         const uint8 *_p = (const uint8 *)(FastMap[address >> FAST_MAP_SHIFT] + address);
+#ifdef MSB_FIRST
+         instr = (uint32_t)_p[0]
+               | ((uint32_t)_p[1] << 8)
+               | ((uint32_t)_p[2] << 16)
+               | ((uint32_t)_p[3] << 24);
+#else
+         memcpy(&instr, _p, 4);
+#endif
 
          if (!psx_gte_overclock)
             *timestamp += 4; /* Approximate best-case cache-disabled time. */
@@ -743,22 +751,50 @@ static INLINE uint32_t ReadInstruction(pscpu_timestamp_t *timestamp, uint32_t ad
                if (!psx_gte_overclock)
                   (*timestamp)++;
                ICI[0x00].TV  &= ~0x2;
-               ICI[0x00].Data = MDFN_de32lsb_aligned(&FMP[0x0]);
+#ifdef MSB_FIRST
+               ICI[0x00].Data = (uint32_t)FMP[0x0]
+                              | ((uint32_t)FMP[0x1] << 8)
+                              | ((uint32_t)FMP[0x2] << 16)
+                              | ((uint32_t)FMP[0x3] << 24);
+#else
+               memcpy(&ICI[0x00].Data, &FMP[0x0], 4);
+#endif
             case 0x4:
                if (!psx_gte_overclock)
                   (*timestamp)++;
                ICI[0x01].TV  &= ~0x2;
-               ICI[0x01].Data = MDFN_de32lsb_aligned(&FMP[0x4]);
+#ifdef MSB_FIRST
+               ICI[0x01].Data = (uint32_t)FMP[0x4]
+                              | ((uint32_t)FMP[0x5] << 8)
+                              | ((uint32_t)FMP[0x6] << 16)
+                              | ((uint32_t)FMP[0x7] << 24);
+#else
+               memcpy(&ICI[0x01].Data, &FMP[0x4], 4);
+#endif
             case 0x8:
                if (!psx_gte_overclock)
                   (*timestamp)++;
                ICI[0x02].TV  &= ~0x2;
-               ICI[0x02].Data = MDFN_de32lsb_aligned(&FMP[0x8]);
+#ifdef MSB_FIRST
+               ICI[0x02].Data = (uint32_t)FMP[0x8]
+                              | ((uint32_t)FMP[0x9] << 8)
+                              | ((uint32_t)FMP[0xA] << 16)
+                              | ((uint32_t)FMP[0xB] << 24);
+#else
+               memcpy(&ICI[0x02].Data, &FMP[0x8], 4);
+#endif
             case 0xC:
                if (!psx_gte_overclock)
                   (*timestamp)++;
                ICI[0x03].TV  &= ~0x2;
-               ICI[0x03].Data = MDFN_de32lsb_aligned(&FMP[0xC]);
+#ifdef MSB_FIRST
+               ICI[0x03].Data = (uint32_t)FMP[0xC]
+                              | ((uint32_t)FMP[0xD] << 8)
+                              | ((uint32_t)FMP[0xE] << 16)
+                              | ((uint32_t)FMP[0xF] << 24);
+#else
+               memcpy(&ICI[0x03].Data, &FMP[0xC], 4);
+#endif
                break;
          }
          instr = ICache[(address & 0xFFC) >> 2].Data;

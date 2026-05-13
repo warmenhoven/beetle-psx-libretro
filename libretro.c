@@ -1244,13 +1244,36 @@ static INLINE void MemRW(int32_t *timestamp, uint32_t A, uint32_t *V_p, unsigned
             }
             else if((A & 0x7FFFFF) < (65536 + TextMem_size))
             {
+               const uint8 *_p = &TextMem[(A & 0x7FFFFF) - 65536];
                if(access24)
-                  (*V_p) = MDFN_de24lsb(&TextMem[(A & 0x7FFFFF) - 65536]);
+                  (*V_p) = ((uint32)_p[0])
+                         | ((uint32)_p[1] << 8)
+                         | ((uint32)_p[2] << 16);
                else switch(size)
                {
-                  case 1: (*V_p) = TextMem[(A & 0x7FFFFF) - 65536]; break;
-                  case 2: (*V_p) = MDFN_de16lsb(&TextMem[(A & 0x7FFFFF) - 65536]); break;
-                  case 4: (*V_p) = MDFN_de32lsb(&TextMem[(A & 0x7FFFFF) - 65536]); break;
+                  case 1: (*V_p) = _p[0]; break;
+                  case 2:
+                  {
+                     uint16 _v;
+#ifdef MSB_FIRST
+                     _v = (uint16)_p[0] | ((uint16)_p[1] << 8);
+#else
+                     memcpy(&_v, _p, 2);
+#endif
+                     (*V_p) = _v;
+                     break;
+                  }
+                  case 4:
+                  {
+                     uint32 _v;
+#ifdef MSB_FIRST
+                     _v = (uint32)_p[0] | ((uint32)_p[1] << 8) | ((uint32)_p[2] << 16) | ((uint32)_p[3] << 24);
+#else
+                     memcpy(&_v, _p, 4);
+#endif
+                     (*V_p) = _v;
+                     break;
+                  }
                }
             }
          }
@@ -1417,16 +1440,35 @@ static INLINE uint32_t MemPeek(int32_t timestamp, uint32_t A, unsigned size, boo
          }
          else if((A & 0x7FFFFF) < (65536 + TextMem_size))
          {
+            const uint8 *_p = &TextMem[(A & 0x7FFFFF) - 65536];
             if(access24)
-               return(MDFN_de24lsb(&TextMem[(A & 0x7FFFFF) - 65536]));
+               return ((uint32)_p[0])
+                    | ((uint32)_p[1] << 8)
+                    | ((uint32)_p[2] << 16);
             else switch(size)
             {
                case 1:
-                  return(TextMem[(A & 0x7FFFFF) - 65536]);
+                  return _p[0];
                case 2:
-                  return(MDFN_de16lsb(&TextMem[(A & 0x7FFFFF) - 65536]));
+               {
+                  uint16 _v;
+#ifdef MSB_FIRST
+                  _v = (uint16)_p[0] | ((uint16)_p[1] << 8);
+#else
+                  memcpy(&_v, _p, 2);
+#endif
+                  return _v;
+               }
                case 4:
-                  return(MDFN_de32lsb(&TextMem[(A & 0x7FFFFF) - 65536]));
+               {
+                  uint32 _v;
+#ifdef MSB_FIRST
+                  _v = (uint32)_p[0] | ((uint32)_p[1] << 8) | ((uint32)_p[2] << 16) | ((uint32)_p[3] << 24);
+#else
+                  memcpy(&_v, _p, 4);
+#endif
+                  return _v;
+               }
             }
          }
       }
@@ -1609,8 +1651,13 @@ static const char *CalcDiscSCEx_BySYSTEMCNF(CDIF *c, unsigned *rr)
    }
 
    /* [156 ... 189], 34 bytes - Root directory record */
-   rdel     = MDFN_de32lsb(&pvd[0x9E]);
-   rdel_len = MDFN_de32lsb(&pvd[0xA6]);
+#ifdef MSB_FIRST
+   rdel     = (uint32_t)pvd[0x9E] | ((uint32_t)pvd[0x9F] << 8) | ((uint32_t)pvd[0xA0] << 16) | ((uint32_t)pvd[0xA1] << 24);
+   rdel_len = (uint32_t)pvd[0xA6] | ((uint32_t)pvd[0xA7] << 8) | ((uint32_t)pvd[0xA8] << 16) | ((uint32_t)pvd[0xA9] << 24);
+#else
+   memcpy(&rdel,     &pvd[0x9E], 4);
+   memcpy(&rdel_len, &pvd[0xA6], 4);
+#endif
 
    if (rdel_len >= (1024 * 1024 * 10))  /* Arbitrary sanity check. */
    {
@@ -1668,10 +1715,16 @@ static const char *CalcDiscSCEx_BySYSTEMCNF(CDIF *c, unsigned *rr)
 
       if (len_fi == 12 && !memcmp(&dr[0x21], "SYSTEM.CNF;1", 12))
       {
-         uint32_t file_lba = MDFN_de32lsb(&dr[0x02]);
+         uint32_t file_lba;
          uint8_t  fb[2048 + 1];
          char    *bootpos;
          char    *tmp;
+
+#ifdef MSB_FIRST
+         file_lba = (uint32_t)dr[0x02] | ((uint32_t)dr[0x03] << 8) | ((uint32_t)dr[0x04] << 16) | ((uint32_t)dr[0x05] << 24);
+#else
+         memcpy(&file_lba, &dr[0x02], 4);
+#endif
 
          memset(fb, 0, sizeof(fb));
          if (!CDIF_ReadSector(c, fb, file_lba, 1))
@@ -2467,12 +2520,21 @@ static void InitCommon(const bool EmulateMemcards, const bool WantPIOMem)
 
 static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 {
-   uint32 PC        = MDFN_de32lsb(&data[0x10]);
-   uint32 SP        = MDFN_de32lsb(&data[0x30]);
-   uint32 TextStart = MDFN_de32lsb(&data[0x18]);
-   uint32 TextSize  = MDFN_de32lsb(&data[0x1C]);
+   uint32 PC, SP, TextStart, TextSize;
    uint8 *po;
    uint32 sa;
+
+#ifdef MSB_FIRST
+   PC        = (uint32)data[0x10] | ((uint32)data[0x11] << 8) | ((uint32)data[0x12] << 16) | ((uint32)data[0x13] << 24);
+   SP        = (uint32)data[0x30] | ((uint32)data[0x31] << 8) | ((uint32)data[0x32] << 16) | ((uint32)data[0x33] << 24);
+   TextStart = (uint32)data[0x18] | ((uint32)data[0x19] << 8) | ((uint32)data[0x1A] << 16) | ((uint32)data[0x1B] << 24);
+   TextSize  = (uint32)data[0x1C] | ((uint32)data[0x1D] << 8) | ((uint32)data[0x1E] << 16) | ((uint32)data[0x1F] << 24);
+#else
+   memcpy(&PC,        &data[0x10], 4);
+   memcpy(&SP,        &data[0x30], 4);
+   memcpy(&TextStart, &data[0x18], 4);
+   memcpy(&TextSize,  &data[0x1C], 4);
+#endif
 
    if(ignore_pcsp)
       log_cb(RETRO_LOG_DEBUG, "TextStart=0x%08x\nTextSize=0x%08x\n", TextStart, TextSize);
@@ -2527,23 +2589,59 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 
    po = &PIOMem->data8[0x0800];
 
-   MDFN_en32lsb(po, (0x0 << 26) | (31 << 21) | (0x8 << 0)); // JR
+   { uint32 _ev = (uint32)((0x0 << 26) | (31 << 21) | (0x8 << 0)); // JR
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
-   MDFN_en32lsb(po, 0); // NOP(kinda)
+   { uint32 _ev = (uint32)(0); // NOP(kinda)
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
    po = &PIOMem->data8[0x1000];
 
    // Load cacheable-region target PC into r2
-   MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16) | (0x9F001010 >> 16));      // LUI
+   { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16) | (0x9F001010 >> 16));      // LUI
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
-   MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (2 << 16) | (0x9F001010 & 0xFFFF));   // ORI
+   { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (2 << 16) | (0x9F001010 & 0xFFFF));   // ORI
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
    // Jump to r2
-   MDFN_en32lsb(po, (0x0 << 26) | (2 << 21) | (0x8 << 0));  // JR
+   { uint32 _ev = (uint32)((0x0 << 26) | (2 << 21) | (0x8 << 0));  // JR
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
-   MDFN_en32lsb(po, 0); // NOP(kinda)
+   { uint32 _ev = (uint32)(0); // NOP(kinda)
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
    //
@@ -2552,42 +2650,114 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 
    // Load source address into r8
    sa = 0x9F000000 + 65536;
-   MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16) | (sa >> 16));  // LUI
+   { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16) | (sa >> 16));  // LUI
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
-   MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (8 << 16) | (sa & 0xFFFF));  // ORI
+   { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (8 << 16) | (sa & 0xFFFF));  // ORI
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
    // Load dest address into r9
-   MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_Start >> 16));  // LUI
+   { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_Start >> 16));  // LUI
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
-   MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (9 << 16) | (TextMem_Start & 0xFFFF));   // ORI
+   { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (9 << 16) | (TextMem_Start & 0xFFFF));   // ORI
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
    // Load size into r10
-   MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_size >> 16)); // LUI
+   { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_size >> 16)); // LUI
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
-   MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (10 << 16) | (TextMem_size & 0xFFFF));    // ORI
+   { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (10 << 16) | (TextMem_size & 0xFFFF));    // ORI
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
    //
    // Loop begin
    //
 
-   MDFN_en32lsb(po, (0x24 << 26) | (8 << 21) | (1 << 16));  // LBU to r1
+   { uint32 _ev = (uint32)((0x24 << 26) | (8 << 21) | (1 << 16));  // LBU to r1
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
-   MDFN_en32lsb(po, (0x08 << 26) | (10 << 21) | (10 << 16) | 0xFFFF);   // Decrement size
+   { uint32 _ev = (uint32)((0x08 << 26) | (10 << 21) | (10 << 16) | 0xFFFF);   // Decrement size
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
-   MDFN_en32lsb(po, (0x28 << 26) | (9 << 21) | (1 << 16));  // SB from r1
+   { uint32 _ev = (uint32)((0x28 << 26) | (9 << 21) | (1 << 16));  // SB from r1
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
-   MDFN_en32lsb(po, (0x08 << 26) | (8 << 21) | (8 << 16) | 0x0001);  // Increment source addr
+   { uint32 _ev = (uint32)((0x08 << 26) | (8 << 21) | (8 << 16) | 0x0001);  // Increment source addr
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
-   MDFN_en32lsb(po, (0x05 << 26) | (0 << 21) | (10 << 16) | (-5 & 0xFFFF));
+   { uint32 _ev = (uint32)((0x05 << 26) | (0 << 21) | (10 << 16) | (-5 & 0xFFFF));
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
-   MDFN_en32lsb(po, (0x08 << 26) | (9 << 21) | (9 << 16) | 0x0001);  // Increment dest addr
+   { uint32 _ev = (uint32)((0x08 << 26) | (9 << 21) | (9 << 16) | 0x0001);  // Increment dest addr
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
    //
@@ -2601,31 +2771,73 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    }
    else
    {
-      MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16)  | (SP >> 16)); // LUI
+      { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16)  | (SP >> 16)); // LUI
+      #ifdef MSB_FIRST
+         po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+      #else
+         memcpy(po, &_ev, 4);
+      #endif
+      }
       po += 4;
-      MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (29 << 16) | (SP & 0xFFFF));    // ORI
+      { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (29 << 16) | (SP & 0xFFFF));    // ORI
+      #ifdef MSB_FIRST
+         po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+      #else
+         memcpy(po, &_ev, 4);
+      #endif
+      }
       po += 4;
 
       // Load PC into r2
-      MDFN_en32lsb(po, (0xF << 26) | (0 << 21) | (1 << 16)  | ((PC >> 16) | 0x8000));      // LUI
+      { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16)  | ((PC >> 16) | 0x8000));      // LUI
+      #ifdef MSB_FIRST
+         po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+      #else
+         memcpy(po, &_ev, 4);
+      #endif
+      }
       po += 4;
-      MDFN_en32lsb(po, (0xD << 26) | (1 << 21) | (2 << 16) | (PC & 0xFFFF));   // ORI
+      { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (2 << 16) | (PC & 0xFFFF));   // ORI
+      #ifdef MSB_FIRST
+         po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+      #else
+         memcpy(po, &_ev, 4);
+      #endif
+      }
       po += 4;
    }
 
    // Half-assed instruction cache flush. ;)
    for(unsigned i = 0; i < 1024; i++)
    {
-      MDFN_en32lsb(po, 0);
+      { uint32 _ev = (uint32)(0);
+      #ifdef MSB_FIRST
+         po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+      #else
+         memcpy(po, &_ev, 4);
+      #endif
+      }
       po += 4;
    }
 
 
 
    // Jump to r2
-   MDFN_en32lsb(po, (0x0 << 26) | (2 << 21) | (0x8 << 0));  // JR
+   { uint32 _ev = (uint32)((0x0 << 26) | (2 << 21) | (0x8 << 0));  // JR
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
-   MDFN_en32lsb(po, 0); // NOP(kinda)
+   { uint32 _ev = (uint32)(0); // NOP(kinda)
+   #ifdef MSB_FIRST
+      po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
+   #else
+      memcpy(po, &_ev, 4);
+   #endif
+   }
    po += 4;
 
 #ifdef HAVE_LIGHTREC

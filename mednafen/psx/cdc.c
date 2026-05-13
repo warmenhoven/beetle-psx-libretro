@@ -1192,8 +1192,17 @@ void PS_CDC_EnbufferizeCDDASector(PS_CDC *cdc, const uint8 *buf)
          int i;
          for (i = 0; i < 588; i++)
       {
-         ab->Samples[0][i] = (int16)MDFN_de16lsb(&buf[i * sizeof(int16) * 2 + 0]);
-         ab->Samples[1][i] = (int16)MDFN_de16lsb(&buf[i * sizeof(int16) * 2 + 2]);
+         const uint8 *_p = &buf[i * sizeof(int16) * 2];
+#ifdef MSB_FIRST
+         ab->Samples[0][i] = (int16)((uint16)_p[0] | ((uint16)_p[1] << 8));
+         ab->Samples[1][i] = (int16)((uint16)_p[2] | ((uint16)_p[3] << 8));
+#else
+         uint16 _l, _r;
+         memcpy(&_l, _p + 0, 2);
+         memcpy(&_r, _p + 2, 2);
+         ab->Samples[0][i] = (int16)_l;
+         ab->Samples[1][i] = (int16)_r;
+#endif
       }
       }
    }
@@ -1293,7 +1302,15 @@ void PS_CDC_HandlePlayRead(PS_CDC *cdc)
             int i;
             for (i = 0; i < 588; i++)
             {
-               int v = abs((int16)MDFN_de16lsb(&read_buf[i * 4 + (abs_lev_chselect * 2)]));
+               const uint8 *_p = &read_buf[i * 4 + (abs_lev_chselect * 2)];
+               int v;
+#ifdef MSB_FIRST
+               v = abs((int16)((uint16)_p[0] | ((uint16)_p[1] << 8)));
+#else
+               uint16 _s;
+               memcpy(&_s, _p, 2);
+               v = abs((int16)_s);
+#endif
                if (v > 32767) v = 32767;
                if ((uint16)v > abs_lev_max) abs_lev_max = (uint16)v;
             }

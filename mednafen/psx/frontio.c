@@ -1689,11 +1689,21 @@ static void InputDevice_DualAnalog_UpdateInput(InputDevice *self_, const void *d
       for (axis = 0; axis < 2; axis++)
       {
          int32 tmp;
+         const uint8 *_p4 = (const uint8 *)data + stick * 16 + axis * 8 + 4;
+         const uint8 *_p8 = (const uint8 *)data + stick * 16 + axis * 8 + 8;
+         uint32 _v4, _v8;
 
          /* revert to 0.9.33, should be fixed on libretro side instead */
          /* tmp = 32768 + MDFN_de16lsb(&aba[0]) - ((int32)MDFN_de16lsb(&aba[2]) * 32768 / 32767); */
 
-         tmp = 32768 + MDFN_de32lsb((const uint8 *)data + stick * 16 + axis * 8 + 4) - ((int32)MDFN_de32lsb((const uint8 *)data + stick * 16 + axis * 8 + 8) * 32768 / 32767);
+#ifdef MSB_FIRST
+         _v4 = (uint32)_p4[0] | ((uint32)_p4[1] << 8) | ((uint32)_p4[2] << 16) | ((uint32)_p4[3] << 24);
+         _v8 = (uint32)_p8[0] | ((uint32)_p8[1] << 8) | ((uint32)_p8[2] << 16) | ((uint32)_p8[3] << 24);
+#else
+         memcpy(&_v4, _p4, 4);
+         memcpy(&_v8, _p8, 4);
+#endif
+         tmp = 32768 + _v4 - ((int32)_v8 * 32768 / 32767);
          tmp >>= 8;
 
          self->axes[stick][axis] = tmp;
@@ -2088,12 +2098,22 @@ static void InputDevice_DualShock_UpdateInput(InputDevice *self_, const void *da
       for (axis = 0; axis < 2; axis++)
       {
          int32 tmp;
+         const uint8 *_p4 = (const uint8 *)data + stick * 16 + axis * 8 + 4;
+         const uint8 *_p8 = (const uint8 *)data + stick * 16 + axis * 8 + 8;
+         uint32 _v4, _v8;
 
          /* revert to 0.9.33, should be fixed on libretro side instead */
          /* tmp = 32767 + MDFN_de16lsb(&aba[0]) - MDFN_de16lsb(&aba[2]); */
          /* tmp = (tmp * 0x100) / 0xFFFF; */
 
-         tmp = 32768 + MDFN_de32lsb((const uint8 *)data + stick * 16 + axis * 8 + 4) - ((int32)MDFN_de32lsb((const uint8 *)data + stick * 16 + axis * 8 + 8) * 32768 / 32767);
+#ifdef MSB_FIRST
+         _v4 = (uint32)_p4[0] | ((uint32)_p4[1] << 8) | ((uint32)_p4[2] << 16) | ((uint32)_p4[3] << 24);
+         _v8 = (uint32)_p8[0] | ((uint32)_p8[1] << 8) | ((uint32)_p8[2] << 16) | ((uint32)_p8[3] << 24);
+#else
+         memcpy(&_v4, _p4, 4);
+         memcpy(&_v8, _p8, 4);
+#endif
+         tmp = 32768 + _v4 - ((int32)_v8 * 32768 / 32767);
          tmp >>= 8;
          self->axes[stick][axis] = tmp;
       }
@@ -2106,6 +2126,7 @@ static void InputDevice_DualShock_UpdateInput(InputDevice *self_, const void *da
    if(self->da_rumble_compat == false)
    {
       uint8 sneaky_weaky = 0;
+      uint32 _rv;
 
       if(self->rumble_param[0] == 0x01)
          sneaky_weaky = 0xFF;
@@ -2113,18 +2134,35 @@ static void InputDevice_DualShock_UpdateInput(InputDevice *self_, const void *da
       /* revert to 0.9.33, should be fixed on libretro side instead */
       /* MDFN_en16lsb(rumb_dp, (sneaky_weaky << 0) | (rumble_param[1] << 8)); */
 
-      MDFN_en32lsb(&d8[4 + 32 + 0], (sneaky_weaky << 0) | (self->rumble_param[1] << 8));
+      _rv = (uint32)((sneaky_weaky << 0) | (self->rumble_param[1] << 8));
+#ifdef MSB_FIRST
+      d8[4 + 32 + 0] = _rv;
+      d8[4 + 32 + 1] = _rv >> 8;
+      d8[4 + 32 + 2] = _rv >> 16;
+      d8[4 + 32 + 3] = _rv >> 24;
+#else
+      memcpy(&d8[4 + 32 + 0], &_rv, 4);
+#endif
    }
    else
    {
       uint8 sneaky_weaky = 0;
+      uint32 _rv;
 
       if(((self->rumble_param[0] & 0xC0) == 0x40) && ((self->rumble_param[1] & 0x01) == 0x01))
          sneaky_weaky = 0xFF;
 
       /* revert to 0.9.33, should be fixed on libretro side instead */
       /* MDFN_en16lsb(rumb_dp, sneaky_weaky << 0); */
-      MDFN_en32lsb(&d8[4 + 32 + 0], sneaky_weaky << 0);
+      _rv = (uint32)(sneaky_weaky << 0);
+#ifdef MSB_FIRST
+      d8[4 + 32 + 0] = _rv;
+      d8[4 + 32 + 1] = _rv >> 8;
+      d8[4 + 32 + 2] = _rv >> 16;
+      d8[4 + 32 + 3] = _rv >> 24;
+#else
+      memcpy(&d8[4 + 32 + 0], &_rv, 4);
+#endif
    }
 
    /* printf("%d %d %d %d\n", axes[0][0], axes[0][1], axes[1][0], axes[1][1]); */
@@ -2998,9 +3036,18 @@ static int InputDevice_Mouse_StateAction(InputDevice *self_, StateMem* sm, int l
 static void InputDevice_Mouse_UpdateInput(InputDevice *self_, const void *data)
 {
    InputDevice_Mouse *self = (InputDevice_Mouse *)self_;
+   const uint8 *_p = (const uint8 *)data;
+   uint32 _dx, _dy;
 
-   self->accum_xdelta += (int32)MDFN_de32lsb((uint8*)data + 0);
-   self->accum_ydelta += (int32)MDFN_de32lsb((uint8*)data + 4);
+#ifdef MSB_FIRST
+   _dx = (uint32)_p[0] | ((uint32)_p[1] << 8) | ((uint32)_p[2] << 16) | ((uint32)_p[3] << 24);
+   _dy = (uint32)_p[4] | ((uint32)_p[5] << 8) | ((uint32)_p[6] << 16) | ((uint32)_p[7] << 24);
+#else
+   memcpy(&_dx, _p + 0, 4);
+   memcpy(&_dy, _p + 4, 4);
+#endif
+   self->accum_xdelta += (int32)_dx;
+   self->accum_ydelta += (int32)_dy;
 
    if(self->accum_xdelta > 30 * 127) self->accum_xdelta = 30 * 127;
    if(self->accum_xdelta < 30 * -128) self->accum_xdelta = 30 * -128;
@@ -3192,15 +3239,29 @@ static void InputDevice_neGcon_UpdateInput(InputDevice *self_, const void *data)
    InputDevice_neGcon *self = (InputDevice_neGcon *)self_;
 
    uint8 *d8 = (uint8 *)data;
+   uint32 _v4, _v8, _v12, _v16, _v20;
+#ifdef MSB_FIRST
+   _v4  = (uint32)d8[ 4] | ((uint32)d8[ 5] << 8) | ((uint32)d8[ 6] << 16) | ((uint32)d8[ 7] << 24);
+   _v8  = (uint32)d8[ 8] | ((uint32)d8[ 9] << 8) | ((uint32)d8[10] << 16) | ((uint32)d8[11] << 24);
+   _v12 = (uint32)d8[12] | ((uint32)d8[13] << 8) | ((uint32)d8[14] << 16) | ((uint32)d8[15] << 24);
+   _v16 = (uint32)d8[16] | ((uint32)d8[17] << 8) | ((uint32)d8[18] << 16) | ((uint32)d8[19] << 24);
+   _v20 = (uint32)d8[20] | ((uint32)d8[21] << 8) | ((uint32)d8[22] << 16) | ((uint32)d8[23] << 24);
+#else
+   memcpy(&_v4,  d8 +  4, 4);
+   memcpy(&_v8,  d8 +  8, 4);
+   memcpy(&_v12, d8 + 12, 4);
+   memcpy(&_v16, d8 + 16, 4);
+   memcpy(&_v20, d8 + 20, 4);
+#endif
 
    self->buttons[0] = d8[0];
    self->buttons[1] = d8[1];
 
-   self->twist = ((32768 + MDFN_de32lsb((const uint8 *)data + 4) - (((int32)MDFN_de32lsb((const uint8 *)data + 8) * 32768 + 16383) / 32767)) * 255 + 32767) / 65535;
+   self->twist = ((32768 + _v4 - (((int32)_v8 * 32768 + 16383) / 32767)) * 255 + 32767) / 65535;
 
-   self->anabuttons[0] = (MDFN_de32lsb((const uint8 *)data + 12) * 255 + 16383) / 32767; 
-   self->anabuttons[1] = (MDFN_de32lsb((const uint8 *)data + 16) * 255 + 16383) / 32767;
-   self->anabuttons[2] = (MDFN_de32lsb((const uint8 *)data + 20) * 255 + 16383) / 32767;
+   self->anabuttons[0] = (_v12 * 255 + 16383) / 32767;
+   self->anabuttons[1] = (_v16 * 255 + 16383) / 32767;
+   self->anabuttons[2] = (_v20 * 255 + 16383) / 32767;
 
    /* printf("%02x %02x %02x %02x\n", twist, anabuttons[0], anabuttons[1], anabuttons[2]); */
 }
@@ -3571,16 +3632,30 @@ static void InputDevice_neGconRumble_UpdateInput(InputDevice *self_, const void 
    InputDevice_neGconRumble *self = (InputDevice_neGconRumble *)self_;
 
    uint8 *d8 = (uint8 *)data;
+   uint32 _v4, _v8, _v12, _v16, _v20;
+#ifdef MSB_FIRST
+   _v4  = (uint32)d8[ 4] | ((uint32)d8[ 5] << 8) | ((uint32)d8[ 6] << 16) | ((uint32)d8[ 7] << 24);
+   _v8  = (uint32)d8[ 8] | ((uint32)d8[ 9] << 8) | ((uint32)d8[10] << 16) | ((uint32)d8[11] << 24);
+   _v12 = (uint32)d8[12] | ((uint32)d8[13] << 8) | ((uint32)d8[14] << 16) | ((uint32)d8[15] << 24);
+   _v16 = (uint32)d8[16] | ((uint32)d8[17] << 8) | ((uint32)d8[18] << 16) | ((uint32)d8[19] << 24);
+   _v20 = (uint32)d8[20] | ((uint32)d8[21] << 8) | ((uint32)d8[22] << 16) | ((uint32)d8[23] << 24);
+#else
+   memcpy(&_v4,  d8 +  4, 4);
+   memcpy(&_v8,  d8 +  8, 4);
+   memcpy(&_v12, d8 + 12, 4);
+   memcpy(&_v16, d8 + 16, 4);
+   memcpy(&_v20, d8 + 20, 4);
+#endif
 
    self->buttons[0] = d8[0];
    self->buttons[1] = d8[1];
    self->cur_ana_button_state = d8[2] & 0x01;
 
-   self->twist = ((32768 + MDFN_de32lsb((const uint8 *)data + 4) - (((int32)MDFN_de32lsb((const uint8 *)data + 8) * 32768 + 16383) / 32767)) * 255 + 32767) / 65535;
+   self->twist = ((32768 + _v4 - (((int32)_v8 * 32768 + 16383) / 32767)) * 255 + 32767) / 65535;
 
-   self->anabuttons[0] = (MDFN_de32lsb((const uint8 *)data + 12) * 255 + 16383) / 32767; 
-   self->anabuttons[1] = (MDFN_de32lsb((const uint8 *)data + 16) * 255 + 16383) / 32767;
-   self->anabuttons[2] = (MDFN_de32lsb((const uint8 *)data + 20) * 255 + 16383) / 32767;
+   self->anabuttons[0] = (_v12 * 255 + 16383) / 32767;
+   self->anabuttons[1] = (_v16 * 255 + 16383) / 32767;
+   self->anabuttons[2] = (_v20 * 255 + 16383) / 32767;
 
    /* printf("%02x %02x %02x %02x\n", twist, anabuttons[0], anabuttons[1], anabuttons[2]); */
 
@@ -3589,6 +3664,7 @@ static void InputDevice_neGconRumble_UpdateInput(InputDevice *self_, const void 
    if(self->da_rumble_compat == false)
    {
       uint8 sneaky_weaky = 0;
+      uint32 _rv;
 
       if(self->rumble_param[0] == 0x01)
          sneaky_weaky = 0xFF;
@@ -3596,18 +3672,35 @@ static void InputDevice_neGconRumble_UpdateInput(InputDevice *self_, const void 
       /* revert to 0.9.33, should be fixed on libretro side instead */
       /* MDFN_en16lsb(rumb_dp, (sneaky_weaky << 0) | (rumble_param[1] << 8)); */
 
-      MDFN_en32lsb(&d8[4 + 32 + 0], (sneaky_weaky << 0) | (self->rumble_param[1] << 8));
+      _rv = (uint32)((sneaky_weaky << 0) | (self->rumble_param[1] << 8));
+#ifdef MSB_FIRST
+      d8[4 + 32 + 0] = _rv;
+      d8[4 + 32 + 1] = _rv >> 8;
+      d8[4 + 32 + 2] = _rv >> 16;
+      d8[4 + 32 + 3] = _rv >> 24;
+#else
+      memcpy(&d8[4 + 32 + 0], &_rv, 4);
+#endif
    }
    else
    {
       uint8 sneaky_weaky = 0;
+      uint32 _rv;
 
       if(((self->rumble_param[0] & 0xC0) == 0x40) && ((self->rumble_param[1] & 0x01) == 0x01))
          sneaky_weaky = 0xFF;
 
       /* revert to 0.9.33, should be fixed on libretro side instead */
       /* MDFN_en16lsb(rumb_dp, sneaky_weaky << 0); */
-      MDFN_en32lsb(&d8[4 + 32 + 0], sneaky_weaky << 0);
+      _rv = (uint32)(sneaky_weaky << 0);
+#ifdef MSB_FIRST
+      d8[4 + 32 + 0] = _rv;
+      d8[4 + 32 + 1] = _rv >> 8;
+      d8[4 + 32 + 2] = _rv >> 16;
+      d8[4 + 32 + 3] = _rv >> 24;
+#else
+      memcpy(&d8[4 + 32 + 0], &_rv, 4);
+#endif
    }
 
    InputDevice_neGconRumble_CheckManualAnaModeChange(self_);
@@ -4469,9 +4562,18 @@ static void InputDevice_GunCon_UpdateInput(InputDevice *self_, const void *data)
    InputDevice_GunCon *self = (InputDevice_GunCon *)self_;
 
    uint8 *d8 = (uint8 *)data;
-
-   self->nom_x = (int16)MDFN_de16lsb(&d8[0]);
-   self->nom_y = (int16)MDFN_de16lsb(&d8[2]);
+   {
+      uint16 _x, _y;
+#ifdef MSB_FIRST
+      _x = (uint16)d8[0] | ((uint16)d8[1] << 8);
+      _y = (uint16)d8[2] | ((uint16)d8[3] << 8);
+#else
+      memcpy(&_x, &d8[0], 2);
+      memcpy(&_y, &d8[2], 2);
+#endif
+      self->nom_x = (int16)_x;
+      self->nom_y = (int16)_y;
+   }
 
    self->trigger_noclear = (bool)(d8[4] & 0x1);
    self->trigger_eff |= self->trigger_noclear;
@@ -4636,8 +4738,19 @@ static bool InputDevice_GunCon_Clock(InputDevice *self_, bool TxD, int32_t *dsr_
                   }
                }
 
-               MDFN_en16lsb(&self->transmit_buffer[3], self->hit_x);
-               MDFN_en16lsb(&self->transmit_buffer[5], self->hit_y);
+               {
+                  uint16 _hx = (uint16)self->hit_x;
+                  uint16 _hy = (uint16)self->hit_y;
+#ifdef MSB_FIRST
+                  self->transmit_buffer[3] = (uint8)_hx;
+                  self->transmit_buffer[4] = (uint8)(_hx >> 8);
+                  self->transmit_buffer[5] = (uint8)_hy;
+                  self->transmit_buffer[6] = (uint8)(_hy >> 8);
+#else
+                  memcpy(&self->transmit_buffer[3], &_hx, 2);
+                  memcpy(&self->transmit_buffer[5], &_hy, 2);
+#endif
+               }
 
                self->hit_x = 0x01;
                self->hit_y = 0x0A;
@@ -4747,8 +4860,18 @@ static void InputDevice_Justifier_UpdateInput(InputDevice *self_, const void *da
 
    uint8 *d8 = (uint8 *)data;
 
-   self->nom_x = (int16)MDFN_de16lsb(&d8[0]);
-   self->nom_y = (int16)MDFN_de16lsb(&d8[2]);
+   {
+      uint16 _x, _y;
+#ifdef MSB_FIRST
+      _x = (uint16)d8[0] | ((uint16)d8[1] << 8);
+      _y = (uint16)d8[2] | ((uint16)d8[3] << 8);
+#else
+      memcpy(&_x, &d8[0], 2);
+      memcpy(&_y, &d8[2], 2);
+#endif
+      self->nom_x = (int16)_x;
+      self->nom_y = (int16)_y;
+   }
 
    self->trigger_noclear = (bool)(d8[4] & 0x1);
    self->trigger_eff |= self->trigger_noclear;
