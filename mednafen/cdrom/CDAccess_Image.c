@@ -32,6 +32,7 @@
 #include <streams/file_stream.h>
 
 #include "../mednafen.h"
+#include "../mednafen-endian.h"
 #include "../error.h"
 
 #include <sys/types.h>
@@ -104,20 +105,6 @@ static const char *DI_CUE_Strings[7] =
    "MODE2/2324",
    "MODE2/2352"
 };
-
-static void Endian_A16_Swap(void *src, uint32_t nelements)
-{
-   uint32_t i;
-   uint8_t *nsrc = (uint8_t *)src;
-
-   for(i = 0; i < nelements; i++)
-   {
-      uint8_t tmp = nsrc[i * 2];
-
-      nsrc[i * 2] = nsrc[i * 2 + 1];
-      nsrc[i * 2 + 1] = tmp;
-   }
-}
 
 /* Tokenize one whitespace-separated argument out of `src` starting at
  * source_offset.  Writes up to destlen-1 characters into dest, NUL-
@@ -1155,10 +1142,22 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
          {
             if(ct->AReader)
             {
-               int16   AudioBuf[588 * 2];
+               /* AR_Read writes host-endian int16 samples; every
+                * caller of CDAccess_Image_Read_Raw_Sector provides a
+                * buf with at least 4-byte alignment - it's either
+                * CDIF_Sector_Buffer.data (offset 12 of a malloc'd
+                * struct) or a stack uint8 array of >=2352 bytes
+                * (gcc/clang default-align such arrays to 16 in the
+                * caller's frame). Reading AR_Read straight into buf
+                * removes the 2352 B memcpy + 2352 B stack scratch
+                * the original code paid per CDDA sector.
+                *
+                * The (void*) intermediate cast keeps -Wcast-align
+                * quiet on strict-alignment targets; the underlying
+                * alignment is safe per above. */
                int64_t frames_read = AR_Read(ct->AReader,
                      (ct->FileOffset / 4) + (lba - ct->LBA) * 588,
-                     AudioBuf, 588);
+                     (int16_t *)(void *)buf, 588);
 
                ct->LastSamplePos += frames_read;
 
@@ -1166,14 +1165,13 @@ static bool CDAccess_Image_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int3
                   frames_read = 0;
 
                if(frames_read < 588)
-                  memset((uint8 *)AudioBuf + frames_read * 2 * sizeof(int16), 0, (588 - frames_read) * 2 * sizeof(int16));
+                  memset(buf + frames_read * 2 * sizeof(int16), 0, (588 - frames_read) * 2 * sizeof(int16));
 
-               /* AudioBuf is in host byte order from the decoder; the
-                * raw CDDA sector format requires little-endian samples.
-                * On LE hosts the bytes are already correct, so a single
-                * memcpy suffices.  On BE hosts copy then byteswap in
-                * place. */
-               memcpy(buf, AudioBuf, 588 * 2 * sizeof(int16));
+               /* Raw CDDA sector format requires little-endian
+                * samples; AR_Read gave us host-endian, so on a BE
+                * host we still need an in-place byteswap. On LE we
+                * already have correct bytes and no further work is
+                * needed. */
 #ifdef MSB_FIRST
                Endian_A16_Swap(buf, 588 * 2);
 #endif

@@ -43,6 +43,12 @@
 #include <stddef.h>
 #include <string.h>
 
+/* mednafen-types.h provides the uint8/uint16/uint32/uint64 aliases
+ * plus the INLINE macro used below.  Pulling it in here lets a TU
+ * include mednafen-endian.h without already having pulled in the
+ * types header (state.c does this). */
+#include "mednafen-types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -59,11 +65,19 @@ void Endian_A64_Swap(void *src, uint32 nelements);
 #endif
 
 /* Byte-swap primitives. Only used inside #ifdef MSB_FIRST branches
- * below; on a little-endian host both helpers are dead-stripped. */
+ * below; on a little-endian host they are not referenced and we
+ * skip defining them entirely so each LE TU saves a few lines of
+ * parse. Prefer __builtin_bswap*() where available so the compiler
+ * can emit a single bswap/rev instruction rather than the shift-or
+ * fallback. */
+
+#ifdef MSB_FIRST
 
 static INLINE uint16 MDFN_bswap16(uint16 v)
 {
-#if defined(_MSC_VER)
+#if defined(__GNUC__) || defined(__clang__)
+   return __builtin_bswap16(v);
+#elif defined(_MSC_VER)
    return _byteswap_ushort(v);
 #else
    return (uint16)((v << 8) | (v >> 8));
@@ -72,7 +86,9 @@ static INLINE uint16 MDFN_bswap16(uint16 v)
 
 static INLINE uint32 MDFN_bswap32(uint32 v)
 {
-#if defined(_MSC_VER)
+#if defined(__GNUC__) || defined(__clang__)
+   return __builtin_bswap32(v);
+#elif defined(_MSC_VER)
    return _byteswap_ulong(v);
 #else
    return (v << 24)
@@ -81,6 +97,8 @@ static INLINE uint32 MDFN_bswap32(uint32 v)
         | (v >> 24);
 #endif
 }
+
+#endif /* MSB_FIRST */
 
 /*
  * Little-endian readers.

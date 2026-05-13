@@ -27,6 +27,7 @@
 #include <retro_inline.h>
 
 #include "state.h"
+#include "mednafen-endian.h"
 
 #define SSEEK_END	2
 #define SSEEK_CUR	1
@@ -298,11 +299,11 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
                /* Restore the byte order before bailing so we don't
                 * leave the live emulator state byte-flipped. */
                if(sf->flags & MDFNSTATE_RLSB64)
-                  Endian_A64_LE_to_NE(sf->v, bytesize / sizeof(uint64_t));
+                  Endian_A64_Swap(sf->v, bytesize / sizeof(uint64_t));
                else if(sf->flags & MDFNSTATE_RLSB32)
-                  Endian_A32_LE_to_NE(sf->v, bytesize / sizeof(uint32_t));
+                  Endian_A32_Swap(sf->v, bytesize / sizeof(uint32_t));
                else if(sf->flags & MDFNSTATE_RLSB16)
-                  Endian_A16_LE_to_NE(sf->v, bytesize / sizeof(uint16_t));
+                  Endian_A16_Swap(sf->v, bytesize / sizeof(uint16_t));
                else if(sf->flags & RLSB)
                   FlipByteOrder((uint8_t*)sf->v, bytesize);
 #endif
@@ -317,11 +318,11 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
 #ifdef MSB_FIRST
             if(sf->flags & MDFNSTATE_BOOL) { }
             else if(sf->flags & MDFNSTATE_RLSB64)
-               Endian_A64_LE_to_NE(sf->v, bytesize / sizeof(uint64_t));
+               Endian_A64_Swap(sf->v, bytesize / sizeof(uint64_t));
             else if(sf->flags & MDFNSTATE_RLSB32)
-               Endian_A32_LE_to_NE(sf->v, bytesize / sizeof(uint32_t));
+               Endian_A32_Swap(sf->v, bytesize / sizeof(uint32_t));
             else if(sf->flags & MDFNSTATE_RLSB16)
-               Endian_A16_LE_to_NE(sf->v, bytesize / sizeof(uint16_t));
+               Endian_A16_Swap(sf->v, bytesize / sizeof(uint16_t));
             else if(sf->flags & RLSB)
                FlipByteOrder((uint8_t*)sf->v, bytesize);
 #endif
@@ -333,11 +334,11 @@ static bool SubWrite(StateMem *st, SFORMAT *sf)
       /* Now restore the original byte order. */
       if(sf->flags & MDFNSTATE_BOOL) { }
       else if(sf->flags & MDFNSTATE_RLSB64)
-         Endian_A64_LE_to_NE(sf->v, bytesize / sizeof(uint64_t));
+         Endian_A64_Swap(sf->v, bytesize / sizeof(uint64_t));
       else if(sf->flags & MDFNSTATE_RLSB32)
-         Endian_A32_LE_to_NE(sf->v, bytesize / sizeof(uint32_t));
+         Endian_A32_Swap(sf->v, bytesize / sizeof(uint32_t));
       else if(sf->flags & MDFNSTATE_RLSB16)
-         Endian_A16_LE_to_NE(sf->v, bytesize / sizeof(uint16_t));
+         Endian_A16_Swap(sf->v, bytesize / sizeof(uint16_t));
       else if(sf->flags & RLSB)
          FlipByteOrder((uint8_t*)sf->v, bytesize);
 #endif
@@ -484,11 +485,11 @@ static int ReadStateChunk(StateMem *st, SFORMAT *sf, int size)
             }
 #ifdef MSB_FIRST
             if(tmp->flags & MDFNSTATE_RLSB64)
-               Endian_A64_LE_to_NE(tmp->v, expected_size / sizeof(uint64_t));
+               Endian_A64_Swap(tmp->v, expected_size / sizeof(uint64_t));
             else if(tmp->flags & MDFNSTATE_RLSB32)
-               Endian_A32_LE_to_NE(tmp->v, expected_size / sizeof(uint32_t));
+               Endian_A32_Swap(tmp->v, expected_size / sizeof(uint32_t));
             else if(tmp->flags & MDFNSTATE_RLSB16)
-               Endian_A16_LE_to_NE(tmp->v, expected_size / sizeof(uint16_t));
+               Endian_A16_Swap(tmp->v, expected_size / sizeof(uint16_t));
             else if(tmp->flags & RLSB)
                FlipByteOrder((uint8_t*)tmp->v, expected_size);
 #endif

@@ -149,24 +149,15 @@ static const unsigned input_map_controller[ INPUT_MAP_CONTROLLER_SIZE ] =
 {
  /*  libretro input                  at position   || maps to PS1         on bit */
  /* ----------------------------------------------------------------------------- */
-#ifdef MSB_FIRST
-   RETRO_DEVICE_ID_JOYPAD_L2,       /*  L-trigger    -> L2 */
-   RETRO_DEVICE_ID_JOYPAD_R2,       /*  R-trigger    -> R2 */
-   RETRO_DEVICE_ID_JOYPAD_L,        /*  L-shoulder   -> L1 */
-   RETRO_DEVICE_ID_JOYPAD_R,        /*  R-shoulder   -> R1 */
-   RETRO_DEVICE_ID_JOYPAD_X,        /*  X(top)       -> Triangle */
-   RETRO_DEVICE_ID_JOYPAD_A,        /*  A(right)     -> Circle */
-   RETRO_DEVICE_ID_JOYPAD_B,        /*  B(down)      -> Cross */
-   RETRO_DEVICE_ID_JOYPAD_Y,        /*  Y(left)      -> Square */
-   RETRO_DEVICE_ID_JOYPAD_SELECT,   /*  Select       -> Select */
-   RETRO_DEVICE_ID_JOYPAD_L3,       /*  L-thumb      -> L3 */
-   RETRO_DEVICE_ID_JOYPAD_R3,       /*  R-thumb      -> R3 */
-   RETRO_DEVICE_ID_JOYPAD_START,    /*  Start        -> Start */
-   RETRO_DEVICE_ID_JOYPAD_UP,       /*  Pad-Up       -> Pad-Up */
-   RETRO_DEVICE_ID_JOYPAD_RIGHT,    /*  Pad-Right    -> Pad-Right */
-   RETRO_DEVICE_ID_JOYPAD_DOWN,     /*  Pad-Down     -> Pad-Down */
-   RETRO_DEVICE_ID_JOYPAD_LEFT,     /*  Pad-Left     -> Pad-Left */
-#else
+ /*
+  * The PS1 controller bit layout is a hardware-fixed property of the
+  * console, independent of the emulator host's byte ordering. The
+  * previous version of this table reshuffled the mapping under
+  * MSB_FIRST, which would silently rebind every face/shoulder/dpad
+  * button on big-endian hosts. The table consumer (input.c:712) ORs
+  * (1 << i) into a uint32_t at a position computed entirely in host-
+  * integer arithmetic, so endianness never enters the picture.
+  */
    RETRO_DEVICE_ID_JOYPAD_SELECT,   /*  Select       -> Select               0 */
    RETRO_DEVICE_ID_JOYPAD_L3,       /*  L-thumb      -> L3                   1 */
    RETRO_DEVICE_ID_JOYPAD_R3,       /*  R-thumb      -> R3                   2 */
@@ -183,7 +174,6 @@ static const unsigned input_map_controller[ INPUT_MAP_CONTROLLER_SIZE ] =
    RETRO_DEVICE_ID_JOYPAD_A,        /*  A(right)     -> Circle              13 */
    RETRO_DEVICE_ID_JOYPAD_B,        /*  B(down)      -> Cross               14 */
    RETRO_DEVICE_ID_JOYPAD_Y,        /*  Y(left)      -> Square              15 */
-#endif
 };
 
 
