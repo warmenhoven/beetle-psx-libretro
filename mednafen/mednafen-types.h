@@ -172,15 +172,9 @@
 #endif
 
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#ifndef MSB_FIRST
 #define MSB_FIRST
-#else
-#define LSB_FIRST
 #endif
-
-#if !defined(MSB_FIRST) && !defined(LSB_FIRST)
- #error "Define MSB_FIRST or LSB_FIRST!"
-#elif defined(MSB_FIRST) && defined(LSB_FIRST)
- #error "Define only one of MSB_FIRST or LSB_FIRST, not both!"
 #endif
 
 #ifdef _MSC_VER
