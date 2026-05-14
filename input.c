@@ -445,7 +445,7 @@ void input_init()
    for (i = 0; i < MAX_CONTROLLERS; ++i )
    {
       input_type[ i ] = RETRO_DEVICE_JOYPAD;
-      FrontIO_SetInput(FIO, i, "gamepad", (uint8*)&input_data[i]);
+      FrontIO_SetInput(FIO, i, "gamepad", (uint8_t*)&input_data[i]);
    }
 }
 
@@ -1079,62 +1079,62 @@ void retro_set_controller_port_device( unsigned in_port, unsigned device )
       {
          case RETRO_DEVICE_NONE:
             log_cb( RETRO_LOG_INFO, "Controller %u: Unplugged\n", (in_port+1) );
-	    FrontIO_SetInput(FIO, in_port, "none", (uint8*)&input_data[in_port]);
+	    FrontIO_SetInput(FIO, in_port, "none", (uint8_t*)&input_data[in_port]);
             break;
 
          case RETRO_DEVICE_JOYPAD:
          case RETRO_DEVICE_PS_CONTROLLER:
             log_cb( RETRO_LOG_INFO, "Controller %u: PlayStation Controller\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "gamepad", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "gamepad", (uint8_t*)&input_data[ in_port ] );
             break;
 
          case RETRO_DEVICE_PS_DUALSHOCK:
             log_cb( RETRO_LOG_INFO, "Controller %u: DualShock\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "dualshock", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "dualshock", (uint8_t*)&input_data[ in_port ] );
             break;
 
          case RETRO_DEVICE_PS_ANALOG:
             log_cb( RETRO_LOG_INFO, "Controller %u: Analog Controller\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "dualanalog", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "dualanalog", (uint8_t*)&input_data[ in_port ] );
             break;
 
          case RETRO_DEVICE_PS_ANALOG_JOYSTICK:
             log_cb( RETRO_LOG_INFO, "Controller %u: Analog Joystick\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "analogjoy", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "analogjoy", (uint8_t*)&input_data[ in_port ] );
             break;
 
          case RETRO_DEVICE_PS_GUNCON:
             log_cb( RETRO_LOG_INFO, "Controller %u: Guncon / G-Con 45\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "guncon", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "guncon", (uint8_t*)&input_data[ in_port ] );
             if ( FIO )
                FrontIO_SetCrosshairsCursor(FIO, in_port, gun_cursor);
             break;
 
          case RETRO_DEVICE_PS_JUSTIFIER:
             log_cb( RETRO_LOG_INFO, "Controller %u: Justifier\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "justifier", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "justifier", (uint8_t*)&input_data[ in_port ] );
             if ( FIO )
                FrontIO_SetCrosshairsCursor(FIO, in_port, gun_cursor);
             break;
 
          case RETRO_DEVICE_PS_MOUSE:
             log_cb( RETRO_LOG_INFO, "Controller %u: Mouse\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "mouse", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "mouse", (uint8_t*)&input_data[ in_port ] );
             break;
 
          case RETRO_DEVICE_PS_NEGCON:
             log_cb( RETRO_LOG_INFO, "Controller %u: neGcon\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "negcon", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "negcon", (uint8_t*)&input_data[ in_port ] );
             break;
 
          case RETRO_DEVICE_PS_NEGCON_RUMBLE:
             log_cb( RETRO_LOG_INFO, "Controller %u: neGcon Rumble\n", (in_port+1) );
-            FrontIO_SetInput(FIO, in_port, "negconrumble", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "negconrumble", (uint8_t*)&input_data[ in_port ] );
             break;
 
          default:
             log_cb( RETRO_LOG_WARN, "Controller %u: Unsupported Device (%u)\n", (in_port+1), device );
-            FrontIO_SetInput(FIO, in_port, "none", (uint8*)&input_data[ in_port ] );
+            FrontIO_SetInput(FIO, in_port, "none", (uint8_t*)&input_data[ in_port ] );
             break;
       }
 

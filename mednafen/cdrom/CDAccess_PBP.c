@@ -2911,7 +2911,7 @@ enum PBP_FILES{
  * source order. */
 static bool CDAccess_PBP_ImageOpen(struct CDAccess_PBP *self, const char *path, bool image_memcache);
 static void CDAccess_PBP_Cleanup(struct CDAccess_PBP *self);
-static void CDAccess_PBP_MakeSubPQ(struct CDAccess_PBP *self, int32 lba, uint8 *SubPWBuf);
+static void CDAccess_PBP_MakeSubPQ(struct CDAccess_PBP *self, int32_t lba, uint8_t *SubPWBuf);
 static int CDAccess_PBP_decompress2(struct CDAccess_PBP *self, void *out, uint32_t *out_size, void *in, uint32_t in_size);
 static int CDAccess_PBP_LoadSBI(struct CDAccess_PBP *self, const char* sbi_path);
 static int CDAccess_PBP_decrypt_pgd(struct CDAccess_PBP *self, unsigned char* pgd_data, int pgd_size);
@@ -2925,7 +2925,7 @@ static int CDAccess_PBP_fix_sector(struct CDAccess_PBP *self, uint8_t* sector, i
 
 
 static bool CDAccess_PBP_ImageOpen(struct CDAccess_PBP *self, const char *path, bool image_memcache){
-   uint8 magic[4];
+   uint8_t magic[4];
    char psar_sig[12];
    char base_dir [4096];
    char file_base[4096];
@@ -3082,7 +3082,7 @@ static void CDAccess_PBP_Cleanup(struct CDAccess_PBP *self){
 }
 
 /* Note: this function makes use of the current contents(as in |=) in SubPWBuf. */
-static void CDAccess_PBP_MakeSubPQ(struct CDAccess_PBP *self, int32 lba, uint8 *SubPWBuf){
+static void CDAccess_PBP_MakeSubPQ(struct CDAccess_PBP *self, int32_t lba, uint8_t *SubPWBuf){
    unsigned i;
    uint8_t buf[0xC], adr, control;
    int32_t track;
@@ -3104,7 +3104,7 @@ static void CDAccess_PBP_MakeSubPQ(struct CDAccess_PBP *self, int32 lba, uint8 *
    if(!track_found)
       track = self->FirstTrack;
 
-   lba_relative = abs((int32)lba - self->Tracks[track].LBA);
+   lba_relative = abs((int32_t)lba - self->Tracks[track].LBA);
 
    f            = (lba_relative % 75);
    s            = ((lba_relative / 75) % 60);
@@ -3123,7 +3123,7 @@ static void CDAccess_PBP_MakeSubPQ(struct CDAccess_PBP *self, int32 lba, uint8 *
 
    /* Handle pregap between audio->data track */
    {
-      int32_t pg_offset = (int32)lba - self->Tracks[track].LBA;
+      int32_t pg_offset = (int32_t)lba - self->Tracks[track].LBA;
 
       /* If we're more than 2 seconds(150 sectors) from the real "start" of the track/INDEX 01, and the track is a data track, */
       /* and the preceding track is an audio track, encode it as audio(by taking the SubQ control field from the preceding track). */
@@ -3206,7 +3206,7 @@ static int CDAccess_PBP_decompress2(struct CDAccess_PBP *self, void *out, uint32
    return ret == 1 ? 0 : ret;
 }
 
-static bool CDAccess_PBP_Read_Raw_Sector(CDAccess *base_self, uint8 *buf, int32 lba){
+static bool CDAccess_PBP_Read_Raw_Sector(CDAccess *base_self, uint8_t *buf, int32_t lba){
    struct CDAccess_PBP *self = (struct CDAccess_PBP *)base_self;
    uint8_t SimuQ[0xC];
    int32_t block = lba >> 4;
@@ -3508,9 +3508,9 @@ static bool CDAccess_PBP_Read_TOC(CDAccess *base_self, TOC *toc){
 
 static int CDAccess_PBP_LoadSBI(struct CDAccess_PBP *self, const char* sbi_path){
    /* Loading SBI file */
-   uint8  header[4];
-   uint8  ed[4 + 10];
-   uint8  tmpq[12];
+   uint8_t  header[4];
+   uint8_t  ed[4 + 10];
+   uint8_t  tmpq[12];
    RFILE *sbis = filestream_open(sbi_path,
          RETRO_VFS_FILE_ACCESS_READ,
          RETRO_VFS_FILE_ACCESS_HINT_NONE);
@@ -3525,7 +3525,7 @@ static int CDAccess_PBP_LoadSBI(struct CDAccess_PBP *self, const char* sbi_path)
 
    while(filestream_read(sbis, ed, sizeof(ed)) == sizeof(ed))
    {
-      uint32 aba;
+      uint32_t aba;
 
       /* Bad BCD MSF offset in SBI file. */
       if(!BCD_is_valid(ed[0]) || !BCD_is_valid(ed[1]) || !BCD_is_valid(ed[2]))

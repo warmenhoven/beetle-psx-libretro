@@ -112,7 +112,7 @@ unsigned cd_2x_speedup = 1;
 static unsigned cd_speedup_compat_max = 0;
 bool cd_async = false;
 bool cd_warned_slow = false;
-int64 cd_slow_timeout = 8000; // microseconds
+int64_t cd_slow_timeout = 8000; // microseconds
 
 // If true, PAL games will run at 60fps
 bool fast_pal = false;
@@ -121,16 +121,16 @@ unsigned image_height = 0;
 #ifdef HAVE_LIGHTREC
 enum DYNAREC psx_dynarec;
 bool         psx_dynarec_invalidate;
-uint8        psx_mmap = 0;
-uint8 *psx_mem = NULL;
-uint8 *psx_bios = NULL;
-uint8 *psx_scratch = NULL;
+uint8_t        psx_mmap = 0;
+uint8_t *psx_mem = NULL;
+uint8_t *psx_bios = NULL;
+uint8_t *psx_scratch = NULL;
 #if defined(HAVE_ASHMEM)
 int memfd;
 #endif
 #endif
 
-int32 EventCycles = 128;
+int32_t EventCycles = 128;
 uint8_t spu_samples = 1;
 
 // CPU overclock factor (or 0 if disabled)
@@ -1243,19 +1243,19 @@ static INLINE void MemRW(int32_t *timestamp, uint32_t A, uint32_t *V_p, unsigned
             }
             else if((A & 0x7FFFFF) < (65536 + TextMem_size))
             {
-               const uint8 *_p = &TextMem[(A & 0x7FFFFF) - 65536];
+               const uint8_t *_p = &TextMem[(A & 0x7FFFFF) - 65536];
                if(access24)
-                  (*V_p) = ((uint32)_p[0])
-                         | ((uint32)_p[1] << 8)
-                         | ((uint32)_p[2] << 16);
+                  (*V_p) = ((uint32_t)_p[0])
+                         | ((uint32_t)_p[1] << 8)
+                         | ((uint32_t)_p[2] << 16);
                else switch(size)
                {
                   case 1: (*V_p) = _p[0]; break;
                   case 2:
                   {
-                     uint16 _v;
+                     uint16_t _v;
 #ifdef MSB_FIRST
-                     _v = (uint16)_p[0] | ((uint16)_p[1] << 8);
+                     _v = (uint16_t)_p[0] | ((uint16_t)_p[1] << 8);
 #else
                      memcpy(&_v, _p, 2);
 #endif
@@ -1264,9 +1264,9 @@ static INLINE void MemRW(int32_t *timestamp, uint32_t A, uint32_t *V_p, unsigned
                   }
                   case 4:
                   {
-                     uint32 _v;
+                     uint32_t _v;
 #ifdef MSB_FIRST
-                     _v = (uint32)_p[0] | ((uint32)_p[1] << 8) | ((uint32)_p[2] << 16) | ((uint32)_p[3] << 24);
+                     _v = (uint32_t)_p[0] | ((uint32_t)_p[1] << 8) | ((uint32_t)_p[2] << 16) | ((uint32_t)_p[3] << 24);
 #else
                      memcpy(&_v, _p, 4);
 #endif
@@ -1439,20 +1439,20 @@ static INLINE uint32_t MemPeek(int32_t timestamp, uint32_t A, unsigned size, boo
          }
          else if((A & 0x7FFFFF) < (65536 + TextMem_size))
          {
-            const uint8 *_p = &TextMem[(A & 0x7FFFFF) - 65536];
+            const uint8_t *_p = &TextMem[(A & 0x7FFFFF) - 65536];
             if(access24)
-               return ((uint32)_p[0])
-                    | ((uint32)_p[1] << 8)
-                    | ((uint32)_p[2] << 16);
+               return ((uint32_t)_p[0])
+                    | ((uint32_t)_p[1] << 8)
+                    | ((uint32_t)_p[2] << 16);
             else switch(size)
             {
                case 1:
                   return _p[0];
                case 2:
                {
-                  uint16 _v;
+                  uint16_t _v;
 #ifdef MSB_FIRST
-                  _v = (uint16)_p[0] | ((uint16)_p[1] << 8);
+                  _v = (uint16_t)_p[0] | ((uint16_t)_p[1] << 8);
 #else
                   memcpy(&_v, _p, 2);
 #endif
@@ -1460,9 +1460,9 @@ static INLINE uint32_t MemPeek(int32_t timestamp, uint32_t A, unsigned size, boo
                }
                case 4:
                {
-                  uint32 _v;
+                  uint32_t _v;
 #ifdef MSB_FIRST
-                  _v = (uint32)_p[0] | ((uint32)_p[1] << 8) | ((uint32)_p[2] << 16) | ((uint32)_p[3] << 24);
+                  _v = (uint32_t)_p[0] | ((uint32_t)_p[1] << 8) | ((uint32_t)_p[2] << 16) | ((uint32_t)_p[3] << 24);
 #else
                   memcpy(&_v, _p, 4);
 #endif
@@ -1534,7 +1534,7 @@ static void PSX_Power(void)
    startup_frame_count = 0;
 }
 
-static INLINE void MemPoke(pscpu_timestamp_t timestamp, uint32 A, uint32_t V, unsigned size, bool access24)
+static INLINE void MemPoke(pscpu_timestamp_t timestamp, uint32_t A, uint32_t V, unsigned size, bool access24)
 {
    if(A < 0x00800000)
    {
@@ -1573,7 +1573,7 @@ static INLINE void MemPoke(pscpu_timestamp_t timestamp, uint32 A, uint32_t V, un
    }
 }
 
-void PSX_MemPoke8(uint32 A, uint8 V)
+void PSX_MemPoke8(uint32_t A, uint8_t V)
 {
    MemPoke(0, A, V, 1, false);
 }
@@ -2154,13 +2154,13 @@ int lightrec_init_mmap()
 		/* All mirrors mapped - we got a match! */
 		if (j == NUM_MEM)
 		{
-			psx_mem = (uint8 *)base;
+			psx_mem = (uint8_t *)base;
 
 			map = MAP(bios, BIOS_SIZE, memfd, RAM_SIZE);
 			if (map == MFAILED)
 				goto err_unmap;
 
-			psx_bios = (uint8 *)map;
+			psx_bios = (uint8_t *)map;
 
 			if (map != bios)
 				goto err_unmap_bios;
@@ -2169,7 +2169,7 @@ int lightrec_init_mmap()
 			if (map == MFAILED)
 				goto err_unmap_bios;
 
-			psx_scratch = (uint8 *)map;
+			psx_scratch = (uint8_t *)map;
 
 			if (map != scratch)
 				goto err_unmap_scratch;
@@ -2418,7 +2418,7 @@ static void InitCommon(const bool EmulateMemcards, const bool WantPIOMem)
    }
 
 
-   MDFNMP_Init(1024, ((uint64)1 << 29) / 1024);
+   MDFNMP_Init(1024, ((uint64_t)1 << 29) / 1024);
    MDFNMP_AddRAM(2048 * 1024, 0x00000000, MainRAM->data8);
 
    if(firmware_is_present(region))
@@ -2519,15 +2519,15 @@ static void InitCommon(const bool EmulateMemcards, const bool WantPIOMem)
 
 static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 {
-   uint32 PC, SP, TextStart, TextSize;
-   uint8 *po;
-   uint32 sa;
+   uint32_t PC, SP, TextStart, TextSize;
+   uint8_t *po;
+   uint32_t sa;
 
 #ifdef MSB_FIRST
-   PC        = (uint32)data[0x10] | ((uint32)data[0x11] << 8) | ((uint32)data[0x12] << 16) | ((uint32)data[0x13] << 24);
-   SP        = (uint32)data[0x30] | ((uint32)data[0x31] << 8) | ((uint32)data[0x32] << 16) | ((uint32)data[0x33] << 24);
-   TextStart = (uint32)data[0x18] | ((uint32)data[0x19] << 8) | ((uint32)data[0x1A] << 16) | ((uint32)data[0x1B] << 24);
-   TextSize  = (uint32)data[0x1C] | ((uint32)data[0x1D] << 8) | ((uint32)data[0x1E] << 16) | ((uint32)data[0x1F] << 24);
+   PC        = (uint32_t)data[0x10] | ((uint32_t)data[0x11] << 8) | ((uint32_t)data[0x12] << 16) | ((uint32_t)data[0x13] << 24);
+   SP        = (uint32_t)data[0x30] | ((uint32_t)data[0x31] << 8) | ((uint32_t)data[0x32] << 16) | ((uint32_t)data[0x33] << 24);
+   TextStart = (uint32_t)data[0x18] | ((uint32_t)data[0x19] << 8) | ((uint32_t)data[0x1A] << 16) | ((uint32_t)data[0x1B] << 24);
+   TextSize  = (uint32_t)data[0x1C] | ((uint32_t)data[0x1D] << 8) | ((uint32_t)data[0x1E] << 16) | ((uint32_t)data[0x1F] << 24);
 #else
    memcpy(&PC,        &data[0x10], 4);
    memcpy(&SP,        &data[0x30], 4);
@@ -2568,7 +2568,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 
    if(TextStart < TextMem_Start)
    {
-      uint32 old_size = TextMem_size;
+      uint32_t old_size = TextMem_size;
 
       //printf("RESIZE: 0x%08x\n", TextMem_Start - TextStart);
 
@@ -2588,7 +2588,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 
    po = &PIOMem->data8[0x0800];
 
-   { uint32 _ev = (uint32)((0x0 << 26) | (31 << 21) | (0x8 << 0)); // JR
+   { uint32_t _ev = (uint32_t)((0x0 << 26) | (31 << 21) | (0x8 << 0)); // JR
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2596,7 +2596,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    #endif
    }
    po += 4;
-   { uint32 _ev = (uint32)(0); // NOP(kinda)
+   { uint32_t _ev = (uint32_t)(0); // NOP(kinda)
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2608,7 +2608,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    po = &PIOMem->data8[0x1000];
 
    // Load cacheable-region target PC into r2
-   { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16) | (0x9F001010 >> 16));      // LUI
+   { uint32_t _ev = (uint32_t)((0xF << 26) | (0 << 21) | (1 << 16) | (0x9F001010 >> 16));      // LUI
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2616,7 +2616,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    #endif
    }
    po += 4;
-   { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (2 << 16) | (0x9F001010 & 0xFFFF));   // ORI
+   { uint32_t _ev = (uint32_t)((0xD << 26) | (1 << 21) | (2 << 16) | (0x9F001010 & 0xFFFF));   // ORI
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2626,7 +2626,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    po += 4;
 
    // Jump to r2
-   { uint32 _ev = (uint32)((0x0 << 26) | (2 << 21) | (0x8 << 0));  // JR
+   { uint32_t _ev = (uint32_t)((0x0 << 26) | (2 << 21) | (0x8 << 0));  // JR
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2634,7 +2634,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    #endif
    }
    po += 4;
-   { uint32 _ev = (uint32)(0); // NOP(kinda)
+   { uint32_t _ev = (uint32_t)(0); // NOP(kinda)
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2649,7 +2649,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 
    // Load source address into r8
    sa = 0x9F000000 + 65536;
-   { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16) | (sa >> 16));  // LUI
+   { uint32_t _ev = (uint32_t)((0xF << 26) | (0 << 21) | (1 << 16) | (sa >> 16));  // LUI
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2657,7 +2657,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    #endif
    }
    po += 4;
-   { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (8 << 16) | (sa & 0xFFFF));  // ORI
+   { uint32_t _ev = (uint32_t)((0xD << 26) | (1 << 21) | (8 << 16) | (sa & 0xFFFF));  // ORI
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2667,7 +2667,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    po += 4;
 
    // Load dest address into r9
-   { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_Start >> 16));  // LUI
+   { uint32_t _ev = (uint32_t)((0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_Start >> 16));  // LUI
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2675,7 +2675,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    #endif
    }
    po += 4;
-   { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (9 << 16) | (TextMem_Start & 0xFFFF));   // ORI
+   { uint32_t _ev = (uint32_t)((0xD << 26) | (1 << 21) | (9 << 16) | (TextMem_Start & 0xFFFF));   // ORI
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2685,7 +2685,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    po += 4;
 
    // Load size into r10
-   { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_size >> 16)); // LUI
+   { uint32_t _ev = (uint32_t)((0xF << 26) | (0 << 21) | (1 << 16)  | (TextMem_size >> 16)); // LUI
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2693,7 +2693,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    #endif
    }
    po += 4;
-   { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (10 << 16) | (TextMem_size & 0xFFFF));    // ORI
+   { uint32_t _ev = (uint32_t)((0xD << 26) | (1 << 21) | (10 << 16) | (TextMem_size & 0xFFFF));    // ORI
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2706,7 +2706,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    // Loop begin
    //
 
-   { uint32 _ev = (uint32)((0x24 << 26) | (8 << 21) | (1 << 16));  // LBU to r1
+   { uint32_t _ev = (uint32_t)((0x24 << 26) | (8 << 21) | (1 << 16));  // LBU to r1
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2715,7 +2715,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    }
    po += 4;
 
-   { uint32 _ev = (uint32)((0x08 << 26) | (10 << 21) | (10 << 16) | 0xFFFF);   // Decrement size
+   { uint32_t _ev = (uint32_t)((0x08 << 26) | (10 << 21) | (10 << 16) | 0xFFFF);   // Decrement size
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2724,7 +2724,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    }
    po += 4;
 
-   { uint32 _ev = (uint32)((0x28 << 26) | (9 << 21) | (1 << 16));  // SB from r1
+   { uint32_t _ev = (uint32_t)((0x28 << 26) | (9 << 21) | (1 << 16));  // SB from r1
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2733,7 +2733,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    }
    po += 4;
 
-   { uint32 _ev = (uint32)((0x08 << 26) | (8 << 21) | (8 << 16) | 0x0001);  // Increment source addr
+   { uint32_t _ev = (uint32_t)((0x08 << 26) | (8 << 21) | (8 << 16) | 0x0001);  // Increment source addr
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2742,7 +2742,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    }
    po += 4;
 
-   { uint32 _ev = (uint32)((0x05 << 26) | (0 << 21) | (10 << 16) | (-5 & 0xFFFF));
+   { uint32_t _ev = (uint32_t)((0x05 << 26) | (0 << 21) | (10 << 16) | (-5 & 0xFFFF));
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2750,7 +2750,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    #endif
    }
    po += 4;
-   { uint32 _ev = (uint32)((0x08 << 26) | (9 << 21) | (9 << 16) | 0x0001);  // Increment dest addr
+   { uint32_t _ev = (uint32_t)((0x08 << 26) | (9 << 21) | (9 << 16) | 0x0001);  // Increment dest addr
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2770,7 +2770,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    }
    else
    {
-      { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16)  | (SP >> 16)); // LUI
+      { uint32_t _ev = (uint32_t)((0xF << 26) | (0 << 21) | (1 << 16)  | (SP >> 16)); // LUI
       #ifdef MSB_FIRST
          po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
       #else
@@ -2778,7 +2778,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
       #endif
       }
       po += 4;
-      { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (29 << 16) | (SP & 0xFFFF));    // ORI
+      { uint32_t _ev = (uint32_t)((0xD << 26) | (1 << 21) | (29 << 16) | (SP & 0xFFFF));    // ORI
       #ifdef MSB_FIRST
          po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
       #else
@@ -2788,7 +2788,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
       po += 4;
 
       // Load PC into r2
-      { uint32 _ev = (uint32)((0xF << 26) | (0 << 21) | (1 << 16)  | ((PC >> 16) | 0x8000));      // LUI
+      { uint32_t _ev = (uint32_t)((0xF << 26) | (0 << 21) | (1 << 16)  | ((PC >> 16) | 0x8000));      // LUI
       #ifdef MSB_FIRST
          po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
       #else
@@ -2796,7 +2796,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
       #endif
       }
       po += 4;
-      { uint32 _ev = (uint32)((0xD << 26) | (1 << 21) | (2 << 16) | (PC & 0xFFFF));   // ORI
+      { uint32_t _ev = (uint32_t)((0xD << 26) | (1 << 21) | (2 << 16) | (PC & 0xFFFF));   // ORI
       #ifdef MSB_FIRST
          po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
       #else
@@ -2809,7 +2809,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    // Half-assed instruction cache flush. ;)
    for(unsigned i = 0; i < 1024; i++)
    {
-      { uint32 _ev = (uint32)(0);
+      { uint32_t _ev = (uint32_t)(0);
       #ifdef MSB_FIRST
          po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
       #else
@@ -2822,7 +2822,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
 
 
    // Jump to r2
-   { uint32 _ev = (uint32)((0x0 << 26) | (2 << 21) | (0x8 << 0));  // JR
+   { uint32_t _ev = (uint32_t)((0x0 << 26) | (2 << 21) | (0x8 << 0));  // JR
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -2830,7 +2830,7 @@ static bool LoadEXE(const uint8_t *data, const uint32_t size, bool ignore_pcsp)
    #endif
    }
    po += 4;
-   { uint32 _ev = (uint32)(0); // NOP(kinda)
+   { uint32_t _ev = (uint32_t)(0); // NOP(kinda)
    #ifdef MSB_FIRST
       po[0] = _ev; po[1] = _ev >> 8; po[2] = _ev >> 16; po[3] = _ev >> 24;
    #else
@@ -3153,7 +3153,7 @@ static void DoSimpleCommand(int cmd)
    }
 }
 
-static void GSCondCode(MemoryPatch* patch, const char* cc, const unsigned len, const uint32 addr, const uint16 val)
+static void GSCondCode(MemoryPatch* patch, const char* cc, const unsigned len, const uint32_t addr, const uint16_t val)
 {
    char tmp[256];
 
@@ -3170,11 +3170,11 @@ static void GSCondCode(MemoryPatch* patch, const char* cc, const unsigned len, c
 
 static bool DecodeGS(const char *cheat_string, MemoryPatch *patch)
 {
-   uint64 code = 0;
+   uint64_t code = 0;
    unsigned nybble_count = 0;
    const size_t len = strlen(cheat_string);
-   uint8  code_type;
-   uint64 cl;
+   uint8_t  code_type;
+   uint64_t cl;
    unsigned i;
 
    for(i = 0; i < len; i++)
@@ -3276,9 +3276,9 @@ static bool DecodeGS(const char *cheat_string, MemoryPatch *patch)
 
    case 0x50:   // Repeat thingy
    {
-      const uint8 wcount = (cl >> 24) & 0xFF;
-      const uint8 addr_inc = (cl >> 16) & 0xFF;
-      const uint8 val_inc = (cl >> 0) & 0xFF;
+      const uint8_t wcount = (cl >> 24) & 0xFF;
+      const uint8_t addr_inc = (cl >> 16) & 0xFF;
+      const uint8_t val_inc = (cl >> 0) & 0xFF;
 
       patch->mltpl_count = wcount;
       patch->mltpl_addr_inc = addr_inc;
@@ -3288,7 +3288,7 @@ static bool DecodeGS(const char *cheat_string, MemoryPatch *patch)
 
    case 0xC2:   // Copy
    {
-      const uint16 ccount = cl & 0xFFFF;
+      const uint16_t ccount = cl & 0xFFFF;
 
       patch->type = 'T';
       patch->val = 0;
@@ -4875,7 +4875,7 @@ static bool MDFNI_LoadCD(const char *devicename)
 
       log_cb(RETRO_LOG_DEBUG, "CD %d Layout:\n", i + 1);
 
-      for(int32 track = toc.first_track; track <= toc.last_track; track++)
+      for(int32_t track = toc.first_track; track <= toc.last_track; track++)
       {
          log_cb(RETRO_LOG_DEBUG, "Track %2d, LBA: %6d  %s\n", track, toc.tracks[track].lba, (toc.tracks[track].control & 0x4) ? "DATA" : "AUDIO");
       }
@@ -5168,7 +5168,7 @@ static bool retro_set_system_av_info(void)
 void retro_run(void)
 {
    bool updated = false;
-   static int32 rects[MEDNAFEN_CORE_GEOMETRY_MAX_H];
+   static int32_t rects[MEDNAFEN_CORE_GEOMETRY_MAX_H];
    EmulateSpecStruct spec = {0};
    EmulateSpecStruct *espec;
    int32_t timestamp = 0;

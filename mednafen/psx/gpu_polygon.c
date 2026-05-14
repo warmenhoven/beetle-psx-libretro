@@ -111,24 +111,24 @@ static INLINE int32_t GetPolyXFP_Int(int64_t xfp)
 #define DEFINE_CalcIDeltas(SUFFIX, GOURAUD_LIT, TEXTURED_LIT) \
 static INLINE bool CalcIDeltas_##SUFFIX(i_deltas *idl, const tri_vertex *A, const tri_vertex *B, const tri_vertex *C) \
 { \
-   int32 denom = CALCIS(x, y); \
+   int32_t denom = CALCIS(x, y); \
    if (!denom) \
       return false; \
    if (GOURAUD_LIT) \
    { \
-      idl->dr_dx = (uint32)(CALCIS(r, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
-      idl->dr_dy = (uint32)(CALCIS(x, r) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
-      idl->dg_dx = (uint32)(CALCIS(g, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
-      idl->dg_dy = (uint32)(CALCIS(x, g) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
-      idl->db_dx = (uint32)(CALCIS(b, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
-      idl->db_dy = (uint32)(CALCIS(x, b) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->dr_dx = (uint32_t)(CALCIS(r, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->dr_dy = (uint32_t)(CALCIS(x, r) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->dg_dx = (uint32_t)(CALCIS(g, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->dg_dy = (uint32_t)(CALCIS(x, g) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->db_dx = (uint32_t)(CALCIS(b, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->db_dy = (uint32_t)(CALCIS(x, b) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
    } \
    if (TEXTURED_LIT) \
    { \
-      idl->du_dx = (uint32)(CALCIS(u, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
-      idl->du_dy = (uint32)(CALCIS(x, u) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
-      idl->dv_dx = (uint32)(CALCIS(v, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
-      idl->dv_dy = (uint32)(CALCIS(x, v) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->du_dx = (uint32_t)(CALCIS(u, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->du_dy = (uint32_t)(CALCIS(x, u) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->dv_dx = (uint32_t)(CALCIS(v, y) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
+      idl->dv_dy = (uint32_t)(CALCIS(x, v) * (1 << COORD_FBS) / denom) << COORD_POST_PADDING; \
    } \
    return true; \
 }
@@ -301,13 +301,13 @@ DEFINE_AddIDeltas_DY(g1_t1, 1, 1)
  * inlined here so the inner loop is fully fused.
  */
 #define DEFINE_DrawSpan(SUFFIX, GOURAUD_LIT, TEXTURED_LIT, BM_VAL, BM_TAG, TM_LIT, MO_LIT, ME_LIT) \
-static INLINE void DrawSpan_##SUFFIX(PS_GPU *gpu, int y, const int32 x_start, const int32 x_bound, i_group ig, const i_deltas *idl, const bool pct) \
+static INLINE void DrawSpan_##SUFFIX(PS_GPU *gpu, int y, const int32_t x_start, const int32_t x_bound, i_group ig, const i_deltas *idl, const bool pct) \
 { \
-   int32 clipx0; \
-   int32 clipx1; \
-   int32 x_ig_adjust; \
-   int32 w; \
-   int32 x; \
+   int32_t clipx0; \
+   int32_t clipx1; \
+   int32_t x_ig_adjust; \
+   int32_t w; \
+   int32_t x; \
    if (LineSkipTest(gpu, y >> gpu->upscale_shift)) \
       return; \
    clipx0 = gpu->ClipX0 << gpu->upscale_shift; \
@@ -321,7 +321,7 @@ static INLINE void DrawSpan_##SUFFIX(PS_GPU *gpu, int y, const int32 x_start, co
     * calls.  Dropped to silence -Wunused-but-set-variable. */ \
    if (x < clipx0) \
    { \
-      int32 delta = clipx0 - x; \
+      int32_t delta = clipx0 - x; \
       x_ig_adjust += delta; \
       x += delta; \
       w -= delta; \
@@ -362,16 +362,16 @@ static INLINE void DrawSpan_##SUFFIX(PS_GPU *gpu, int y, const int32 x_start, co
    } \
    do \
    { \
-      const uint32 r = ig.r >> (COORD_FBS + COORD_POST_PADDING); \
-      const uint32 g = ig.g >> (COORD_FBS + COORD_POST_PADDING); \
-      const uint32 b = ig.b >> (COORD_FBS + COORD_POST_PADDING); \
-      uint32 dither_x = (x >> gpu->dither_upscale_shift) & 3; \
-      uint32 dither_y = (y >> gpu->dither_upscale_shift) & 3; \
+      const uint32_t r = ig.r >> (COORD_FBS + COORD_POST_PADDING); \
+      const uint32_t g = ig.g >> (COORD_FBS + COORD_POST_PADDING); \
+      const uint32_t b = ig.b >> (COORD_FBS + COORD_POST_PADDING); \
+      uint32_t dither_x = (x >> gpu->dither_upscale_shift) & 3; \
+      uint32_t dither_y = (y >> gpu->dither_upscale_shift) & 3; \
       /*assert(x >= ClipX0 && x <= ClipX1);*/ \
       if (TEXTURED_LIT) \
       { \
-         int32 tex_u, tex_v; \
-         uint16 fbw; \
+         int32_t tex_u, tex_v; \
+         uint16_t fbw; \
          /* Perspective-correct sampling.  Three guards: \
           * (1) inv_w > eps - very small inv_w corresponds to a \
           *     vertex at huge w (effectively at infinity), where \
@@ -411,8 +411,8 @@ static INLINE void DrawSpan_##SUFFIX(PS_GPU *gpu, int y, const int32 x_start, co
             else if (fu > idl->max_u) fu = idl->max_u; \
             if (fv < idl->min_v) fv = idl->min_v; \
             else if (fv > idl->max_v) fv = idl->max_v; \
-            tex_u = ((int32)fu) & 0xFF; \
-            tex_v = ((int32)fv) & 0xFF; \
+            tex_u = ((int32_t)fu) & 0xFF; \
+            tex_v = ((int32_t)fv) & 0xFF; \
          } \
          else \
          { \
@@ -438,7 +438,7 @@ static INLINE void DrawSpan_##SUFFIX(PS_GPU *gpu, int y, const int32 x_start, co
       } \
       else \
       { \
-         uint16 pix = 0x8000; \
+         uint16_t pix = 0x8000; \
          if ((GOURAUD_LIT) && DitherEnabled(gpu)) \
          { \
             pix |= gpu->DitherLUT[dither_y][dither_x][r] << 0; \
@@ -529,12 +529,12 @@ static INLINE void DrawTriangle_##SUFFIX(PS_GPU *gpu, tri_vertex *vertices, cons
 { \
    i_deltas idl; \
    unsigned core_vertex; \
-   int32 clipy0 = gpu->ClipY0 << gpu->upscale_shift; \
-   int32 clipy1 = gpu->ClipY1 << gpu->upscale_shift; \
-   int64 base_coord; \
-   int64 base_step; \
-   int64 bound_coord_us; \
-   int64 bound_coord_ls; \
+   int32_t clipy0 = gpu->ClipY0 << gpu->upscale_shift; \
+   int32_t clipy1 = gpu->ClipY1 << gpu->upscale_shift; \
+   int64_t base_coord; \
+   int64_t base_step; \
+   int64_t bound_coord_us; \
+   int64_t bound_coord_ls; \
    bool right_facing; \
    bool pct_local = pct; \
    i_group ig; \
@@ -543,10 +543,10 @@ static INLINE void DrawTriangle_##SUFFIX(PS_GPU *gpu, tri_vertex *vertices, cons
    unsigned i; \
    struct tripart \
    { \
-      uint64 x_coord[2]; \
-      uint64 x_step[2]; \
-      int32 y_coord; \
-      int32 y_bound; \
+      uint64_t x_coord[2]; \
+      uint64_t x_step[2]; \
+      int32_t y_coord; \
+      int32_t y_bound; \
       bool dec_mode; \
    } tripart[2]; \
    /* Calculate the "core" vertex based on the unsorted input vertices, and sort vertices by Y. */ \
@@ -687,17 +687,17 @@ static INLINE void DrawTriangle_##SUFFIX(PS_GPU *gpu, tri_vertex *vertices, cons
    } \
    for (i = 0; i < 2; i++) \
    { \
-      int32 yi = tripart[i].y_coord; \
-      int32 yb = tripart[i].y_bound; \
-      uint64 lc = tripart[i].x_coord[0]; \
-      uint64 ls = tripart[i].x_step[0]; \
-      uint64 rc = tripart[i].x_coord[1]; \
-      uint64 rs = tripart[i].x_step[1]; \
+      int32_t yi = tripart[i].y_coord; \
+      int32_t yb = tripart[i].y_bound; \
+      uint64_t lc = tripart[i].x_coord[0]; \
+      uint64_t ls = tripart[i].x_step[0]; \
+      uint64_t rc = tripart[i].x_coord[1]; \
+      uint64_t rs = tripart[i].x_step[1]; \
       if (tripart[i].dec_mode) \
       { \
          while (MDFN_LIKELY(yi > yb)) \
          { \
-            int32 y; \
+            int32_t y; \
             yi--; \
             lc -= ls; \
             rc -= rs; \
@@ -716,7 +716,7 @@ static INLINE void DrawTriangle_##SUFFIX(PS_GPU *gpu, tri_vertex *vertices, cons
       { \
          while (MDFN_LIKELY(yi < yb)) \
          { \
-            int32 y = sign_x_to_s32(11 + gpu->upscale_shift, yi); \
+            int32_t y = sign_x_to_s32(11 + gpu->upscale_shift, yi); \
             if (y > clipy1) \
                break; \
             if (y < clipy0) \
@@ -900,7 +900,7 @@ static void Command_DrawPolygon_##SUFFIX(PS_GPU *gpu, const uint32_t *cb) \
    /* else memset(vertices, 0, sizeof(vertices)); */ \
    for (v = sv; v < 3; v++) \
    { \
-      int32 x, y; \
+      int32_t x, y; \
       if (v == 0 || GOURAUD_LIT) \
       { \
          uint32_t raw_color = (*cb & 0xFFFFFF); \
@@ -1148,7 +1148,7 @@ static void Command_DrawPolygon_##SUFFIX(PS_GPU *gpu, const uint32_t *cb) \
       { \
          if (PGXP_LIT) \
          { \
-            uint32 i; \
+            uint32_t i; \
             for (i = 0; i < 3; ++i) \
             { \
                vertices[i].x = vertices[i].precise[0]; \
