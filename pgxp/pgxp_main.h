@@ -44,11 +44,19 @@ extern "C" {
 
 #include "pgxp_types.h"
 
+	/* The mode bitfield is hot-path: 100+ readers across cpu.c,
+	 * gte.c, gpu.c.  Expose the underlying global directly and
+	 * inline the getter so callers don't pay for a cross-TU
+	 * function call on every read.  All writes still go through
+	 * the apply_modes() path in pgxp_main.c (which handles the
+	 * vertex-cache free side effect when the cache bit drops). */
+	extern uint32_t gMode;
+
 	void	PGXP_Init(void);	/* initialise memory */
 	void	PGXP_Shutdown(void);	/* free heap-allocated buffers */
 
 	void	PGXP_SetModes(uint32_t modes);
-	uint32_t		PGXP_GetModes();
+	static inline uint32_t PGXP_GetModes(void) { return gMode; }
 	void	PGXP_EnableModes(uint32_t modes);
 	void	PGXP_DisableModes(uint32_t modes);
 

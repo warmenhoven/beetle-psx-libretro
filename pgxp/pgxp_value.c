@@ -30,17 +30,9 @@ void MakeValid(PGXP_value *pV, uint32_t psxV)
 	}
 }
 
-void Validate(PGXP_value *pV, uint32_t psxV)
-{
-	/* assume pV is not NULL */
-	pV->flags &= (pV->value == psxV) ? ALL : INV_VALID_ALL;
-}
-
-void MaskValidate(PGXP_value *pV, uint32_t psxV, uint32_t mask, uint32_t validMask)
-{
-	/* assume pV is not NULL */
-	pV->flags &= ((pV->value & mask) == (psxV & mask)) ? ALL : (ALL ^ (validMask));
-}
+/* Validate and MaskValidate are now static inline in pgxp_value.h
+ * (called 40+ times per PGXP-tagged CPU instruction; the cross-TU
+ * function-call overhead used to dominate their actual work). */
 
 uint32_t ValueToTolerance(PGXP_value *pV, uint32_t psxV, float tolerance)
 {

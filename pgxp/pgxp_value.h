@@ -87,8 +87,24 @@ extern "C" {
 
 	void	SetValue(PGXP_value *pV, uint32_t psxV);
 	void	MakeValid(PGXP_value *pV, uint32_t psxV);
-	void	Validate(PGXP_value *pV, uint32_t psxV);
-	void	MaskValidate(PGXP_value *pV, uint32_t psxV, uint32_t mask, uint32_t validMask);
+
+	/* Hot-path validators - inline at every call site (43+
+	 * Validate() and MaskValidate() invocations in pgxp_cpu.c
+	 * alone, one or two per PGXP-tagged CPU instruction).
+	 * Bodies are tiny (~3 RISC ops); the cross-TU call setup was
+	 * larger than the work being done. */
+	static inline void Validate(PGXP_value *pV, uint32_t psxV)
+	{
+		/* assume pV is not NULL */
+		pV->flags &= (pV->value == psxV) ? ALL : INV_VALID_ALL;
+	}
+
+	static inline void MaskValidate(PGXP_value *pV, uint32_t psxV, uint32_t mask, uint32_t validMask)
+	{
+		/* assume pV is not NULL */
+		pV->flags &= ((pV->value & mask) == (psxV & mask)) ? ALL : (ALL ^ (validMask));
+	}
+
 	uint32_t		ValueToTolerance(PGXP_value *pV, uint32_t psxV, float tolerance);
 
 	double f16Sign(double in);
