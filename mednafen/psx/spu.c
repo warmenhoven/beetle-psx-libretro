@@ -794,10 +794,10 @@ static void SPU_CacheEnvelope(SPU_Voice *voice)
    int32_t     Rr    = (raw >> 16) & 0x1F;
    int32_t     Sr    = (raw >> 22) & 0x7F;
 
-   ADSR->AttackExp   = (bool)(raw & (1 << 15));
-   ADSR->ReleaseExp  = (bool)(raw & (1 << 21));
-   ADSR->SustainExp  = (bool)(raw & (1 << 31));
-   ADSR->SustainDec  = (bool)(raw & (1 << 30));
+   ADSR->AttackExp   = (bool)(raw & (1u << 15));
+   ADSR->ReleaseExp  = (bool)(raw & (1u << 21));
+   ADSR->SustainExp  = (bool)(raw & (1u << 31));
+   ADSR->SustainDec  = (bool)(raw & (1u << 30));
 
    ADSR->AttackRate  = Ar;
    ADSR->DecayRate   = Dr << 2;
@@ -929,7 +929,7 @@ static INLINE uint32_t SPU_Get_Reverb_Offset(uint32_t in_offset)
 {
  uint32_t offset = ReverbCur + (in_offset & 0x3FFFF);
 
- offset += ReverbWA & ((int32_t)(offset << 13) >> 31);
+ offset += ReverbWA & (0u - ((offset >> 18) & 1));
  offset &= 0x3FFFF;
 
  return(offset);

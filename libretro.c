@@ -721,7 +721,6 @@ static uint8_t *psx_expansion1 = NULL;
 
 const uint8_t *PSX_LoadExpansion1(void)
 {
-   uint32_t *p;
    unsigned i;
 
    if (psx_expansion1 == NULL)
@@ -731,10 +730,18 @@ const uint8_t *PSX_LoadExpansion1(void)
          return NULL;
    }
 
-   /* Read 32 bits at a time to speed things up. */
-   p = (uint32_t *)psx_expansion1;
+   /* Read 32 bits at a time to speed things up.  The previous version
+    * aliased psx_expansion1 (a uint8_t*) as uint32_t* to do four-byte
+    * writes; the buffer is returned to callers as uint8_t* and read
+    * byte-wise from there, so the effective type is uint8_t and the
+    * uint32_t write was a strict-aliasing violation.  memcpy() is
+    * bit-exact, lets the compiler still emit a single 4-byte store,
+    * and stays within defined behaviour. */
    for (i = 0; i < PSX_EXPANSION1_SIZE / 4; i++)
-      p[i] = PSX_MemPeek32(PSX_EXPANSION1_BASE + i * 4);
+   {
+      uint32_t word = PSX_MemPeek32(PSX_EXPANSION1_BASE + i * 4);
+      memcpy(psx_expansion1 + i * 4, &word, sizeof(word));
+   }
 
    return psx_expansion1;
 }

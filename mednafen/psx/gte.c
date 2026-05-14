@@ -365,7 +365,7 @@ void GTE_WriteCR(unsigned int which, uint32_t value)
          break;
 
       case 31:
-         CR[31] = (value & 0x7ffff000) | ((value & 0x7f87e000) ? (1 << 31) : 0);
+         CR[31] = (value & 0x7ffff000) | ((value & 0x7f87e000) ? (1u << 31) : 0);
          break;
    }
 }
@@ -571,7 +571,7 @@ void GTE_WriteDR(unsigned int which, uint32_t value)
       case 30:
 
          LZCS = value;
-		 LZCR = MDFN_lzcount32(value ^ ((int32_t)value >> 31));
+		 LZCR = MDFN_lzcount32(value ^ (0u - (value >> 31)));
          break;
 
       case 31:	/* Read-only */
@@ -1936,7 +1936,7 @@ int32_t GTE_Instruction(uint32_t instr)
       ret = 1;
 
    if(FLAGS & 0x7f87e000)
-      FLAGS |= 1 << 31;
+      FLAGS |= 1u << 31;
 
    CR[31] = FLAGS;
 
