@@ -199,26 +199,36 @@ void WriteMem(PGXP_value* value, u32 addr)
 void WriteMem16(PGXP_value* src, u32 addr)
 {
 	PGXP_value* dest = GetPtr(addr);
-	psx_value*	pVal = NULL;
 
 	if (dest)
 	{
-	        pVal = (psx_value*)&dest->value;
+		/* Load dest->value into a local psx_value, manipulate, store
+		 * back.  The previous code aliased dest->value (a u32) through
+		 * a psx_value pointer, which is a strict-aliasing violation
+		 * (u32 and psx_value are not compatible types in C's effective
+		 * type rules).  The round-trip through a local is bit-exact,
+		 * defined behaviour, and the compiler optimises it identically
+		 * on every backend we ship. */
+		psx_value pVal;
+		pVal.d = dest->value;
+
 		/* determine if high or low word */
 		if ((addr % 4) == 2)
 		{
 			dest->y = src->x;
 			dest->hFlags = src->lFlags;
 			dest->compFlags[1] = src->compFlags[0];
-			pVal->w.h = (u16)src->value;
+			pVal.w.h = (u16)src->value;
 		}
 		else
 		{
 			dest->x = src->x;
 			dest->lFlags = src->lFlags;
 			dest->compFlags[0] = src->compFlags[0];
-			pVal->w.l = (u16)src->value;
+			pVal.w.l = (u16)src->value;
 		}
+
+		dest->value = pVal.d;
 
 		/* overwrite z/w if valid */
 		if (src->compFlags[2] == VALID)

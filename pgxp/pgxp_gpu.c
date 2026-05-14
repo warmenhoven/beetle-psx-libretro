@@ -247,10 +247,17 @@ void PGXP_SetAddress(unsigned int addr)
 /* Get single parallel vertex value */
 int PGXP_GetVertex(const unsigned int offset, const unsigned int* addr, OGLVertex* pOutput, int xOffs, int yOffs)
 {
-	PGXP_value*		vert = PGXP_ReadCB(offset);			/* pointer to vertex */
-	short*			psxData = ((short*)addr);			/* primitive data for cache lookups */
+	PGXP_value* vert = PGXP_ReadCB(offset);          /* pointer to vertex */
 
-	if (vert && ((vert->flags & VALID_01) == VALID_01) && (vert->value == *(unsigned int*)(addr)))
+	/* The GP0 vertex word packs sy in the high 16 bits and sx in
+	 * the low 16 bits.  Unpack with shifts on the u32 rather than
+	 * aliasing addr through `short*` (which is strict-aliasing UB
+	 * since addr's effective type is `unsigned int`). */
+	uint32_t psxWord = *addr;
+	short psxX = (short)(psxWord & 0xFFFF);
+	short psxY = (short)(psxWord >> 16);
+
+	if (vert && ((vert->flags & VALID_01) == VALID_01) && (vert->value == psxWord))
 	{
 		/* There is a value here with valid X and Y coordinates */
 		pOutput->x = (vert->x + xOffs);
@@ -270,7 +277,7 @@ int PGXP_GetVertex(const unsigned int offset, const unsigned int* addr, OGLVerte
 		/* Look in cache for valid vertex.  The cache holds a smaller
 		 * struct (just x/y/z/gFlags) than the FIFO/CB, so we use a
 		 * separate local rather than aliasing `vert`. */
-		PGXP_cache_entry* cache_vert = PGXP_GetCachedVertex(psxData[0], psxData[1]);
+		PGXP_cache_entry* cache_vert = PGXP_GetCachedVertex(psxX, psxY);
 		if ((cache_vert) && (cache_vert->gFlags == 1))
 		{
 			/* a value is found, it is from the current session and is unambiguous (there was only one value recorded at that position) */
@@ -282,21 +289,41 @@ int PGXP_GetVertex(const unsigned int offset, const unsigned int* addr, OGLVerte
 		}
 		else
 		{
-			/* no valid value can be found anywhere, use the native PSX data */
-			pOutput->x = ((psxData[0] + xOffs) << 5) >> 5;
-			pOutput->y = ((psxData[1] + yOffs) << 5) >> 5;
+			/* no valid value can be found anywhere, use the native PSX
+			 * data.  The original `((psxData[0] + xOffs) << 5) >> 5`
+			 * was a clamp-to-11-bit-signed-and-sign-extend; the
+			 * left-shift was UB on signed when the value crossed the
+			 * sign bit (compiler with -fwrapv tolerates it, but the
+			 * left-shift exception isn't covered by that flag).
+			 * Replace with an explicit mask-and-sign-extend. */
+			int32_t sx = psxX + xOffs;
+			int32_t sy = psxY + yOffs;
+			sx &= 0x07FFFFFF; if (sx & 0x04000000) sx |= ~0x07FFFFFF;
+			sy &= 0x07FFFFFF; if (sy & 0x04000000) sy |= ~0x07FFFFFF;
+			pOutput->x = (float)sx;
+			pOutput->y = (float)sy;
 			pOutput->valid_w = 0;
 		}
 	}
 
-	/* clear upper 5 bits in x and y */
+	/* clear upper 5 bits in x and y - same 27-bit signed clamp as
+	 * above, but applied in the 16.16 fixed-point domain (i.e. 11
+	 * integer bits with 16 fractional) so we keep sub-pixel
+	 * precision from the PGXP path.  Original code did
+	 * `(int)x << 5 >> 5` which is the same UB.  Mask-and-sign-
+	 * extend via unsigned avoids it.  The (int32_t)float cast can
+	 * still be UB if the float is out of int32 range; for our
+	 * normal inputs (vert->x + xOffs in -2048..2046 -> * 65536 is
+	 * < 2^28, well within int32) it's fine. */
 	{
 		float x = pOutput->x * (1 << 16);
 		float y = pOutput->y * (1 << 16);
-		x = (float)(((int)x << 5) >> 5);
-		y = (float)(((int)y << 5) >> 5);
-		pOutput->x = x / (1 << 16);
-		pOutput->y = y / (1 << 16);
+		int32_t ix = (int32_t)x;
+		int32_t iy = (int32_t)y;
+		ix &= 0x07FFFFFF; if (ix & 0x04000000) ix |= ~0x07FFFFFF;
+		iy &= 0x07FFFFFF; if (iy & 0x04000000) iy |= ~0x07FFFFFF;
+		pOutput->x = (float)ix / (1 << 16);
+		pOutput->y = (float)iy / (1 << 16);
 	}
 
 	return 1;

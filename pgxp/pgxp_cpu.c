@@ -94,7 +94,7 @@ void PGXP_CPU_ADDI(u32 instr, u32 rtVal, u32 rsVal)
 	Validate(&CPU_reg[rs(instr)], rsVal);
 	ret = CPU_reg[rs(instr)];
 	tempImm.d = imm(instr);
-	tempImm.sd = (tempImm.sd << 16) >> 16;	/* sign extend */
+	tempImm.sd = (int32_t)(int16_t)tempImm.w.l;	/* sign extend low 16 -> 32 */
 
 	ret.x = f16Unsign(ret.x);
 	ret.x += tempImm.w.l;
@@ -828,7 +828,7 @@ void PGXP_CPU_SRL(u32 instr, u32 rdVal, u32 rtVal)
 	iX.d = rtVal;
 	iY.d = rtVal;
 
-	iX.sd = (iX.sd << 16) >> 16;	/* remove Y */
+	iX.sd = (int32_t)(int16_t)iX.sw.l;	/* sign-extend low 16 to 32, removing Y */
 	iY.sw.l = iX.sw.h;				/* overwrite x with sign(x) */
 
 									/* Shift test values */
@@ -836,7 +836,7 @@ void PGXP_CPU_SRL(u32 instr, u32 rdVal, u32 rtVal)
 	dY.d = iY.d >> sh;
 
 	if (dX.sw.l != iX.sw.h)
-		x = x / (1 << sh);
+		x = x / (1u << sh);
 	else
 		x = dX.sw.l;	/* only sign bits left */
 
@@ -861,7 +861,7 @@ void PGXP_CPU_SRL(u32 instr, u32 rdVal, u32 rtVal)
 	if ((dY.sw.h == 0) || (dY.sw.h == -1))
 		y = dY.sw.h;
 	else
-		y = y / (1 << sh);
+		y = y / (1u << sh);
 
 	x = f16Sign(x);
 	y = f16Sign(y);
@@ -930,7 +930,7 @@ void PGXP_CPU_SRA(u32 instr, u32 rdVal, u32 rtVal)
 	iX.d = rtVal;
 	iY.d = rtVal;
 
-	iX.sd = (iX.sd << 16) >> 16;	/* remove Y */
+	iX.sd = (int32_t)(int16_t)iX.sw.l;	/* sign-extend low 16 to 32, removing Y */
 	iY.sw.l = iX.sw.h;				/* overwrite x with sign(x) */
 
 									/* Shift test values */
@@ -938,7 +938,7 @@ void PGXP_CPU_SRA(u32 instr, u32 rdVal, u32 rtVal)
 	dY.sd = iY.sd >> sh;
 
 	if (dX.sw.l != iX.sw.h)
-		x = x / (1 << sh);
+		x = x / (1u << sh);
 	else
 		x = dX.sw.l;	/* only sign bits left */
 
@@ -963,7 +963,7 @@ void PGXP_CPU_SRA(u32 instr, u32 rdVal, u32 rtVal)
 	if ((dY.sw.h == 0) || (dY.sw.h == -1))
 		y = dY.sw.h;
 	else
-		y = y / (1 << sh);
+		y = y / (1u << sh);
 
 	x = f16Sign(x);
 	y = f16Sign(y);
@@ -1134,7 +1134,7 @@ void PGXP_CPU_SRLV(u32 instr, u32 rdVal, u32 rtVal, u32 rsVal)
 	iX.d = rtVal;
 	iY.d = rtVal;
 
-	iX.sd = (iX.sd << 16) >> 16;	/* remove Y */
+	iX.sd = (int32_t)(int16_t)iX.sw.l;	/* sign-extend low 16 to 32, removing Y */
 	iY.sw.l = iX.sw.h;				/* overwrite x with sign(x) */
 
 									/* Shift test values */
@@ -1142,7 +1142,7 @@ void PGXP_CPU_SRLV(u32 instr, u32 rdVal, u32 rtVal, u32 rsVal)
 	dY.d = iY.d >> sh;
 
 	if (dX.sw.l != iX.sw.h)
-		x = x / (1 << sh);
+		x = x / (1u << sh);
 	else
 		x = dX.sw.l;	/* only sign bits left */
 
@@ -1167,7 +1167,7 @@ void PGXP_CPU_SRLV(u32 instr, u32 rdVal, u32 rtVal, u32 rsVal)
 	if ((dY.sw.h == 0) || (dY.sw.h == -1))
 		y = dY.sw.h;
 	else
-		y = y / (1 << sh);
+		y = y / (1u << sh);
 
 	x = f16Sign(x);
 	y = f16Sign(y);
@@ -1237,7 +1237,7 @@ void PGXP_CPU_SRAV(u32 instr, u32 rdVal, u32 rtVal, u32 rsVal)
 	iX.d = rtVal;
 	iY.d = rtVal;
 
-	iX.sd = (iX.sd << 16) >> 16;	/* remove Y */
+	iX.sd = (int32_t)(int16_t)iX.sw.l;	/* sign-extend low 16 to 32, removing Y */
 	iY.sw.l = iX.sw.h;				/* overwrite x with sign(x) */
 
 									/* Shift test values */
@@ -1245,7 +1245,7 @@ void PGXP_CPU_SRAV(u32 instr, u32 rdVal, u32 rtVal, u32 rsVal)
 	dY.sd = iY.sd >> sh;
 
 	if (dX.sw.l != iX.sw.h)
-		x = x / (1 << sh);
+		x = x / (1u << sh);
 	else
 		x = dX.sw.l;	/* only sign bits left */
 
@@ -1270,7 +1270,7 @@ void PGXP_CPU_SRAV(u32 instr, u32 rdVal, u32 rtVal, u32 rsVal)
 	if ((dY.sw.h == 0) || (dY.sw.h == -1))
 		y = dY.sw.h;
 	else
-		y = y / (1 << sh);
+		y = y / (1u << sh);
 
 	x = f16Sign(x);
 	y = f16Sign(y);
