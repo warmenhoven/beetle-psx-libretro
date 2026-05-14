@@ -4,7 +4,7 @@
 #include "pgxp_value.h"
 #include "limits.h"
 
-void SetValue(PGXP_value *pV, u32 psxV)
+void SetValue(PGXP_value *pV, uint32_t psxV)
 {
 	psx_value psx;
 	psx.d = psxV;
@@ -16,7 +16,7 @@ void SetValue(PGXP_value *pV, u32 psxV)
 	pV->value = psx.d;
 }
 
-void MakeValid(PGXP_value *pV, u32 psxV)
+void MakeValid(PGXP_value *pV, uint32_t psxV)
 {
 	psx_value psx;
 	psx.d = psxV;
@@ -30,22 +30,22 @@ void MakeValid(PGXP_value *pV, u32 psxV)
 	}
 }
 
-void Validate(PGXP_value *pV, u32 psxV)
+void Validate(PGXP_value *pV, uint32_t psxV)
 {
 	/* assume pV is not NULL */
 	pV->flags &= (pV->value == psxV) ? ALL : INV_VALID_ALL;
 }
 
-void MaskValidate(PGXP_value *pV, u32 psxV, u32 mask, u32 validMask)
+void MaskValidate(PGXP_value *pV, uint32_t psxV, uint32_t mask, uint32_t validMask)
 {
 	/* assume pV is not NULL */
 	pV->flags &= ((pV->value & mask) == (psxV & mask)) ? ALL : (ALL ^ (validMask));
 }
 
-u32 ValueToTolerance(PGXP_value *pV, u32 psxV, float tolerance)
+uint32_t ValueToTolerance(PGXP_value *pV, uint32_t psxV, float tolerance)
 {
 	psx_value psx;
-	u32       retFlags = VALID_ALL;
+	uint32_t       retFlags = VALID_ALL;
 
 	psx.d = psxV;
 

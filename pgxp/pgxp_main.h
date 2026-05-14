@@ -47,10 +47,10 @@ extern "C" {
 	void	PGXP_Init(void);	/* initialise memory */
 	void	PGXP_Shutdown(void);	/* free heap-allocated buffers */
 
-	void	PGXP_SetModes(u32 modes);
-	u32		PGXP_GetModes();
-	void	PGXP_EnableModes(u32 modes);
-	void	PGXP_DisableModes(u32 modes);
+	void	PGXP_SetModes(uint32_t modes);
+	uint32_t		PGXP_GetModes();
+	void	PGXP_EnableModes(uint32_t modes);
+	void	PGXP_DisableModes(uint32_t modes);
 
         static inline int PGXP_enabled(void) {
           return (PGXP_GetModes() & (PGXP_MODE_MEMORY | PGXP_VERTEX_CACHE)) != 0;

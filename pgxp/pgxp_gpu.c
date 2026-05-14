@@ -39,32 +39,32 @@
 PGXP_value FIFO[32];
 PGXP_value CB[16];
 
-void PGXP_WriteFIFO(PGXP_value* pV, u32 pos)
+void PGXP_WriteFIFO(PGXP_value* pV, uint32_t pos)
 {
 	assert(pos < 32);
 	FIFO[pos] = *pV;
 }
 
-PGXP_value* PGXP_ReadFIFO(u32 pos)
+PGXP_value* PGXP_ReadFIFO(uint32_t pos)
 {
 	assert(pos < 32);
 	return &FIFO[pos];
 }
 
-void PGXP_WriteCB(PGXP_value* pV, u32 pos)
+void PGXP_WriteCB(PGXP_value* pV, uint32_t pos)
 {
 	assert(pos < 16);
 	CB[pos] = *pV;
 }
 
-PGXP_value* PGXP_ReadCB(u32 pos)
+PGXP_value* PGXP_ReadCB(uint32_t pos)
 {
 	assert(pos < 16);
 	return &CB[pos];
 }
 
 
-unsigned int PGXP_tDebug = 0;
+uint32_t PGXP_tDebug = 0;
 /* ============================================================
  * Blade_Arma's Vertex Cache (CatBlade?)
  *
@@ -98,17 +98,17 @@ typedef struct
 	/* 3 bytes of tail padding bring this to 16 bytes naturally. */
 } PGXP_cache_entry;
 
-const unsigned int mode_init = 0;
-const unsigned int mode_write = 1;
-const unsigned int mode_read = 2;
-const unsigned int mode_fail = 3;
+const uint32_t mode_init = 0;
+const uint32_t mode_write = 1;
+const uint32_t mode_read = 2;
+const uint32_t mode_fail = 3;
 
 #define VERTEX_CACHE_DIM	(0x800 * 2)
 #define VERTEX_CACHE_SIZE	(VERTEX_CACHE_DIM * VERTEX_CACHE_DIM)
 
 static PGXP_cache_entry *vertexCache = NULL;
 
-unsigned int cacheMode = 0;
+uint32_t cacheMode = 0;
 
 /* Allocate the vertex cache on first use.  Returns 1 on success, 0 on
  * allocation failure (in which case the cache stays NULL and callers
@@ -135,7 +135,7 @@ void PGXP_FreeVertexCache(void)
 	cacheMode = mode_init;
 }
 
-void PGXP_CacheVertex(short sx, short sy, const PGXP_value* _pVertex)
+void PGXP_CacheVertex(int16_t sx, int16_t sy, const PGXP_value* _pVertex)
 {
 	const PGXP_value*	pNewVertex = (const PGXP_value*)_pVertex;
 	PGXP_cache_entry*	pOldVertex = NULL;
@@ -186,7 +186,7 @@ void PGXP_CacheVertex(short sx, short sy, const PGXP_value* _pVertex)
 	}
 }
 
-static PGXP_cache_entry* PGXP_GetCachedVertex(short sx, short sy)
+static PGXP_cache_entry* PGXP_GetCachedVertex(int16_t sx, int16_t sy)
 {
 	if (cacheMode != mode_read)
 	{
@@ -222,30 +222,30 @@ static PGXP_cache_entry* PGXP_GetCachedVertex(short sx, short sy)
  * PGXP Implementation
  * ============================================================ */
 
-const unsigned int primStrideTable[] = { 1, 2, 1, 2, 2, 3, 2, 3, 0 };
-const unsigned int primCountTable[] = { 3, 3, 4, 4, 3, 3, 4, 4, 0 };
+const uint32_t primStrideTable[] = { 1, 2, 1, 2, 2, 3, 2, 3, 0 };
+const uint32_t primCountTable[] = { 3, 3, 4, 4, 3, 3, 4, 4, 0 };
 
 PGXP_value*	PGXP_Mem = NULL;	/* pointer to parallel memory */
-unsigned int	currentAddr = 0;	/* address of current DMA */
+uint32_t	currentAddr = 0;	/* address of current DMA */
 
-unsigned int	numVertices = 0;	/* iCB: Used for glVertex3fv fix */
-unsigned int	vertexIdx = 0;
+uint32_t	numVertices = 0;	/* iCB: Used for glVertex3fv fix */
+uint32_t	vertexIdx = 0;
 
 /* Set current DMA address and pointer to parallel memory */
-void GPUpgxpMemory(unsigned int addr, unsigned char* pVRAM)
+void GPUpgxpMemory(uint32_t addr, uint8_t* pVRAM)
 {
 	PGXP_Mem = (PGXP_value*)(pVRAM);
 	currentAddr = addr;
 }
 
 /* Set current DMA address */
-void PGXP_SetAddress(unsigned int addr)
+void PGXP_SetAddress(uint32_t addr)
 {
 	currentAddr = addr;
 }
 
 /* Get single parallel vertex value */
-int PGXP_GetVertex(const unsigned int offset, const unsigned int* addr, OGLVertex* pOutput, int xOffs, int yOffs)
+int PGXP_GetVertex(const uint32_t offset, const uint32_t* addr, OGLVertex* pOutput, int xOffs, int yOffs)
 {
 	PGXP_value* vert = PGXP_ReadCB(offset);          /* pointer to vertex */
 
@@ -254,8 +254,8 @@ int PGXP_GetVertex(const unsigned int offset, const unsigned int* addr, OGLVerte
 	 * aliasing addr through `short*` (which is strict-aliasing UB
 	 * since addr's effective type is `unsigned int`). */
 	uint32_t psxWord = *addr;
-	short psxX = (short)(psxWord & 0xFFFF);
-	short psxY = (short)(psxWord >> 16);
+	int16_t psxX = (int16_t)(psxWord & 0xFFFF);
+	int16_t psxY = (int16_t)(psxWord >> 16);
 
 	if (vert && ((vert->flags & VALID_01) == VALID_01) && (vert->value == psxWord))
 	{

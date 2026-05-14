@@ -26,10 +26,10 @@ static PGXP_value UserMem[USER_MEM_COUNT];
 static PGXP_value ScratchMem[SCRATCH_MEM_COUNT];
 static PGXP_value RegisterMem[REGISTER_MEM_COUNT];
 
-const u32 UserMemOffset  = 0;
-const u32 ScratchOffset  = USER_MEM_COUNT;
-const u32 RegisterOffset = USER_MEM_COUNT + SCRATCH_MEM_COUNT;
-const u32 InvalidAddress = USER_MEM_COUNT + SCRATCH_MEM_COUNT + REGISTER_MEM_COUNT;
+const uint32_t UserMemOffset  = 0;
+const uint32_t ScratchOffset  = USER_MEM_COUNT;
+const uint32_t RegisterOffset = USER_MEM_COUNT + SCRATCH_MEM_COUNT;
+const uint32_t InvalidAddress = USER_MEM_COUNT + SCRATCH_MEM_COUNT + REGISTER_MEM_COUNT;
 
 void PGXP_InitMem()
 {
@@ -56,7 +56,7 @@ void PGXP_InitMem()
 0xa000_0000-0xa01f_ffff		Kernel and User Memory Mirror (2 Meg) Uncached
 0xbfc0_0000-0xbfc7_ffff		BIOS Mirror (512K) Uncached
 */
-void ValidateAddress(u32 addr)
+void ValidateAddress(uint32_t addr)
 {
 	if ((addr >= 0x00000000) && (addr <= 0x007fffff)) {}	/* Kernel + User Memory x 8 */
 	else if ((addr >= 0x1f000000) && (addr <= 0x1f00ffff)) {}	/* Parallel Port */
@@ -75,9 +75,9 @@ void ValidateAddress(u32 addr)
 
 }
 
-u32 PGXP_ConvertAddress(u32 addr)
+uint32_t PGXP_ConvertAddress(uint32_t addr)
 {
-	u32 paddr = addr;
+	uint32_t paddr = addr;
 
 	switch (paddr >> 24)
 	{
@@ -112,7 +112,7 @@ u32 PGXP_ConvertAddress(u32 addr)
 	return paddr;
 }
 
-PGXP_value* GetPtr(u32 addr)
+PGXP_value* GetPtr(uint32_t addr)
 {
 	addr = PGXP_ConvertAddress(addr);
 
@@ -125,12 +125,12 @@ PGXP_value* GetPtr(u32 addr)
 	return NULL;
 }
 
-PGXP_value* ReadMem(u32 addr)
+PGXP_value* ReadMem(uint32_t addr)
 {
 	return GetPtr(addr);
 }
 
-void ValidateAndCopyMem(PGXP_value* dest, u32 addr, u32 value)
+void ValidateAndCopyMem(PGXP_value* dest, uint32_t addr, uint32_t value)
 {
 	PGXP_value* pMem = GetPtr(addr);
 	if (pMem != NULL)
@@ -143,9 +143,9 @@ void ValidateAndCopyMem(PGXP_value* dest, u32 addr, u32 value)
 	*dest = PGXP_value_invalid_address;
 }
 
-void ValidateAndCopyMem16(PGXP_value* dest, u32 addr, u32 value, int sign)
+void ValidateAndCopyMem16(PGXP_value* dest, uint32_t addr, uint32_t value, int sign)
 {
-	u32 validMask = 0;
+	uint32_t validMask = 0;
 	psx_value val, mask;
 	PGXP_value* pMem = GetPtr(addr);
 	if (pMem != NULL)
@@ -188,7 +188,7 @@ void ValidateAndCopyMem16(PGXP_value* dest, u32 addr, u32 value, int sign)
 	*dest = PGXP_value_invalid_address;
 }
 
-void WriteMem(PGXP_value* value, u32 addr)
+void WriteMem(PGXP_value* value, uint32_t addr)
 {
 	PGXP_value* pMem = GetPtr(addr);
 
@@ -196,7 +196,7 @@ void WriteMem(PGXP_value* value, u32 addr)
 		*pMem = *value;
 }
 
-void WriteMem16(PGXP_value* src, u32 addr)
+void WriteMem16(PGXP_value* src, uint32_t addr)
 {
 	PGXP_value* dest = GetPtr(addr);
 
@@ -218,14 +218,14 @@ void WriteMem16(PGXP_value* src, u32 addr)
 			dest->y = src->x;
 			dest->hFlags = src->lFlags;
 			dest->compFlags[1] = src->compFlags[0];
-			pVal.w.h = (u16)src->value;
+			pVal.w.h = (uint16_t)src->value;
 		}
 		else
 		{
 			dest->x = src->x;
 			dest->lFlags = src->lFlags;
 			dest->compFlags[0] = src->compFlags[0];
-			pVal.w.l = (u16)src->value;
+			pVal.w.l = (uint16_t)src->value;
 		}
 
 		dest->value = pVal.d;
