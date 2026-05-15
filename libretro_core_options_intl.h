@@ -376,6 +376,8 @@ extern "C" {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_AR NULL
 #define OPTION_VAL_WEAVE_AR NULL
 #define OPTION_VAL_BOB_AR NULL
+#define OPTION_VAL_BOB_OFFSET_AR NULL
+#define OPTION_VAL_FASTMAD_AR NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_AR NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_AR NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_AR NULL
@@ -1658,11 +1660,11 @@ struct retro_core_option_v2_definition option_defs_ar[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_AR },
-         { "bob",   OPTION_VAL_BOB_AR },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_AR },
+         { "bob",        OPTION_VAL_BOB_AR },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_AR },
+         { "fastmad",    OPTION_VAL_FASTMAD_AR },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -2452,6 +2454,8 @@ struct retro_core_options_v2 options_ar = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_AST NULL
 #define OPTION_VAL_WEAVE_AST NULL
 #define OPTION_VAL_BOB_AST NULL
+#define OPTION_VAL_BOB_OFFSET_AST NULL
+#define OPTION_VAL_FASTMAD_AST NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_AST NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_AST NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_AST NULL
@@ -3734,11 +3738,11 @@ struct retro_core_option_v2_definition option_defs_ast[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_AST },
-         { "bob",   OPTION_VAL_BOB_AST },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_AST },
+         { "bob",        OPTION_VAL_BOB_AST },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_AST },
+         { "fastmad",    OPTION_VAL_FASTMAD_AST },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -4382,7 +4386,7 @@ struct retro_core_options_v2 options_ast = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_BE "Вяршынны кэш PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_BE "Кэшаваць каардынаты вяршыняў, палепшаных з PGXP дзеля паўторнага выкарыстання пры адмалёўцы палігонаў. Паляпшае выраўноўванне аб'ектаў і памяншае бачнасць швоў пры рэндэрынгу тэкстур, але праз памылкі пры апытанні кэша можа выклікаць збоі графікі. Рэкамендуецца пакідаць выклычанай. Дадзеная опцыя прымяняецца толькі калі ўключаны 'Рэжым выканання PGXP'. Падтрымліваецца толькі апаратнымі рэндэрамі."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_BE "Перспектыўна-карэктнае тэкстураванне PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_BE "Замяшчае роднае пераўтварэнне тэкстураў арыгінальнай PSX на перспектыўна-карэктнае. Забяспечвае правільнае выраўноўванне тэкстураў, ухіляючы пазіцыйна-залежныя скажэнні. Дадзеная опцыя прымяняецца толькі калі ўключаны 'Рэжым выканання PGXP'. Падтрымліваецца толькі апаратнымі рэндэрамі."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_BE NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_BE "Паказваць частату кадраў"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_BE "Адлюстроўваць унутраную частату кадраў, з якой эмуляваная PlayStation ажыццяўляе рэндэрынг. Заўвага: патрабуецца ўключэнне апавяшчэнняў у наладах франтэнда."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_BE "Адлюстраванне паведамленняў"
@@ -4528,6 +4532,8 @@ struct retro_core_options_v2 options_ast = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_BE NULL
 #define OPTION_VAL_WEAVE_BE NULL
 #define OPTION_VAL_BOB_BE NULL
+#define OPTION_VAL_BOB_OFFSET_BE NULL
+#define OPTION_VAL_FASTMAD_BE NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_BE NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_BE NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_BE NULL
@@ -5810,11 +5816,11 @@ struct retro_core_option_v2_definition option_defs_be[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_BE },
-         { "bob",   OPTION_VAL_BOB_BE },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_BE },
+         { "bob",        OPTION_VAL_BOB_BE },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_BE },
+         { "fastmad",    OPTION_VAL_FASTMAD_BE },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -6604,6 +6610,8 @@ struct retro_core_options_v2 options_be = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_BG NULL
 #define OPTION_VAL_WEAVE_BG NULL
 #define OPTION_VAL_BOB_BG NULL
+#define OPTION_VAL_BOB_OFFSET_BG NULL
+#define OPTION_VAL_FASTMAD_BG NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_BG NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_BG NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_BG NULL
@@ -7886,11 +7894,11 @@ struct retro_core_option_v2_definition option_defs_bg[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_BG },
-         { "bob",   OPTION_VAL_BOB_BG },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_BG },
+         { "bob",        OPTION_VAL_BOB_BG },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_BG },
+         { "fastmad",    OPTION_VAL_FASTMAD_BG },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -8534,7 +8542,7 @@ struct retro_core_options_v2 options_bg = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_CA "Memòria cau dels vèrtexs del PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_CA "Escorcolla les posicions dels vèrtexs millorades pel PGXP perquè siguin escorcollades per dibuixar polígons. Pot millorar l'alineació dels objectes i reduir les vores, però pot produir defectes visuals. Ara mateix, es recomana desactivar aquesta opció. Només s'aplicarà si s'activa el mode d'operació del PGXP. Només funciona amb els renderitzadors per maquinari."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_CA "Texturitzat fidel a la perspectiva del PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_CA "Canvia el mapeig de textures natiu de PSX per un mapeig de textures amb la perspectiva correcta. Elimina les distorsions per posició i la deformació de textures, produïnt textures ben alineades. Només s'aplica quan s'activa el mode d'operació del PGXP. Només funciona en els renderitzadors per maquinari."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_CA "Canvia el mapeig de textures natiu de PSX per un mapeig de textures amb la perspectiva correcta. Elimina les distorsions per posició i la deformació de textures, produïnt textures ben alineades. Només s'aplica quan s'activa el mode d'operació del PGXP. Funciona en els renderitzadors per maquinari o per programari."
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_CA "Mostrar FPS interns"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_CA "Mostra la velocitat de fotogrames interna a la qual el sistema PlayStations emulat renderitza el contingut. Nota: És necessari activar les notificacions en pantalla."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_CA "Mostrar missatges en pantalla"
@@ -8677,9 +8685,11 @@ struct retro_core_options_v2 options_bg = {
 #define OPTION_VAL_FORCE_PROGRESSIVE_CA "Força la taxa progressiva"
 #define OPTION_VAL_FORCE_INTERLACED_CA "Forçar trama entrellaçada"
 #define BEETLE_OPT_DEINTERLACER_LABEL_CA "Mètode de desentrellaçat"
-#define BEETLE_OPT_DEINTERLACER_INFO_0_CA "'Weave' mostra els dos camps en el mateix fotograma per una imatge fixa d'alta resolució, 'Bob' redueix la claredat de la resolució per claredat del moviment. 'Off' fa que el renderitzador de programari coincideix amb el comportament del renderitzador de maquinari (Vulkan/OpenGL) rasteritzant totes les línies de VRAM de cada fotograma eliminant el comb-on-motion en jocs entrellaçats. Nota: els programes que DMA a VRAM durant l'escaneig (algunes demostracions que utilitzen trucs de framebuffer-wrap PAL de més de 512 línies) poden mostrar files obsoletes a \"Off\"; utilitzeu \"Weave\" o \"Bob\" per a aquests."
+#define BEETLE_OPT_DEINTERLACER_INFO_0_CA "'Weave' mostra els dos camps en el mateix fotograma per tenir una resolució alta encara que la imatge no ho sigui, 'Bob' sacrifica claredat de resolució per claredat de moviment. 'Bob (Offset)' és Bob amb la duplicació del camp actual a tota la superfície com una compensació entre camps, això fa que es mantingui la resolució de sortida de libretro i es conserva la claredat de moviment. 'FastMAD (adaptatiu al moviment)' entrellaça els pixels fixs i interpola els píxels en moviment en l'eix vertical, ofereix una imatge amb l'altura complerta sense els efectes de 'Weave' o la pèrdua de resolució de 'Bob'. Si es desactiva aquesta opció, el renderitzador per programari farà servir el mateix comportament que el renderitzador per maquinari (Vulkan/OpenGL) rasteritzant totes les línies de la memòria virtual en cada fotograma i retrasant l'escaneig fins que acabi el fotograma, això elimina els efectes en alguns jocs entrellaçats. Nota: aquells programes que facin servir el DMA durant l'escaneig (com algunes demos PAL de més de 512 línies que fan servir trucs en la memòria intermèdia de fotogrames) poden mostrar línies paralitzades si aquesta opció està desactivada, actívala en aquests casos."
 #define OPTION_VAL_WEAVE_CA NULL
 #define OPTION_VAL_BOB_CA NULL
+#define OPTION_VAL_BOB_OFFSET_CA NULL
+#define OPTION_VAL_FASTMAD_CA "FastMAD (Moviment adaptatiu)"
 #define BEETLE_OPT_FRAME_DUPING_LABEL_CA "Omissió de fotogrames"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_CA "Si el nucli no té res nou a mostrar, repeteix l'últim fotograma."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_CA "Anul·la la velocitat de sincronització PAL"
@@ -9962,11 +9972,11 @@ struct retro_core_option_v2_definition option_defs_ca[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_CA },
-         { "bob",   OPTION_VAL_BOB_CA },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_CA },
+         { "bob",        OPTION_VAL_BOB_CA },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_CA },
+         { "fastmad",    OPTION_VAL_FASTMAD_CA },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -10610,7 +10620,7 @@ struct retro_core_options_v2 options_ca = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_CHS "PGXP 顶点缓存"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_CHS "缓存 PGXP 增强的顶点位置，以便在多边形绘制中重复使用。在渲染纹理时可能改善物体对齐并减少可见接缝，但在查询缓存时可能产生误报导致图形故障。目前建议保持此选项禁用。仅由硬件渲染器支持。"
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_CHS "PGXP 透视校正纹理映射"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_CHS "将原生 PSX 的仿射纹理映射替换为透视校正纹理映射。可消除位置相关的失真和纹理扭曲，从而实现正确对齐的纹理。此选项仅在启用 PGXP 操作模式时生效。仅由硬件渲染器支持。"
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_CHS NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_CHS "显示内部 FPS"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_CHS "显示模拟的 PlayStation 系统渲染内容时的内部帧率。注意：需要在 libretro 前端中启用屏幕通知。"
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_CHS "显示 OSD 消息"
@@ -10756,6 +10766,8 @@ struct retro_core_options_v2 options_ca = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_CHS NULL
 #define OPTION_VAL_WEAVE_CHS "交织"
 #define OPTION_VAL_BOB_CHS NULL
+#define OPTION_VAL_BOB_OFFSET_CHS NULL
+#define OPTION_VAL_FASTMAD_CHS NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_CHS NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_CHS NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_CHS NULL
@@ -12038,11 +12050,11 @@ struct retro_core_option_v2_definition option_defs_chs[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_CHS },
-         { "bob",   OPTION_VAL_BOB_CHS },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_CHS },
+         { "bob",        OPTION_VAL_BOB_CHS },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_CHS },
+         { "fastmad",    OPTION_VAL_FASTMAD_CHS },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -12832,6 +12844,8 @@ struct retro_core_options_v2 options_chs = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_CHT NULL
 #define OPTION_VAL_WEAVE_CHT NULL
 #define OPTION_VAL_BOB_CHT NULL
+#define OPTION_VAL_BOB_OFFSET_CHT NULL
+#define OPTION_VAL_FASTMAD_CHT NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_CHT NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_CHT NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_CHT NULL
@@ -14114,11 +14128,11 @@ struct retro_core_option_v2_definition option_defs_cht[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_CHT },
-         { "bob",   OPTION_VAL_BOB_CHT },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_CHT },
+         { "bob",        OPTION_VAL_BOB_CHT },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_CHT },
+         { "fastmad",    OPTION_VAL_FASTMAD_CHT },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -14762,7 +14776,7 @@ struct retro_core_options_v2 options_cht = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_CS NULL
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_CS "Ukládání pozic vrcholů s podporou PGXP do mezipaměti pro opakované použití při kreslení polygonů. Může potenciálně zlepšit zarovnání objektů a omezit viditelné švy při vykreslování textur, ale falešně pozitivní dotazy na mezipaměť mohou způsobit grafické závady. V současné době se doporučuje ponechat tuto možnost vypnutou. Tato volba se použije pouze tehdy, když je povolen operační režim PGXP. Podporováno pouze hardwarovými vykreslovači."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_CS "PGXP Perspektivní Správné Texturování"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_CS "Nahrazení nativního afinního mapování textur pro PSX perspektivně správným mapováním textur. Eliminuje zkreslení a deformaci textur v závislosti na poloze a výsledkem jsou správně zarovnané textury. Tato volba se použije pouze tehdy, když je povolen provozní režim PGXP. Podporováno pouze hardwarovými vykreslovači."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_CS NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_CS "Interní Zobrazení FPS"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_CS "Zobrazení interní snímkové frekvence, při které emulovaný systém PlayStation vykresluje obsah. Poznámka: Vyžaduje, aby byla ve frontendu libretro povolena oznámení na obrazovce."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_CS "Zobrazení OSD zpráv"
@@ -14908,6 +14922,8 @@ struct retro_core_options_v2 options_cht = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_CS NULL
 #define OPTION_VAL_WEAVE_CS NULL
 #define OPTION_VAL_BOB_CS NULL
+#define OPTION_VAL_BOB_OFFSET_CS NULL
+#define OPTION_VAL_FASTMAD_CS NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_CS NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_CS NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_CS NULL
@@ -16190,11 +16206,11 @@ struct retro_core_option_v2_definition option_defs_cs[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_CS },
-         { "bob",   OPTION_VAL_BOB_CS },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_CS },
+         { "bob",        OPTION_VAL_BOB_CS },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_CS },
+         { "fastmad",    OPTION_VAL_FASTMAD_CS },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -16984,6 +17000,8 @@ struct retro_core_options_v2 options_cs = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_CY NULL
 #define OPTION_VAL_WEAVE_CY NULL
 #define OPTION_VAL_BOB_CY NULL
+#define OPTION_VAL_BOB_OFFSET_CY NULL
+#define OPTION_VAL_FASTMAD_CY NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_CY NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_CY NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_CY NULL
@@ -18266,11 +18284,11 @@ struct retro_core_option_v2_definition option_defs_cy[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_CY },
-         { "bob",   OPTION_VAL_BOB_CY },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_CY },
+         { "bob",        OPTION_VAL_BOB_CY },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_CY },
+         { "fastmad",    OPTION_VAL_FASTMAD_CY },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -19060,6 +19078,8 @@ struct retro_core_options_v2 options_cy = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_DA NULL
 #define OPTION_VAL_WEAVE_DA NULL
 #define OPTION_VAL_BOB_DA NULL
+#define OPTION_VAL_BOB_OFFSET_DA NULL
+#define OPTION_VAL_FASTMAD_DA NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_DA NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_DA NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_DA NULL
@@ -20342,11 +20362,11 @@ struct retro_core_option_v2_definition option_defs_da[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_DA },
-         { "bob",   OPTION_VAL_BOB_DA },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_DA },
+         { "bob",        OPTION_VAL_BOB_DA },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_DA },
+         { "fastmad",    OPTION_VAL_FASTMAD_DA },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -20990,7 +21010,7 @@ struct retro_core_options_v2 options_da = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_DE "PGXP-Vertex-Cache"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_DE "Cache-PGXP-erweiterte Vertex-Positionen zur Wiederverwendung über Polygon-Zeichnungen hinweg. Kann möglicherweise die Objektorientierung verbessern und die sichtbaren Nähte beim Rendern von Texturen reduzieren, aber falsche Positiven, wenn der Cache abfragt wird, können zu grafischen Fehlern führen. Es wird derzeit empfohlen, diese Option deaktiviert zu lassen. Diese Option wird nur angewendet, wenn der PGXP-Operationsmodus aktiviert ist. Unterstützt nur von Hardware-Renderern."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_DE "PGXP-Perspektivische Texturkorrektur"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_DE "Ersetzt die native PSX affine Texturzuordnung durch eine perspektivisch korrekte Texturzuordnung. Eliminiert positionabhängige Verzerrung und Verformung von Texturen, was zu richtig ausgerichteten Texturen führt. Diese Option wird nur angewendet, wenn der PGXP-Operationsmodus aktiviert ist. Unterstützt nur von Hardware-Rendern."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_DE "Ersetzt das native affine Textur-Mapping der PSX durch perspektivkorrektes Textur-Mapping. Beseitigt positionsabhängige Verzerrungen und Verformungen von Texturen, wodurch korrekt ausgerichtete Texturen entstehen. Diese Option wird nur angewendet, wenn der PGXP-Betriebsmodus aktiviert ist. Wird von den Hardware-Renderern und dem Software-Renderer unterstützt."
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_DE "Interne FPS anzeigen"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_DE "Die interne Bildrate anzeigen, mit der das emulierte PlayStation-System Inhalte rendert. Hinweis: Benötigt, dass Bildschirm-Benachrichtigungen im Libretro-Frontend aktiviert sind."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_DE "OSD-Meldungen anzeigen"
@@ -21133,9 +21153,11 @@ struct retro_core_options_v2 options_da = {
 #define OPTION_VAL_FORCE_PROGRESSIVE_DE "Progressive Rate erzwingen"
 #define OPTION_VAL_FORCE_INTERLACED_DE "„Interlaced“ Frequenz erzwingen"
 #define BEETLE_OPT_DEINTERLACER_LABEL_DE "Deinterlacing-Methode"
-#define BEETLE_OPT_DEINTERLACER_INFO_0_DE "„Weave“ zeigt beide Halbbilder im selben Frame an, um ein Standbild in voller hoher Auflösung zu erzielen, während „Bob“ die Bildschärfe zugunsten der Bewegungsschärfe opfert. „Off“ sorgt dafür, dass sich der Software-Renderer dem Verhalten des Hardware-Renderers (Vulkan/OpenGL) anpasst, indem er in jedem Frame alle VRAM-Zeilen rastert und das Auslesen auf das Ende des Frames verschiebt, wodurch „Comb-on-Motion“ in Spielen mit Zeilensprungverfahren beseitigt wird. Hinweis: Programme, die während des Scanouts per DMA in den VRAM schreiben (einige Demos, die >512-Zeilen-PAL-Framebuffer-Wrap-Tricks verwenden), zeigen bei „Off“ möglicherweise veraltete Zeilen an; für diese dann „Weave“ oder „Bob“ verwenden."
+#define BEETLE_OPT_DEINTERLACER_INFO_0_DE "„Weave“ zeigt beide Halbbilder im selben Bild an und liefert so ein Standbild in voller hoher Auflösung, während „Bob“ Abstriche bei der Bildschärfe zugunsten einer klareren Bewegungsdarstellung macht. „Bob (Offset)“ ist Bob, wobei das aktuelle Halbbild auf die volle Bildhöhe verdoppelt wird, mit einem Offset von einer Zeile zwischen den Halbbildern, wodurch die Libretro-Ausgabeauflösung beibehalten wird, während die flüssige Bewegung im Bob-Stil erhalten bleibt. „FastMAD (Motion Adaptive)“ verwebt Standpixel und interpoliert bewegte Pixel vertikal pixelweise, bei voller Ausgabehöhe, ohne den Kammeffekt bei Bewegung von Weave oder die halbierte Auflösung von Bob. „Off“ passt das Verhalten des Software-Renderers an das des Hardware-Renderers (Vulkan/OpenGL) an, indem jeder Frame auf alle VRAM-Zeilen rasterisiert und das Auslesen auf das Ende des Frames verschoben wird, wodurch Kammartefakte bei „interlaced“ Spielen beseitigt werden. Hinweis: Programme, die während des Scanouts DMA-zu-VRAM durchführen (einige Demos, die >512-Zeilen-PAL-Framebuffer-Wrap-Tricks verwenden) oder die bewegende Sprites über CPU-zu-VRAM-Bildübertragungen aktualisieren, die an das angezeigte Feld gebunden sind (z. B. Pro Pinball), können bei „Aus“ obsolete Zeilen oder Sprite-Ghosting anzeigen; in solchen Fällen „Weave“, „Bob“, „Bob (Offset)“ oder „FastMAD“ verwenden."
 #define OPTION_VAL_WEAVE_DE NULL
 #define OPTION_VAL_BOB_DE NULL
+#define OPTION_VAL_BOB_OFFSET_DE NULL
+#define OPTION_VAL_FASTMAD_DE "FastMAD (Bewegungsadaptiv)"
 #define BEETLE_OPT_FRAME_DUPING_LABEL_DE "Bild-Duplizierung"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_DE "Wiederholt das vorherige Bild, wenn der Core nichts Neues zum Anzeigen hat."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_DE "PAL-Video-Timing-Übersteuerung"
@@ -22418,11 +22440,11 @@ struct retro_core_option_v2_definition option_defs_de[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_DE },
-         { "bob",   OPTION_VAL_BOB_DE },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_DE },
+         { "bob",        OPTION_VAL_BOB_DE },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_DE },
+         { "fastmad",    OPTION_VAL_FASTMAD_DE },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -23212,6 +23234,8 @@ struct retro_core_options_v2 options_de = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_EL NULL
 #define OPTION_VAL_WEAVE_EL NULL
 #define OPTION_VAL_BOB_EL NULL
+#define OPTION_VAL_BOB_OFFSET_EL NULL
+#define OPTION_VAL_FASTMAD_EL NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_EL NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_EL NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_EL NULL
@@ -24494,11 +24518,11 @@ struct retro_core_option_v2_definition option_defs_el[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_EL },
-         { "bob",   OPTION_VAL_BOB_EL },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_EL },
+         { "bob",        OPTION_VAL_BOB_EL },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_EL },
+         { "fastmad",    OPTION_VAL_FASTMAD_EL },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -25142,7 +25166,7 @@ struct retro_core_options_v2 options_el = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_EN NULL
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_EN NULL
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_EN NULL
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_EN "Replace native PS1 affine texture mapping with perspective correct texture mapping. Eliminates position-dependent distortion and warping of textures, resulting in properly aligned textures. This option is applied only when PGXP Operation Mode is enabled. Supported by the hardware renderers and the software renderer."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_EN NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_EN NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_EN "Display the internal frame rate at which the emulated PlayStation system is rendering content. Note: Requires on-screen notifications to be enabled in the libretro front-end."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_EN NULL
@@ -25288,6 +25312,8 @@ struct retro_core_options_v2 options_el = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_EN NULL
 #define OPTION_VAL_WEAVE_EN NULL
 #define OPTION_VAL_BOB_EN NULL
+#define OPTION_VAL_BOB_OFFSET_EN NULL
+#define OPTION_VAL_FASTMAD_EN NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_EN NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_EN NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_EN NULL
@@ -26570,11 +26596,11 @@ struct retro_core_option_v2_definition option_defs_en[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_EN },
-         { "bob",   OPTION_VAL_BOB_EN },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_EN },
+         { "bob",        OPTION_VAL_BOB_EN },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_EN },
+         { "fastmad",    OPTION_VAL_FASTMAD_EN },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -27364,6 +27390,8 @@ struct retro_core_options_v2 options_en = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_EO NULL
 #define OPTION_VAL_WEAVE_EO NULL
 #define OPTION_VAL_BOB_EO NULL
+#define OPTION_VAL_BOB_OFFSET_EO NULL
+#define OPTION_VAL_FASTMAD_EO NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_EO NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_EO NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_EO NULL
@@ -28646,11 +28674,11 @@ struct retro_core_option_v2_definition option_defs_eo[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_EO },
-         { "bob",   OPTION_VAL_BOB_EO },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_EO },
+         { "bob",        OPTION_VAL_BOB_EO },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_EO },
+         { "fastmad",    OPTION_VAL_FASTMAD_EO },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -29294,7 +29322,7 @@ struct retro_core_options_v2 options_eo = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_ES "Caché de vértices del PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_ES "Cachea las posiciones de vértices mejoradas por el PGXP sean cacheadas para reutilizarlas al dibujar polígonos. Puede mejorar la alineación de los objetos y reducir los bordes, pero los falsos positivos a la hora de recurrir a la caché pueden producir defectos visuales. Actualmente se recomienda desactivar esta opción. Solo se aplicará cuando se active el modo de operación del PGXP. Solo funciona con los renderizadores por hardware."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_ES "Texturizado fiel a la perspectiva del PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_ES "Sustituye el mapeado de texturas afín nativo de PSX con un mapeado de texturas fiel a la perspectiva. Elimina las distorsiones posicionales y la deformación de texturas, produciendo texturas correctamente alineadas. Solo se aplicará cuando se active el modo de operación del PGXP. Solo funciona con los renderizadores por hardware."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_ES "Sustituye el mapeado de texturas afín nativo de PSX con un mapeado de texturas fiel a la perspectiva. Elimina las distorsiones posicionales y la deformación de texturas, produciendo texturas correctamente alineadas. Solo se aplicará cuando se active el modo de operación del PGXP. Compatible con los renderizadores por hardware y software."
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_ES "Mostrar FPS internos"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_ES "Muestra la velocidad de fotogramas interna con la que el sistema PlayStation emulado renderiza el contenido. Nota: Es necesario activar las notificaciones en pantalla en el front-end libretro."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_ES "Mostrar mensajes en pantalla"
@@ -29437,9 +29465,11 @@ struct retro_core_options_v2 options_eo = {
 #define OPTION_VAL_FORCE_PROGRESSIVE_ES "Forzar imagen progresiva"
 #define OPTION_VAL_FORCE_INTERLACED_ES "Forzar barrido entrelazado"
 #define BEETLE_OPT_DEINTERLACER_LABEL_ES "Método de desentrelazado"
-#define BEETLE_OPT_DEINTERLACER_INFO_0_ES "«Weave» muestra ambos campos en el mismo fotograma para producir imágenes fijas a la resolución máxima, «Bob» sacrifica claridad en la resolución para ganarla en los movimientos. Al desactivar esta opción, el renderizador por software respetará el mismo comportamiento del renderizador por hardware (Vulkan/OpenGL) rasterizando todas las líneas de la VRAM en cada fotograma y aplazando el «scan-out» a que acabe el fotograma, lo que eliminará el efecto de peine en juegos entrelazados. NOTA: aquellos programas que hagan DMA a la VRAM durante el «scan-out» (como ciertas demos PAL de más de 512 líneas que utilizan trucos de ajuste del búfer de fotogramas) podrían mostrar líneas paralizadas con la opción desactivada, utiliza «Weave» o «Bob» para estos casos."
+#define BEETLE_OPT_DEINTERLACER_INFO_0_ES "«Weave» muestra ambos campos en el mismo fotograma para producir imágenes fijas a la resolución máxima, «Bob» sacrifica claridad en la resolución para ganarla en los movimientos. «Bob (compensado)» aplica el desentrelazado Bob duplicando el campo actual a toda la superficie con una compensación de una línea entre campos, lo que preservará la resolución de salida de libretro y conservará el suavizado de movimientos del desentrelazado Bob. «FastMAD (adaptativo a movimientos)» entrelaza los píxeles fijos e interpola los píxeles en movimiento en el eje vertical, ofreciendo una altura de imagen de salida completa sin el efecto peine de Weave ni la pérdida de resolución de Bob. Al desactivar esta opción, el renderizador por software respetará el mismo comportamiento del renderizador por hardware (Vulkan/OpenGL) rasterizando todas las líneas de la VRAM en cada fotograma y aplazando el «scan-out» a que acabe el fotograma, lo que eliminará el efecto de peine en juegos entrelazados. NOTA: aquellos programas que hagan DMA a la VRAM durante el «scan-out» (como ciertas demos PAL de más de 512 líneas que utilizan trucos de ajuste del búfer de fotogramas) podrían mostrar líneas paralizadas con la opción desactivada, utiliza «Weave», «Bob», «Bob (compensado)» o «FastMAD (adaptativo a movimientos)» para estos casos."
 #define OPTION_VAL_WEAVE_ES "«Weave»"
 #define OPTION_VAL_BOB_ES NULL
+#define OPTION_VAL_BOB_OFFSET_ES "Bob (compensado)"
+#define OPTION_VAL_FASTMAD_ES "FastMAD (adaptativo a movimientos)"
 #define BEETLE_OPT_FRAME_DUPING_LABEL_ES "Duplicado de fotogramas"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_ES "Si el núcleo no tiene nada nuevo que mostrar en la imagen, repetirá el fotograma anterior."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_ES "Anular velocidad de vídeo PAL"
@@ -30722,11 +30752,11 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_ES },
-         { "bob",   OPTION_VAL_BOB_ES },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_ES },
+         { "bob",        OPTION_VAL_BOB_ES },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_ES },
+         { "fastmad",    OPTION_VAL_FASTMAD_ES },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -31516,6 +31546,8 @@ struct retro_core_options_v2 options_es = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_FA NULL
 #define OPTION_VAL_WEAVE_FA NULL
 #define OPTION_VAL_BOB_FA NULL
+#define OPTION_VAL_BOB_OFFSET_FA NULL
+#define OPTION_VAL_FASTMAD_FA NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_FA NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_FA NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_FA NULL
@@ -32798,11 +32830,11 @@ struct retro_core_option_v2_definition option_defs_fa[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_FA },
-         { "bob",   OPTION_VAL_BOB_FA },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_FA },
+         { "bob",        OPTION_VAL_BOB_FA },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_FA },
+         { "fastmad",    OPTION_VAL_FASTMAD_FA },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -33375,9 +33407,9 @@ struct retro_core_options_v2 options_fa = {
 #define BEETLE_OPT_REGION_LABEL_FI "Järjestelmän alue"
 #define BEETLE_OPT_REGION_INFO_0_FI NULL
 #define OPTION_VAL_AUTO_FI "Automaattinen"
-#define OPTION_VAL_NTSC_J_FI NULL
-#define OPTION_VAL_NTSC_U_FI NULL
-#define OPTION_VAL_PAL_FI NULL
+#define OPTION_VAL_NTSC_J_FI "NTSC-J (Japani)"
+#define OPTION_VAL_NTSC_U_FI "NTSC-U (Pohjois-Amerikka)"
+#define OPTION_VAL_PAL_FI "PAL (Eurooppa)"
 #define BEETLE_OPT_INTERNAL_RESOLUTION_LABEL_FI "Sisäisen näytönohjaimen resoluutio"
 #define BEETLE_OPT_INTERNAL_RESOLUTION_INFO_0_FI "Korkeammat resoluutiot kuin 1x (Natiivi) parantaa 3D-mallien tarkkuutta lisääntyvät suorituskukuvaatimuksien kustannuksella. Tämä asetus ei yleensä vaikuta 2D-elementteihin."
 #define BEETLE_OPT_RENDERER_LABEL_FI "Renderoija"
@@ -33506,7 +33538,7 @@ struct retro_core_options_v2 options_fa = {
 #define BEETLE_OPT_CROSSHAIR_COLOR_P2_INFO_0_FI NULL
 #define BEETLE_OPT_MOUSE_SENSITIVITY_LABEL_FI "Hiiren herkkyys"
 #define BEETLE_OPT_MOUSE_SENSITIVITY_INFO_0_FI NULL
-#define OPTION_VAL_5_O42_FI NULL
+#define OPTION_VAL_5_O42_FI "5 %"
 #define OPTION_VAL_10_FI "10 %"
 #define OPTION_VAL_15_FI "15 %"
 #define OPTION_VAL_20_FI "20 %"
@@ -33538,7 +33570,7 @@ struct retro_core_options_v2 options_fa = {
 #define OPTION_VAL_CUBIC_FI NULL
 #define BEETLE_OPT_NEGCON_DEADZONE_LABEL_FI NULL
 #define BEETLE_OPT_NEGCON_DEADZONE_INFO_0_FI NULL
-#define OPTION_VAL_0_O44_FI NULL
+#define OPTION_VAL_0_O44_FI "0 %"
 #define BEETLE_OPT_USE_MEDNAFEN_MEMCARD0_METHOD_LABEL_FI "Muistikortin menetelmä"
 #define BEETLE_OPT_USE_MEDNAFEN_MEMCARD0_METHOD_INFO_0_FI NULL
 #define OPTION_VAL_LIBRETRO_FI NULL
@@ -33549,10 +33581,10 @@ struct retro_core_options_v2 options_fa = {
 #define BEETLE_OPT_SHARED_MEMORY_CARDS_INFO_0_FI NULL
 #define BEETLE_OPT_MEMCARD_LEFT_INDEX_LABEL_FI NULL
 #define BEETLE_OPT_MEMCARD_LEFT_INDEX_INFO_0_FI NULL
-#define OPTION_VAL_0_O48_FI NULL
+#define OPTION_VAL_0_O48_FI "0 (Oletus)"
 #define BEETLE_OPT_MEMCARD_RIGHT_INDEX_LABEL_FI NULL
 #define BEETLE_OPT_MEMCARD_RIGHT_INDEX_INFO_0_FI NULL
-#define OPTION_VAL_1_O49_FI NULL
+#define OPTION_VAL_1_O49_FI "1 (Oletus)"
 #define BEETLE_OPT_LINE_RENDER_LABEL_FI NULL
 #define BEETLE_OPT_LINE_RENDER_INFO_0_FI NULL
 #define OPTION_VAL_DEFAULT_FI "Oletus"
@@ -33592,6 +33624,8 @@ struct retro_core_options_v2 options_fa = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_FI NULL
 #define OPTION_VAL_WEAVE_FI NULL
 #define OPTION_VAL_BOB_FI NULL
+#define OPTION_VAL_BOB_OFFSET_FI NULL
+#define OPTION_VAL_FASTMAD_FI NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_FI NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_FI NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_FI NULL
@@ -34874,11 +34908,11 @@ struct retro_core_option_v2_definition option_defs_fi[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_FI },
-         { "bob",   OPTION_VAL_BOB_FI },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_FI },
+         { "bob",        OPTION_VAL_BOB_FI },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_FI },
+         { "fastmad",    OPTION_VAL_FASTMAD_FI },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -35522,7 +35556,7 @@ struct retro_core_options_v2 options_fi = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_FR "Cache des vertex de PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_FR "Mettre en cache la position des vertex améliorée par PGXP pour une réutilisation entre les rendus de polygones. Peut potentiellement améliorer l'alignement des objets et réduire les discontinuités visibles lors du rendu des textures, mais les faux positifs lors des requêtes du cache peuvent produire des bugs graphiques. Il est actuellement recommandé de laisser cette option désactivée. Cette option n'est appliquée que lorsque le Mode d'opération de PGXP est activé. Uniquement pris en charge par les moteurs de rendu matériels."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_FR "Textures correctes en perspective de PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_FR "Remplacer le mappage de textures affiné natif de la PSX par le mappage de texture correct pour la perspective. Élimine la distorsion et la déformation dépendant de la position des textures, ce qui entraîne un alignement correct des textures. Cette option n'est appliquée que lorsque le Mode d'opération de PGXP est activé. Uniquement pris en charge par les moteurs de rendu matériels."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_FR "Remplacer le mappage de textures affiné natif de la PSX par le mappage de texture correct pour la perspective. Élimine la distorsion et la déformation dépendant de la position des textures, ce qui entraîne un alignement correct des textures. Cette option n'est appliquée que lorsque le Mode d'opération de PGXP est activé. Pris en charge par les moteurs de rendu matériels et le moteur de rendu logiciel."
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_FR "Afficher les i/s internes"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_FR "Affiche la fréquence d'images interne à laquelle le système PlayStation émulé rend du contenu. Remarque : Nécessite que les notifications à l'écran soient activées dans l'interface de libretro."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_FR "Afficher les messages à l'écran"
@@ -35665,9 +35699,11 @@ struct retro_core_options_v2 options_fi = {
 #define OPTION_VAL_FORCE_PROGRESSIVE_FR "Forcer le débit progressif"
 #define OPTION_VAL_FORCE_INTERLACED_FR "Forcer le débit entrelacé"
 #define BEETLE_OPT_DEINTERLACER_LABEL_FR "Méthode de désentrelacement"
-#define BEETLE_OPT_DEINTERLACER_INFO_0_FR "'Weave' affiche les deux champs sur la même image pour une image fixe en pleine haute résolution, 'Bob' sacrifie la clarté de la résolution pour la clarté du mouvement. 'Désactivé' fait correspondre le moteur de rendu du logiciel au rendu matériel (Vulkan/OpenGL) en rastérisant sur toutes les lignes VRAM à chaque image et en reportant la fin du balayage à la fin de l'image, en éliminant l'effet de peigne-sur-mouvement dans les jeux entrelacés. Remarque : les programmes qui font du DMA vers VRAM pendant le balayage (certaines démos utilisant des astuces de réenroulement du tampon d'image en PAL >512 lignes) peuvent afficher des lignes obsolètes avec l'option 'Désactivé' ; Utilisez 'Weave' ou 'Bob' pour ceux-ci."
+#define BEETLE_OPT_DEINTERLACER_INFO_0_FR "'Weave' affiche les deux champs sur la même image pour une image fixe en pleine haute résolution, 'Bob' sacrifie la clarté de la résolution pour la clarté du mouvement. 'Bob (décalé)' est Bob avec le champ actuel doublé dans la hauteur de la surface complète et un décalage d'une ligne entre les champs, conservant la résolution de libretro en sortie tout en gardant la clarté du mouvement de style Bob. 'FastMAD (Adaptif au mouvement)' trame des pixels fixes et interpole verticalement les pixels en mouvement pour chaque pixel, à la pleine hauteur de sortie sans l'effet de peigne sur mouvement de Weave ni la résolution diminuée de moitié de Bob. 'Désactivé' fait correspondre le moteur de rendu logiciel au comportement du rendu matériel (Vulkan/OpenGL) en rastérisant sur toutes les lignes VRAM à chaque image et en reportant la fin du balayage à la fin de l'image, en éliminant l'effet de peigne sur mouvement dans les jeux entrelacés. Remarque : les programmes qui font du DMA vers VRAM pendant la fin du balayage (certaines démos utilisant des astuces de réenroulement du tampon d'image PAL >512 lignes), ou qui mettent à jour les sprites en mouvement via des transferts d'image processeur vers VRAM liés au champ affiché (Pro Pinball par exemple), peuvent montrer des lignes obsolètes ou une rémanence des sprites avec l'option 'Désactivé' ; utiliser 'Weave', 'Bob', 'Bob (décalé)' ou 'FastMAD (adaptatif au mouvement)' pour ceux-ci."
 #define OPTION_VAL_WEAVE_FR NULL
 #define OPTION_VAL_BOB_FR NULL
+#define OPTION_VAL_BOB_OFFSET_FR "Bob (décalé)"
+#define OPTION_VAL_FASTMAD_FR "FastMAD (adaptatif au mouvement)"
 #define BEETLE_OPT_FRAME_DUPING_LABEL_FR "Duplication d'images"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_FR "Répéter l'image précédente si le cœur n'a rien de nouveau à afficher."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_FR "Substitution de la cadence vidéo PAL"
@@ -36950,11 +36986,11 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_FR },
-         { "bob",   OPTION_VAL_BOB_FR },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_FR },
+         { "bob",        OPTION_VAL_BOB_FR },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_FR },
+         { "fastmad",    OPTION_VAL_FASTMAD_FR },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -37598,7 +37634,7 @@ struct retro_core_options_v2 options_fr = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_GA "Taisce Buaicphointe PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_GA "Cuir suíomhanna buaicphointí feabhsaithe PGXP i dtaisce lena n-athúsáid ar fud líníochtaí polagán. Is féidir ailíniú réad a fheabhsú agus fuálacha infheicthe a laghdú agus uigeachtaí á rindreáil, ach d'fhéadfadh dearfacha bréagacha agus fiosrúcháin á ndéanamh ar an taisce fabhtanna grafacha a chruthú. Moltar faoi láthair an rogha seo a fhágáil díchumasaithe. Ní chuirtear an rogha seo i bhfeidhm ach amháin nuair a bhíonn Mód Oibríochta PGXP cumasaithe. Ní thacaítear leis ach ag na rindreálaithe crua-earraí."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_GA "Uigeacht Cheart Peirspictíochta PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_GA "Cuir mapáil uigeachta atá ceart ó thaobh peirspictíochta in ionad mapáil uigeachta afíne dúchais PSX. Cuireann sé deireadh le saobhadh agus le lúbadh uigeachtaí atá ag brath ar shuíomh, rud a fhágann go mbíonn uigeachtaí ailínithe i gceart. Ní chuirtear an rogha seo i bhfeidhm ach amháin nuair a bhíonn Mód Oibríochta PGXP cumasaithe. Ní thacaítear leis ach ag na rindreálaithe crua-earraí."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_GA "Cuir mapáil uigeachta atá ceart ó thaobh peirspictíochta in ionad mapáil uigeachta afíne dúchais PSX. Cuireann sé deireadh le saobhadh agus le lúbadh uigeachtaí atá ag brath ar shuíomh, rud a fhágann go mbíonn uigeachtaí ailínithe i gceart. Ní chuirtear an rogha seo i bhfeidhm ach amháin nuair a bhíonn Mód Oibríochta PGXP cumasaithe. Tacaítear leis ag na rindreálaithe crua-earraí agus an rindreálaí bogearraí."
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_GA "Taispeáin FPS Inmheánach"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_GA "Taispeáin an ráta fráma inmheánach ag a bhfuil an córas PlayStation aithrisithe ag rindreáil ábhair. Nóta: Éilíonn sé seo go mbeidh fógraí ar an scáileán cumasaithe i dtosach libretro."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_GA "Taispeáin Teachtaireachtaí OSD"
@@ -37741,9 +37777,11 @@ struct retro_core_options_v2 options_fr = {
 #define OPTION_VAL_FORCE_PROGRESSIVE_GA "Ráta Forásach Fórsa"
 #define OPTION_VAL_FORCE_INTERLACED_GA "Ráta Idirfhite Fórsa"
 #define BEETLE_OPT_DEINTERLACER_LABEL_GA "Modh Dí-idirfhite"
-#define BEETLE_OPT_DEINTERLACER_INFO_0_GA "Taispeánann 'Weave' an dá réimse ar an bhfráma céanna le haghaidh íomhá neamhghluaiste ardtaifigh, agus íobairtíonn 'Bob' soiléireacht taifigh ar mhaithe le soiléireacht gluaisne. Le 'Off', déanann an rindreálaí bogearraí meaitseáil le hiompar an rindreálaí crua-earraí (Vulkan/OpenGL) trí rastar a chur ar gach líne VRAM i ngach fráma agus an scanadh amach a chur siar go dtí deireadh an fhráma, rud a chuireann deireadh le cíor-ar-ghluaiseacht i gcluichí idirnasctha. Tabhair faoi deara: féadfaidh cláir a dhéanann DMA go VRAM le linn scanadh amach (roinnt taispeántóirí ag baint úsáide as cleasanna fillte maolán fráma PAL >512 líne) sraitheanna seanchaite a thaispeáint faoi 'Off'; bain úsáid as 'Weave' nó 'Bob' dóibh siúd."
+#define BEETLE_OPT_DEINTERLACER_INFO_0_GA "Taispeánann 'Weave' an dá réimse ar an bhfráma céanna le haghaidh íomhá neamhghluaiste ardtaifigh iomlán, agus íobairtíonn 'Bob' soiléireacht taifigh ar mhaithe le soiléireacht gluaisne. Is é 'Bob (Offset)' Bob agus an réimse reatha dúbailte isteach san airde dromchla iomlán le fritháireamh aonlíne idir réimsí, ag caomhnú taifeach aschuir an libretro agus gluaiseacht réidh stíl Bob á choinneáil. Fíonn 'FastMAD (Motion Adaptive)' picteilíní neamhghluaiste agus idirshuíonn sé picteilíní gluaisteacha go hingearach in aghaidh an phicteilín, airde aschuir iomlán gan cíor an fhí ar ghluaiseacht ná taifeach leathnaithe Bob. Déanann 'Off' an rindreálaí bogearraí a mheaitseáil le hiompar an rindreálaí crua-earraí (Vulkan/OpenGL) trí rastar a dhéanamh chuig gach líne VRAM i ngach fráma agus scanadh amach a chur siar go dtí deireadh an fhráma, rud a chuireann deireadh le cíor-ar-ghluaiseacht i gcluichí idirnasctha. Tabhair faoi deara: féadfaidh cláir a dhéanann DMA go VRAM le linn scanadh amach (roinnt taispeántóirí ag baint úsáide as cleasanna fillte maolán fráma PAL >512 líne), nó a dhéanann nuashonrú ar sprites gluaisteacha trí aistrithe íomhá LAP-go-VRAM atá ceangailte leis an réimse taispeánta (e.g. Pro Pinball), sraitheanna seanchaite nó taibhsí sprites a thaispeáint faoi 'As'; bain úsáid as 'Weave', 'Bob', 'Bob (Offset)', nó 'FastMAD' dóibh siúd."
 #define OPTION_VAL_WEAVE_GA "Fí"
 #define OPTION_VAL_BOB_GA NULL
+#define OPTION_VAL_BOB_OFFSET_GA "Bob (Fritháireamh)"
+#define OPTION_VAL_FASTMAD_GA "FastMAD (Oiriúnaitheach Gluaiseachta)"
 #define BEETLE_OPT_FRAME_DUPING_LABEL_GA "Dupáil Fráma"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_GA "Déan an fráma roimhe seo arís mura bhfuil aon rud nua le taispeáint ag an gcroílár."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_GA "Sáraigh Ama Físe PAL"
@@ -39026,11 +39064,11 @@ struct retro_core_option_v2_definition option_defs_ga[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_GA },
-         { "bob",   OPTION_VAL_BOB_GA },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_GA },
+         { "bob",        OPTION_VAL_BOB_GA },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_GA },
+         { "fastmad",    OPTION_VAL_FASTMAD_GA },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -39674,7 +39712,7 @@ struct retro_core_options_v2 options_ga = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_GL NULL
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_GL "Almacene en caché as posicións dos vértices melloradas con PGXP para reutilizalas en debuxos de polígonos. Pode mellorar o aliñamento dos obxectos e reducir as costuras visibles ao renderizar texturas, pero os falsos positivos ao consultar a caché poden producir fallos gráficos. Actualmente recoméndase deixar esta opción desactivada. Esta opción só se aplica cando o Modo de operación PGXP está activado. Só admitido polos renderizadores de hardware."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_GL "PGXP Perspectiva Texturización correcta"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_GL "Substitúe a asignación de texturas afines nativa de PSX pola asignación de texturas correctas en perspectiva. Elimina a distorsión dependente da posición e a deformación das texturas, obtendo texturas correctamente aliñadas. Esta opción só se aplica cando o Modo de operación PGXP está activado. Só admitido polos renderizadores de hardware."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_GL NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_GL NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_GL "Mostra a velocidade de fotogramas interna á que o sistema PlayStation emulado está a renderizar contido. Nota: Require que as notificacións en pantalla estean activadas na interface de libretro."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_GL "Amosar mensaxes OSD"
@@ -39820,6 +39858,8 @@ struct retro_core_options_v2 options_ga = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_GL NULL
 #define OPTION_VAL_WEAVE_GL "Entretecido"
 #define OPTION_VAL_BOB_GL NULL
+#define OPTION_VAL_BOB_OFFSET_GL NULL
+#define OPTION_VAL_FASTMAD_GL NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_GL "Duplicación de fotogramas"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_GL "Repetir o fotograma anterior se o núcleo non ten nada novo que mostrar."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_GL "Sobrescribir temporización de vídeo PAL"
@@ -41102,11 +41142,11 @@ struct retro_core_option_v2_definition option_defs_gl[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_GL },
-         { "bob",   OPTION_VAL_BOB_GL },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_GL },
+         { "bob",        OPTION_VAL_BOB_GL },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_GL },
+         { "fastmad",    OPTION_VAL_FASTMAD_GL },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -41896,6 +41936,8 @@ struct retro_core_options_v2 options_gl = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_HE NULL
 #define OPTION_VAL_WEAVE_HE NULL
 #define OPTION_VAL_BOB_HE NULL
+#define OPTION_VAL_BOB_OFFSET_HE NULL
+#define OPTION_VAL_FASTMAD_HE NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_HE NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_HE NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_HE NULL
@@ -43178,11 +43220,11 @@ struct retro_core_option_v2_definition option_defs_he[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_HE },
-         { "bob",   OPTION_VAL_BOB_HE },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_HE },
+         { "bob",        OPTION_VAL_BOB_HE },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_HE },
+         { "fastmad",    OPTION_VAL_FASTMAD_HE },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -43972,6 +44014,8 @@ struct retro_core_options_v2 options_he = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_HR NULL
 #define OPTION_VAL_WEAVE_HR NULL
 #define OPTION_VAL_BOB_HR NULL
+#define OPTION_VAL_BOB_OFFSET_HR NULL
+#define OPTION_VAL_FASTMAD_HR NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_HR NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_HR NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_HR NULL
@@ -45254,11 +45298,11 @@ struct retro_core_option_v2_definition option_defs_hr[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_HR },
-         { "bob",   OPTION_VAL_BOB_HR },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_HR },
+         { "bob",        OPTION_VAL_BOB_HR },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_HR },
+         { "fastmad",    OPTION_VAL_FASTMAD_HR },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -45902,7 +45946,7 @@ struct retro_core_options_v2 options_hr = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_HU "PGXP vertex gyorsítótár"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_HU "A PXGP által javított vertex pozíciók eltárolása és újrahasználata újabb poligonoknál. Javíthatja az objektumok illeszkedését és csökkenti a textúrák illesztési hézagait, de a gyorsítótár fals pozitív találatai grafikai hibákat okozhatnak. Jelenleg ajánlott kikapcsolva hagyni. Csak PGXP műveleti módnál érvényes, és csak a hardveres megjelenítők támogatják."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_HU NULL
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_HU "Az eredeti PSX affine textúra leképezését perspektivikusan helyes textúra leképezésre cseréli. Megszünteti a helyzetfüggő torzítást és a textúrák görbülését, helyesen illeszkedő textúrákat eredményezve. Csak PGXP működési módnál érvényes, és csak a hardveres megjelenítők támogatják."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_HU NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_HU "Belső FPS megjelenítése"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_HU "A belső képkockasebesség megjelenítése, amivel az emulált PlayStation rendszer előállítja a képet. Figyelem: a képernyőn megjelenő értesítések be kell legyenek kapcsolva a libretro frontenden."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_HU "OSD üzenetek megjelenítése"
@@ -46048,6 +46092,8 @@ struct retro_core_options_v2 options_hr = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_HU NULL
 #define OPTION_VAL_WEAVE_HU "Szövés"
 #define OPTION_VAL_BOB_HU NULL
+#define OPTION_VAL_BOB_OFFSET_HU NULL
+#define OPTION_VAL_FASTMAD_HU NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_HU NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_HU NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_HU NULL
@@ -47330,11 +47376,11 @@ struct retro_core_option_v2_definition option_defs_hu[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_HU },
-         { "bob",   OPTION_VAL_BOB_HU },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_HU },
+         { "bob",        OPTION_VAL_BOB_HU },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_HU },
+         { "fastmad",    OPTION_VAL_FASTMAD_HU },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -48124,6 +48170,8 @@ struct retro_core_options_v2 options_hu = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_ID NULL
 #define OPTION_VAL_WEAVE_ID NULL
 #define OPTION_VAL_BOB_ID NULL
+#define OPTION_VAL_BOB_OFFSET_ID NULL
+#define OPTION_VAL_FASTMAD_ID NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_ID NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_ID NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_ID NULL
@@ -49406,11 +49454,11 @@ struct retro_core_option_v2_definition option_defs_id[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_ID },
-         { "bob",   OPTION_VAL_BOB_ID },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_ID },
+         { "bob",        OPTION_VAL_BOB_ID },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_ID },
+         { "fastmad",    OPTION_VAL_FASTMAD_ID },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -50054,7 +50102,7 @@ struct retro_core_options_v2 options_id = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_IT "Vertice Cache PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_IT "Posizioni verticali migliorate per Cache PGXP per il riutilizzo tra disegni poligonali. Può potenzialmente migliorare l'allineamento degli oggetti e ridurre le cuciture visibili durante il rendering delle texture, ma i falsi positivi quando si interroga la cache possono produrre glitch grafici. Al momento si raccomanda di lasciare disabilitata questa opzione. Questa opzione è applicata solo quando la Modalità Operazione PGXP è abilitata. Supporta solo i renderer hardware."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_IT "Prospettiva Texturing Corretta PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_IT "Sostituisci la mappatura della trama PSX nativa con la mappatura della trama corretta in prospettiva. Elimina la distorsione dipendente dalla posizione e l'ordito delle texture, con conseguente coerenza delle texture. Questa opzione è applicata solo quando la Modalità Operazione PGXP è abilitata. Supporta solo i renderer hardware."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_IT NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_IT "Visualizza Contatore FPS Interno"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_IT "Visualizza il contatore del frame rate interno a cui viene renderizzato il contenuto del sistema PlayStation emulato. Nota: Richiede di essere abilitato l'opzione delle notifiche su schermo in libretro."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_IT "Visualizza Messaggi OSD"
@@ -50200,6 +50248,8 @@ struct retro_core_options_v2 options_id = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_IT NULL
 #define OPTION_VAL_WEAVE_IT "Intreccio"
 #define OPTION_VAL_BOB_IT NULL
+#define OPTION_VAL_BOB_OFFSET_IT NULL
+#define OPTION_VAL_FASTMAD_IT NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_IT NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_IT NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_IT NULL
@@ -51482,11 +51532,11 @@ struct retro_core_option_v2_definition option_defs_it[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_IT },
-         { "bob",   OPTION_VAL_BOB_IT },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_IT },
+         { "bob",        OPTION_VAL_BOB_IT },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_IT },
+         { "fastmad",    OPTION_VAL_FASTMAD_IT },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -52130,7 +52180,7 @@ struct retro_core_options_v2 options_it = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_JA "PGXP 頂点キャッシュ"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_JA "ポリゴン描画全体で再利用するため、PGXP 拡張頂点位置をキャッシュします。テクスチャのレンダリング時にオブジェクトのアライメントを改善し、表示される継ぎ目を減らすことができますが、キャッシュの照会時に誤検知が発生すると描画バグが発生する可能性があります。無効にすることをおすすめします。ハードウェアレンダラーでのみサポートされています。"
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_JA "PGXP 視点修正テクスチャリング"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_JA "ネイティブの PS1 アフィンテクスチャマッピングを視点修正テクスチャマッピングに置換します。テクスチャの位置に依存する歪みを除去し、テクスチャを適切にアライメントします。ハードウェアレンダラーでのみサポートされています。"
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_JA NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_JA "内部 FPS を表示"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_JA "エミュレートされた PlayStation システムが描画しているコンテンツの内部フレームレートを表示します。注意: Libretro フロントエンドで OSD 通知を有効にする必要があります。"
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_JA NULL
@@ -52276,6 +52326,8 @@ struct retro_core_options_v2 options_it = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_JA NULL
 #define OPTION_VAL_WEAVE_JA NULL
 #define OPTION_VAL_BOB_JA NULL
+#define OPTION_VAL_BOB_OFFSET_JA NULL
+#define OPTION_VAL_FASTMAD_JA NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_JA NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_JA NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_JA NULL
@@ -53558,11 +53610,11 @@ struct retro_core_option_v2_definition option_defs_ja[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_JA },
-         { "bob",   OPTION_VAL_BOB_JA },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_JA },
+         { "bob",        OPTION_VAL_BOB_JA },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_JA },
+         { "fastmad",    OPTION_VAL_FASTMAD_JA },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -54206,7 +54258,7 @@ struct retro_core_options_v2 options_ja = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_KO "PGXP 버텍스 캐시"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_KO "PGXP 개선된 버텍스 위치를 캐싱하여 다양한 폴리곤 그리기에 재사용합니다. 텍스쳐를 렌더링할 때 개체 정렬을 개선하고 틈을 줄이는 등의 개선 효과를 볼 수 있지만, 캐시 쿼리 시 오탐으로 인해 그래픽 오류가 발생할 수 있습니다. 현재는 사용하지 않는 것이 권장됩니다. 이 설정은 PGXP 작동 모드가 활성화되어 있어야 적용됩니다. 하드웨어 렌더러에서만 지원됩니다."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_KO "PGXP 원근 교정 텍스쳐링"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_KO "네이티브 PSX 아핀 텍스쳐 매핑을 원근 교정 텍스쳐 매핑으로 대체합니다. 위치 기반 왜곡 및 뒤틀림을 제거하여 텍스쳐가 올바르게 표시되게 합니다. 이 설정은 PGXP 작동 모드가 활성화되어 있어야 적용됩니다. 하드웨어 렌더러에서만 지원됩니다."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_KO NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_KO "내부 FPS 표시"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_KO "에뮬레이트된 PlayStation 시스템이 컨텐츠를 렌더링하는 내부 프레임 레이트를 표시합니다. 주의: libretro 프론트엔드에서 OSD 알림을 활성화해야 합니다."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_KO "온스크린 알림으로 메시지 표시"
@@ -54352,6 +54404,8 @@ struct retro_core_options_v2 options_ja = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_KO NULL
 #define OPTION_VAL_WEAVE_KO NULL
 #define OPTION_VAL_BOB_KO NULL
+#define OPTION_VAL_BOB_OFFSET_KO NULL
+#define OPTION_VAL_FASTMAD_KO NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_KO "프레임 반복"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_KO "새로 표시할 내용이 없을 경우 이전 프레임을 한 번 더 표시합니다."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_KO "PAL 비디오 타이밍 오버라이드"
@@ -55634,11 +55688,11 @@ struct retro_core_option_v2_definition option_defs_ko[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_KO },
-         { "bob",   OPTION_VAL_BOB_KO },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_KO },
+         { "bob",        OPTION_VAL_BOB_KO },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_KO },
+         { "fastmad",    OPTION_VAL_FASTMAD_KO },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -56391,7 +56445,7 @@ struct retro_core_options_v2 options_ko = {
 #define OPTION_VAL_1_O49_NL NULL
 #define BEETLE_OPT_LINE_RENDER_LABEL_NL NULL
 #define BEETLE_OPT_LINE_RENDER_INFO_0_NL NULL
-#define OPTION_VAL_DEFAULT_NL NULL
+#define OPTION_VAL_DEFAULT_NL "Standaard"
 #define OPTION_VAL_AGGRESSIVE_NL NULL
 #define BEETLE_OPT_WIDESCREEN_HACK_LABEL_NL NULL
 #define BEETLE_OPT_WIDESCREEN_HACK_INFO_0_NL NULL
@@ -56428,6 +56482,8 @@ struct retro_core_options_v2 options_ko = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_NL NULL
 #define OPTION_VAL_WEAVE_NL NULL
 #define OPTION_VAL_BOB_NL NULL
+#define OPTION_VAL_BOB_OFFSET_NL NULL
+#define OPTION_VAL_FASTMAD_NL NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_NL NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_NL NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_NL NULL
@@ -57710,11 +57766,11 @@ struct retro_core_option_v2_definition option_defs_nl[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_NL },
-         { "bob",   OPTION_VAL_BOB_NL },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_NL },
+         { "bob",        OPTION_VAL_BOB_NL },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_NL },
+         { "fastmad",    OPTION_VAL_FASTMAD_NL },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -58504,6 +58560,8 @@ struct retro_core_options_v2 options_nl = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_NO NULL
 #define OPTION_VAL_WEAVE_NO NULL
 #define OPTION_VAL_BOB_NO NULL
+#define OPTION_VAL_BOB_OFFSET_NO NULL
+#define OPTION_VAL_FASTMAD_NO NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_NO NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_NO NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_NO NULL
@@ -59786,11 +59844,11 @@ struct retro_core_option_v2_definition option_defs_no[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_NO },
-         { "bob",   OPTION_VAL_BOB_NO },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_NO },
+         { "bob",        OPTION_VAL_BOB_NO },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_NO },
+         { "fastmad",    OPTION_VAL_FASTMAD_NO },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -60580,6 +60638,8 @@ struct retro_core_options_v2 options_no = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_OR NULL
 #define OPTION_VAL_WEAVE_OR NULL
 #define OPTION_VAL_BOB_OR NULL
+#define OPTION_VAL_BOB_OFFSET_OR NULL
+#define OPTION_VAL_FASTMAD_OR NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_OR NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_OR NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_OR NULL
@@ -61862,11 +61922,11 @@ struct retro_core_option_v2_definition option_defs_or[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_OR },
-         { "bob",   OPTION_VAL_BOB_OR },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_OR },
+         { "bob",        OPTION_VAL_BOB_OR },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_OR },
+         { "fastmad",    OPTION_VAL_FASTMAD_OR },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -62656,6 +62716,8 @@ struct retro_core_options_v2 options_or = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_PL NULL
 #define OPTION_VAL_WEAVE_PL NULL
 #define OPTION_VAL_BOB_PL NULL
+#define OPTION_VAL_BOB_OFFSET_PL NULL
+#define OPTION_VAL_FASTMAD_PL NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_PL NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_PL NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_PL NULL
@@ -63938,11 +64000,11 @@ struct retro_core_option_v2_definition option_defs_pl[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_PL },
-         { "bob",   OPTION_VAL_BOB_PL },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_PL },
+         { "bob",        OPTION_VAL_BOB_PL },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_PL },
+         { "fastmad",    OPTION_VAL_FASTMAD_PL },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -64513,11 +64575,11 @@ struct retro_core_options_v2 options_pl = {
 #define OPTION_VAL_PS1_ROM_PT_BR "BIOS de PS1 de PS3"
 #define OPTION_VAL_OPENBIOS_PT_BR NULL
 #define BEETLE_OPT_REGION_LABEL_PT_BR "Região do sistema"
-#define BEETLE_OPT_REGION_INFO_0_PT_BR NULL
+#define BEETLE_OPT_REGION_INFO_0_PT_BR "Defina a região de fallback usada quando o conteúdo não puder ser detectado automaticamente (ex.: arquivos PS-X EXE brutos). Jogos em disco continuam usando a região gravada no disco. Requer reinicialização."
 #define OPTION_VAL_AUTO_PT_BR "Automático"
-#define OPTION_VAL_NTSC_J_PT_BR NULL
-#define OPTION_VAL_NTSC_U_PT_BR NULL
-#define OPTION_VAL_PAL_PT_BR NULL
+#define OPTION_VAL_NTSC_J_PT_BR "NTSC-J (Japão)"
+#define OPTION_VAL_NTSC_U_PT_BR "NTSC-U (América do Norte)"
+#define OPTION_VAL_PAL_PT_BR "PAL (Europa)"
 #define BEETLE_OPT_INTERNAL_RESOLUTION_LABEL_PT_BR "Resolução interna da GPU"
 #define BEETLE_OPT_INTERNAL_RESOLUTION_INFO_0_PT_BR "Resoluções superiores a '1x (Nativa)' melhoram a fidelidade dos modelos 3D, ao custo de maiores requisitos de desempenho. Elementos 2D geralmente não são afetados por esta configuração."
 #define BEETLE_OPT_RENDERER_LABEL_PT_BR "Renderizador"
@@ -64586,7 +64648,7 @@ struct retro_core_options_v2 options_pl = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_PT_BR "Cache de vértice do PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_PT_BR "Faz o cache das posições de vértices melhoradas pelo PGXP para reutilização ao desenhar polígonos. Pode melhorar o alinhamento dos objetos e reduzir bordas, mas os falsos positivos ao usar o cache podem produzir defeitos visuais. Atualmente é recomendado desativar esta opção. Só se aplicará quando o modo de operação PGXP estiver ativado. Funciona somente com renderizadores de hardware."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_PT_BR "Textura fiel à perspectiva do PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_PT_BR "Substitui o mapeamento de textura afim nativo de PSX pelo mapeamento de textura fiel à perspectiva. Elimina distorções posicionais e deformações de textura, produzindo texturas corretamente alinhadas. Somente se aplicará quando o 'Modo de operação do PGXP' estiver ativado. Funciona somente com renderizadores de hardware."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_PT_BR NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_PT_BR "Mostrar QPS interno"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_PT_BR "Exibir a taxa de quadros internos na qual o sistema PlayStation emulado está renderizando o conteúdo. Nota: Requer que as notificações na tela sejam habilitadas na interface libretro."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_PT_BR "Mostrar mensagens na tela"
@@ -64689,10 +64751,10 @@ struct retro_core_options_v2 options_pl = {
 #define BEETLE_OPT_SHARED_MEMORY_CARDS_INFO_0_PT_BR "Usa memory cards compartilhados em vez de cartões separados para cada conteúdo. Nota: Se o 'Método do Memory Card' estiver definido como 'Libretro', apenas o Slot 2 do Memory Card será afetado. Reinicialização necessária."
 #define BEETLE_OPT_MEMCARD_LEFT_INDEX_LABEL_PT_BR "Índice do Slot 1 do Memory Card"
 #define BEETLE_OPT_MEMCARD_LEFT_INDEX_INFO_0_PT_BR "Memory Card carregado atualmente no slot da esquerda. Esta opção só funcionará se o Método de Memory Card estiver definido como Mednafen."
-#define OPTION_VAL_0_O48_PT_BR NULL
+#define OPTION_VAL_0_O48_PT_BR "0 (Padrão)"
 #define BEETLE_OPT_MEMCARD_RIGHT_INDEX_LABEL_PT_BR "Índice do Slot 2 do Memory Card"
 #define BEETLE_OPT_MEMCARD_RIGHT_INDEX_INFO_0_PT_BR "Memory Card carregado atualmente no slot da direita. Esta opção só funcionará se o Slot de Memory Card 2 estiver ativado."
-#define OPTION_VAL_1_O49_PT_BR NULL
+#define OPTION_VAL_1_O49_PT_BR "1 (Padrão)"
 #define BEETLE_OPT_LINE_RENDER_LABEL_PT_BR "Hack para o efeito 'Line-to-Quad'"
 #define BEETLE_OPT_LINE_RENDER_INFO_0_PT_BR "Alguns jogos (por exemplo, Doom, Hexen, Soul Blade, etc.) desenham linhas horizontais esticando triângulos de um pixel de altura pela tela, que são rasterizados como uma linha de pixels no hardware original. Este hack detecta esses pequenos triângulos e os converte em quadriláteros conforme necessário, permitindo que sejam exibidos corretamente nos renderizadores de hardware e em resoluções internas aumentadas. A opção 'Agressivo' é necessária para alguns títulos (por exemplo, Dark Forces, Duke Nukem), mas pode causar falhas gráficas em outros casos. Deixe em 'Padrão' se não tiver certeza."
 #define OPTION_VAL_DEFAULT_PT_BR "Padrão"
@@ -64729,9 +64791,11 @@ struct retro_core_options_v2 options_pl = {
 #define OPTION_VAL_FORCE_PROGRESSIVE_PT_BR "Forçar Taxa Progressiva"
 #define OPTION_VAL_FORCE_INTERLACED_PT_BR "Forçar taxa entrelaçada"
 #define BEETLE_OPT_DEINTERLACER_LABEL_PT_BR "Método de desentrelaçamento"
-#define BEETLE_OPT_DEINTERLACER_INFO_0_PT_BR NULL
+#define BEETLE_OPT_DEINTERLACER_INFO_0_PT_BR "'Weave' exibe ambos os campos no mesmo quadro para obter uma imagem estática em alta resolução total. 'Bob' sacrifica a clareza da resolução em favor da clareza de movimento. 'Bob (Offset)' é o Bob com o campo atual duplicado para a altura total da superfície com um deslocamento de uma linha entre os campos, preservando a resolução de saída do libretro enquanto mantém o movimento suave no estilo Bob. 'FastMAD (Adaptativo ao Movimento)' entrelaça pixels estáticos e interpola verticalmente pixels em movimento, pixel por pixel, mantendo a altura de saída total sem o efeito de pente em movimento do Weave nem a resolução reduzida pela metade do Bob. 'Off' faz com que o renderizador por software corresponda ao comportamento do renderizador por hardware (Vulkan/OpenGL), rasterizando todas as linhas da VRAM a cada quadro e adiando o scanout para o final do quadro, eliminando o efeito de pente em movimento (comb-on-motion) nos jogos entrelaçados. Nota: programas que fazem DMA para a VRAM durante o scanout (algumas demos que usam truques de wrap de framebuffer PAL com >512 linhas), ou que atualizam sprites em movimento via transferências de imagem da CPU para a VRAM vinculadas ao campo exibido (ex.: Pro Pinball), podem exibir linhas desatualizadas ou efeito fantasma (ghosting) nos sprites em 'Off'; use 'Weave', 'Bob', 'Bob (Offset)' ou 'FastMAD' para eles."
 #define OPTION_VAL_WEAVE_PT_BR NULL
 #define OPTION_VAL_BOB_PT_BR NULL
+#define OPTION_VAL_BOB_OFFSET_PT_BR NULL
+#define OPTION_VAL_FASTMAD_PT_BR "FastMAD (Adaptativo ao Movimento)"
 #define BEETLE_OPT_FRAME_DUPING_LABEL_PT_BR "Duplicação de Frames"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_PT_BR "Repete o frame anterior se o core não tiver nada novo para exibir."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_PT_BR "Sobreposição de Sincronização de Vídeo PAL"
@@ -66014,11 +66078,11 @@ struct retro_core_option_v2_definition option_defs_pt_br[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_PT_BR },
-         { "bob",   OPTION_VAL_BOB_PT_BR },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_PT_BR },
+         { "bob",        OPTION_VAL_BOB_PT_BR },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_PT_BR },
+         { "fastmad",    OPTION_VAL_FASTMAD_PT_BR },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -66808,6 +66872,8 @@ struct retro_core_options_v2 options_pt_br = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_PT_PT NULL
 #define OPTION_VAL_WEAVE_PT_PT NULL
 #define OPTION_VAL_BOB_PT_PT NULL
+#define OPTION_VAL_BOB_OFFSET_PT_PT NULL
+#define OPTION_VAL_FASTMAD_PT_PT NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_PT_PT NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_PT_PT NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_PT_PT NULL
@@ -68090,11 +68156,11 @@ struct retro_core_option_v2_definition option_defs_pt_pt[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_PT_PT },
-         { "bob",   OPTION_VAL_BOB_PT_PT },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_PT_PT },
+         { "bob",        OPTION_VAL_BOB_PT_PT },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_PT_PT },
+         { "fastmad",    OPTION_VAL_FASTMAD_PT_PT },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -68667,9 +68733,9 @@ struct retro_core_options_v2 options_pt_pt = {
 #define BEETLE_OPT_REGION_LABEL_RU "Регион системы"
 #define BEETLE_OPT_REGION_INFO_0_RU NULL
 #define OPTION_VAL_AUTO_RU "Автоматически"
-#define OPTION_VAL_NTSC_J_RU NULL
-#define OPTION_VAL_NTSC_U_RU NULL
-#define OPTION_VAL_PAL_RU NULL
+#define OPTION_VAL_NTSC_J_RU "NTSC-J (Япония)"
+#define OPTION_VAL_NTSC_U_RU "NTSC-U (Северная Америка)"
+#define OPTION_VAL_PAL_RU "PAL (Европа)"
 #define BEETLE_OPT_INTERNAL_RESOLUTION_LABEL_RU "Внутреннее разрешение GPU"
 #define BEETLE_OPT_INTERNAL_RESOLUTION_INFO_0_RU NULL
 #define BEETLE_OPT_RENDERER_LABEL_RU "Рендер"
@@ -68738,7 +68804,7 @@ struct retro_core_options_v2 options_pt_pt = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_RU "Вершинный кэш PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_RU "Кэшировать координаты вершин, улучшенных с PGXP для повторного исп. при отрисовке полигонов. Улучшает выравнивание объектов и уменьшает видимость швов при рендеринге текстур, но из-за ошибок при опросе кэша может вызывать ошибки графики. Рекомендуется оставлять выкл. Применяется только если вкл. 'Режим выполнения PGXP'. Поддерживается только аппаратными рендерами."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_RU "Перспективно-корректное текстурирование PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_RU "Заменяет аффинное преобразование текстур ориг. PSX на перспективно-корректное. Обеспечивает правильное выравнивание текстур, устраняя позиционно-зависимые искажения. Применяется только если вкл. 'Режим выполнения PGXP'. Поддерживается только аппаратными рендерами."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_RU NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_RU "Показывать частоту кадров"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_RU "Отображать внутреннюю частоту кадров, с которой эмулируемая PlayStation производит рендеринг. Примечание: требуется включение уведомлений в настройках фронтенда."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_RU "Показывать уведомления"
@@ -68841,10 +68907,10 @@ struct retro_core_options_v2 options_pt_pt = {
 #define BEETLE_OPT_SHARED_MEMORY_CARDS_INFO_0_RU NULL
 #define BEETLE_OPT_MEMCARD_LEFT_INDEX_LABEL_RU NULL
 #define BEETLE_OPT_MEMCARD_LEFT_INDEX_INFO_0_RU NULL
-#define OPTION_VAL_0_O48_RU NULL
+#define OPTION_VAL_0_O48_RU "0 (по умолчанию)"
 #define BEETLE_OPT_MEMCARD_RIGHT_INDEX_LABEL_RU NULL
 #define BEETLE_OPT_MEMCARD_RIGHT_INDEX_INFO_0_RU NULL
-#define OPTION_VAL_1_O49_RU NULL
+#define OPTION_VAL_1_O49_RU "1 (по умолчанию)"
 #define BEETLE_OPT_LINE_RENDER_LABEL_RU "Преобразование линий в полигоны"
 #define BEETLE_OPT_LINE_RENDER_INFO_0_RU NULL
 #define OPTION_VAL_DEFAULT_RU "По умолчанию"
@@ -68884,6 +68950,8 @@ struct retro_core_options_v2 options_pt_pt = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_RU NULL
 #define OPTION_VAL_WEAVE_RU NULL
 #define OPTION_VAL_BOB_RU NULL
+#define OPTION_VAL_BOB_OFFSET_RU NULL
+#define OPTION_VAL_FASTMAD_RU NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_RU "Дамп кадров"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_RU NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_RU NULL
@@ -68914,10 +68982,10 @@ struct retro_core_options_v2 options_pt_pt = {
 #define OPTION_VAL_20PX_RU "20 пикс."
 #define BEETLE_OPT_IMAGE_OFFSET_LABEL_RU "Сдвиг изображения после обрезки"
 #define BEETLE_OPT_IMAGE_OFFSET_INFO_0_RU NULL
-#define OPTION_VAL_12PX_O64_RU NULL
-#define OPTION_VAL_11PX_O64_RU NULL
-#define OPTION_VAL_10PX_O64_RU NULL
-#define OPTION_VAL_9PX_O64_RU NULL
+#define OPTION_VAL_12PX_O64_RU "-12 пикс."
+#define OPTION_VAL_11PX_O64_RU "-11 пикс."
+#define OPTION_VAL_10PX_O64_RU "-10 пикс."
+#define OPTION_VAL_9PX_O64_RU "-9 пикс."
 #define OPTION_VAL_8PX_O64_RU NULL
 #define OPTION_VAL_7PX_O64_RU NULL
 #define OPTION_VAL_6PX_O64_RU NULL
@@ -68931,13 +68999,13 @@ struct retro_core_options_v2 options_pt_pt = {
 #define OPTION_VAL_3PX_O64_0_RU NULL
 #define OPTION_VAL_4PX_O64_0_RU NULL
 #define OPTION_VAL_5PX_O64_0_RU NULL
-#define OPTION_VAL_6PX_O64_0_RU NULL
-#define OPTION_VAL_7PX_O64_0_RU NULL
-#define OPTION_VAL_8PX_O64_0_RU NULL
-#define OPTION_VAL_9PX_O64_0_RU NULL
-#define OPTION_VAL_10PX_O64_0_RU NULL
-#define OPTION_VAL_11PX_O64_0_RU NULL
-#define OPTION_VAL_12PX_O64_0_RU NULL
+#define OPTION_VAL_6PX_O64_0_RU "+6 пикс."
+#define OPTION_VAL_7PX_O64_0_RU "+7 пикс."
+#define OPTION_VAL_8PX_O64_0_RU "+8 пикс."
+#define OPTION_VAL_9PX_O64_0_RU "+9 пикс."
+#define OPTION_VAL_10PX_O64_0_RU "+10 пикс."
+#define OPTION_VAL_11PX_O64_0_RU "+11 пикс."
+#define OPTION_VAL_12PX_O64_0_RU "+12 пикс."
 #define BEETLE_OPT_IMAGE_OFFSET_CYCLES_LABEL_RU "Сдвиг изображения по горизонтали (в тактах GPU)"
 #define BEETLE_OPT_IMAGE_OFFSET_CYCLES_INFO_0_RU NULL
 #define BEETLE_OPT_INITIAL_SCANLINE_LABEL_RU "Начальная строка развёртки - NTSC"
@@ -70166,11 +70234,11 @@ struct retro_core_option_v2_definition option_defs_ru[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_RU },
-         { "bob",   OPTION_VAL_BOB_RU },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_RU },
+         { "bob",        OPTION_VAL_BOB_RU },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_RU },
+         { "fastmad",    OPTION_VAL_FASTMAD_RU },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -70741,7 +70809,7 @@ struct retro_core_options_v2 options_ru = {
 #define OPTION_VAL_PS1_ROM_SK NULL
 #define OPTION_VAL_OPENBIOS_SK NULL
 #define BEETLE_OPT_REGION_LABEL_SK "Systémový región"
-#define BEETLE_OPT_REGION_INFO_0_SK NULL
+#define BEETLE_OPT_REGION_INFO_0_SK "Nastaví náhradný región, ktorý sa použije v prípade, že obsah nie je možné automaticky rozpoznať (napr. surové súbory PS-X EXE). Hry na diskoch naďalej používajú región zakódovaný na disku. Je potrebné reštartovať systém."
 #define OPTION_VAL_AUTO_SK NULL
 #define OPTION_VAL_NTSC_J_SK "NTSC-J (Japonsko)"
 #define OPTION_VAL_NTSC_U_SK "NTSC-U (Severná Amerika)"
@@ -70814,7 +70882,7 @@ struct retro_core_options_v2 options_ru = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_SK "PGXP cache vrcholov"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_SK "Ukladá pozície vrcholov vylepšených PGXP do cache pre opakované použitie naprieč vykresľovaním polygónov. Môže potenciálne zlepšiť zarovnanie objektov a redukovať viditeľné švy pri vykresľovaní textúr, no chybné zhody pri dotazovaní cache môžu spôsobiť grafické chyby. V súčasnosti sa odporúča nechať túto možnosť vypnutú. Možnosť sa aplikuje len ak je povolený PGXP režim. Podporované len hardvérovými rendermi."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_SK "PGXP perspektívne korektné texturovanie"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_SK "Nahradí natívne afínne mapovanie textúr PSX perspektívne korektným mapovaním textúr. Eliminuje skreslenie a deformáciu textúr závislú od polohy, výsledkom sú správne zarovnané textúry. Možnosť sa aplikuje len ak je povolený PGXP režim. Podporované len hardvérovými rendermi."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_SK "Nahradiť pôvodné afínne mapovanie textúr PSX mapovaním textúr s korekciou perspektívy. Eliminuje skreslenie a deformáciu textúr závislé od polohy, čím sa dosiahne správne zarovnanie textúr. Táto možnosť sa uplatňuje len v prípade, ak je zapnutý prevádzkový režim PGXP. Podporujú ju hardvérové aj softvérové renderery."
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_SK "Zobraziť vnútorné FPS"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_SK "Zobrazí vnútornú frekvenciu snímok, ktorou emulovaný systém PlayStation vykresľuje obsah. Poznámka: vyžaduje povolené onscreen oznámenia v libretro frontende."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_SK "Zobraziť OSD správy"
@@ -70957,9 +71025,11 @@ struct retro_core_options_v2 options_ru = {
 #define OPTION_VAL_FORCE_PROGRESSIVE_SK "Vynútiť progresívnu frekvenciu"
 #define OPTION_VAL_FORCE_INTERLACED_SK "Vynútiť prekladanú frekvenciu"
 #define BEETLE_OPT_DEINTERLACER_LABEL_SK "Metóda deinterlace"
-#define BEETLE_OPT_DEINTERLACER_INFO_0_SK NULL
+#define BEETLE_OPT_DEINTERLACER_INFO_0_SK "Režim „Weave“ zobrazuje obe polia v jednom snímku, čím sa dosahuje statický obraz v plnom vysokom rozlíšení, zatiaľ čo režim „Bob“ uprednostňuje plynulosť pohybu na úkor ostrosti obrazu. „Bob (Offset)“ je Bob s aktuálnym poľom zdvojeným na plnú výšku povrchu s posunom jednej línie medzi poľami, čím sa zachováva výstupné rozlíšenie libretro a zároveň sa zachová plynulý pohyb v štýle Bob. „FastMAD (Motion Adaptive)“ preplieta statické pixely a vertikálne interpoluje pohybujúce sa pixely na pixel, s plnou výškou výstupu bez hrebeňového efektu pri pohybe ani zníženého rozlíšenia Bob. „Off“ zosúlaďuje správanie softvérového renderera so správaním hardvérového (Vulkan/OpenGL) renderera rasterizáciou do všetkých riadkov VRAM v každom snímku a odložením výstupu na koniec snímku, čím sa eliminuje hrebeňový efekt pri pohybe v prekladaných hrách. Poznámka: programy, ktoré počas skenovania používajú DMA do VRAM (niektoré dema využívajúce triky s obalením framebufferu PAL s viac ako 512 riadkami), alebo ktoré aktualizujú pohybujúce sa sprajty prostredníctvom prenosov obrazu z CPU do VRAM viazaných na zobrazené pole (napr. Pro Pinball), môžu pri nastavení „Off“ zobrazovať neaktuálne riadky alebo duchovité obrazy sprajtov; pre tieto prípady použite „Weave“, „Bob“, „Bob (Offset)“ alebo „FastMAD“."
 #define OPTION_VAL_WEAVE_SK "Výplet"
 #define OPTION_VAL_BOB_SK NULL
+#define OPTION_VAL_BOB_OFFSET_SK NULL
+#define OPTION_VAL_FASTMAD_SK NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_SK "Duplikovanie snímok"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_SK "Zopakuje predošlú snímku, ak jadro nemá čo nové zobraziť."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_SK "Prepísanie PAL video časovania"
@@ -72242,11 +72312,11 @@ struct retro_core_option_v2_definition option_defs_sk[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_SK },
-         { "bob",   OPTION_VAL_BOB_SK },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_SK },
+         { "bob",        OPTION_VAL_BOB_SK },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_SK },
+         { "fastmad",    OPTION_VAL_FASTMAD_SK },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -73036,6 +73106,8 @@ struct retro_core_options_v2 options_sk = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_SR NULL
 #define OPTION_VAL_WEAVE_SR NULL
 #define OPTION_VAL_BOB_SR NULL
+#define OPTION_VAL_BOB_OFFSET_SR NULL
+#define OPTION_VAL_FASTMAD_SR NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_SR NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_SR NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_SR NULL
@@ -74318,11 +74390,11 @@ struct retro_core_option_v2_definition option_defs_sr[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_SR },
-         { "bob",   OPTION_VAL_BOB_SR },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_SR },
+         { "bob",        OPTION_VAL_BOB_SR },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_SR },
+         { "fastmad",    OPTION_VAL_FASTMAD_SR },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -74966,7 +75038,7 @@ struct retro_core_options_v2 options_sr = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_SV NULL
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_SV "Cachar PGXP-förbättrade vertexpositioner för återanvändning vid polygonritningar. Kan potentiellt förbättra objektinriktningen och minska synliga sömmar vid rendering av texturer, men falska positiva resultat vid förfrågan till cacheminnet kan ge grafiska störningar. För närvarande rekommenderas att detta alternativ är avaktiverat. Detta alternativ tillämpas endast när PGXP Operation Mode är aktiverat. Stöds endast av hårdvarurenderingarna."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_SV "Korrekt texturering för PGXP-perspektiv"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_SV "Ersätt den ursprungliga affina texturmappningen i PSX med perspektivkorrekt texturmappning. Eliminerar positionsberoende förvrängning och skevhet av texturer, vilket resulterar i korrekt inriktade texturer. Detta alternativ tillämpas endast när PGXP Operation Mode är aktiverat. Stöds endast av hårdvarurenderingarna."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_SV NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_SV "Visa interna bilder per sekund (FPS)"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_SV "Visa den interna bildrutefrekvensen (FPS) som det emulerade PlayStation-systemet renderar innehåll i. Obs!: Kräver att meddelanden på skärmen är aktiverade i libretro-frontenden."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_SV "Visa OSD-meddelanden"
@@ -75112,6 +75184,8 @@ struct retro_core_options_v2 options_sr = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_SV NULL
 #define OPTION_VAL_WEAVE_SV NULL
 #define OPTION_VAL_BOB_SV NULL
+#define OPTION_VAL_BOB_OFFSET_SV NULL
+#define OPTION_VAL_FASTMAD_SV NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_SV "Bildruteduplicering"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_SV "Upprepa föregående bildruta om kärnan inte har något nytt att visa."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_SV "Åsidosätt PAL-videotiming"
@@ -76394,11 +76468,11 @@ struct retro_core_option_v2_definition option_defs_sv[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_SV },
-         { "bob",   OPTION_VAL_BOB_SV },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_SV },
+         { "bob",        OPTION_VAL_BOB_SV },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_SV },
+         { "fastmad",    OPTION_VAL_FASTMAD_SV },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -77042,7 +77116,7 @@ struct retro_core_options_v2 options_sv = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_TH NULL
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_TH "แคชตำแหน่งจุดยอด (Vertex) ที่ปรับปรุงด้วย PGXP เพื่อนำกลับมาใช้ใหม่ในการวาดโพลีกอน; ช่วยปรับปรุงการจัดวางวัตถุและลดรอยต่อที่มองเห็นได้เมื่อเรนเดอร์พื้นผิว แต่หากมีการดึงข้อมูลจากแคชผิดพลาดอาจทำให้เกิดอาการภาพค้างหรือกราฟิกผิดเพี้ยนได้ ในขณะนี้แนะนำให้ปิดตัวเลือกนี้ไว้ โดยตัวเลือกนี้จะมีผลเมื่อเปิดใช้งานโหมดการทำงาน PGXP เท่านั้น และรองรับเฉพาะตัวเรนเดอร์ฮาร์ดแวร์"
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_TH "การปรับปรุงพื้นผิวให้ถูกต้องตามมิติภาพ"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_TH "แทนที่การจับคู่พื้นผิวแบบแอฟไฟน์ (Affine) ดั้งเดิมของ PSX ด้วยการจับคู่พื้นผิวให้ถูกต้องตามมิติภาพ (Perspective Correct); ช่วยขจัดความผิดเพี้ยนและการบิดเบี้ยวของพื้นผิวตามตำแหน่งของวัตถุ ทำให้พื้นผิวมีการจัดวางที่ถูกต้องสวยงาม ตัวเลือกนี้จะมีผลเมื่อเปิดใช้งานโหมดการทำงาน PGXP เท่านั้น และรองรับเฉพาะตัวเรนเดอร์ฮาร์ดแวร์"
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_TH NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_TH "แสดง FPS ภายใน"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_TH "แสดงอัตราเฟรมเรตภายใน (FPS) ที่ระบบ PlayStation ที่จำลองอยู่กำลังประมวลผล หมายเหตุ: จำเป็นต้องเปิดใช้งานการแจ้งเตือนบนหน้าจอ ในส่วนหน้าของ libretro (Frontend) ก่อนจึงจะแสดงผลได้"
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_TH "แสดงข้อความแจ้งเตือนบนหน้าจอ"
@@ -77188,6 +77262,8 @@ struct retro_core_options_v2 options_sv = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_TH NULL
 #define OPTION_VAL_WEAVE_TH NULL
 #define OPTION_VAL_BOB_TH NULL
+#define OPTION_VAL_BOB_OFFSET_TH NULL
+#define OPTION_VAL_FASTMAD_TH NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_TH "การทำซ้ำเฟรม"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_TH "แสดงเฟรมเดิมซ้ำหากไม่มีข้อมูลใหม่จากคอร์"
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_TH "เขียนทับจังหวะวิดีโอ PAL"
@@ -78470,11 +78546,11 @@ struct retro_core_option_v2_definition option_defs_th[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_TH },
-         { "bob",   OPTION_VAL_BOB_TH },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_TH },
+         { "bob",        OPTION_VAL_BOB_TH },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_TH },
+         { "fastmad",    OPTION_VAL_FASTMAD_TH },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -79118,7 +79194,7 @@ struct retro_core_options_v2 options_th = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_TR "PGXP Köşe Önbelleği"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_TR "Çokgen çizimlerinde yeniden kullanım için PGXP ile geliştirilmiş köşe konumlarını önbelleğe alın. Dokuları işlerken potansiyel olarak nesne hizalamasını iyileştirebilir ve görünür tırtıkları azaltabilir, ancak önbelleği sorgularken yanlış pozitifler grafik arızalarına neden olabilir. Şu anda bu seçeneği devre dışı bırakmanız önerilir. Bu seçenek yalnızca PGXP Çalışma Kipi etkinleştirildiğinde uygulanır. Yalnızca donanım işleyiciler tarafından desteklenir."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_TR "PGXP Perspektif Doğru Doku"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_TR "Yerel PSX doku eşlemesini perspektif doğru doku eşlemesi ile değiştirin. Düzgün hizalanmış dokularla dokuların konuma bağlı bozulmasını ve eğrilmesini ortadan kaldırır. Bu seçenek yalnızca PGXP Çalışma Kipi etkinleştirildiğinde uygulanır. Yalnızca donanım işleyiciler tarafından desteklenir."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_TR NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_TR "Dahili FPS'yi Görüntüle"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_TR "Taklit edilmiş PlayStation sisteminin dahili kare hızını görüntüleyin. Not: Libretro ön ucunda etkinleştirilecek ekran bildirimlerini gerektirir."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_TR "OSD Mesajlarını Görüntüle"
@@ -79264,6 +79340,8 @@ struct retro_core_options_v2 options_th = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_TR NULL
 #define OPTION_VAL_WEAVE_TR NULL
 #define OPTION_VAL_BOB_TR NULL
+#define OPTION_VAL_BOB_OFFSET_TR NULL
+#define OPTION_VAL_FASTMAD_TR NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_TR NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_TR NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_TR NULL
@@ -80546,11 +80624,11 @@ struct retro_core_option_v2_definition option_defs_tr[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_TR },
-         { "bob",   OPTION_VAL_BOB_TR },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_TR },
+         { "bob",        OPTION_VAL_BOB_TR },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_TR },
+         { "fastmad",    OPTION_VAL_FASTMAD_TR },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -81340,6 +81418,8 @@ struct retro_core_options_v2 options_tr = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_TT NULL
 #define OPTION_VAL_WEAVE_TT NULL
 #define OPTION_VAL_BOB_TT NULL
+#define OPTION_VAL_BOB_OFFSET_TT NULL
+#define OPTION_VAL_FASTMAD_TT NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_TT NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_TT NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_TT NULL
@@ -82622,11 +82702,11 @@ struct retro_core_option_v2_definition option_defs_tt[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_TT },
-         { "bob",   OPTION_VAL_BOB_TT },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_TT },
+         { "bob",        OPTION_VAL_BOB_TT },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_TT },
+         { "fastmad",    OPTION_VAL_FASTMAD_TT },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -83270,7 +83350,7 @@ struct retro_core_options_v2 options_tt = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_UK "Кеш вершини PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_UK "Кешувати вершинні позиції PGXP-для повторного використання з допомогою багатокутника. потенційно може покращити вирівнювання об'єктів та зменшити видимі трави під час рендерингу текстур, але помилкові розміри при запиті кеш може призвести до графічних відблисків. Зараз рекомендуємо залишити цю опцію відключеною. Цей параметр застосовується тільки коли увімкнено режим PGXP операції. Підтримується тільки візуальні засоби."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_UK "Виправлення текстури PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_UK "Замінити рідне відображення текстур на PSX правильним зіставленням текстур. Знижує спотворення позицій та викривлення текстур, в результаті чого правильно вирівнюються текстури. Цей параметр застосовується тільки коли увімкнено режим PGXP операції. Підтримується тільки візуальні засоби."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_UK NULL
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_UK "Показувати внутрішню FPS"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_UK "Відображення інтенсивності кадрів за вказаним вмістом PlayStation системи. Примітка: Потрібні сповіщення для увімкненого в лібро-інтерфейсі."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_UK "Відображати повідомлення OSD"
@@ -83416,6 +83496,8 @@ struct retro_core_options_v2 options_tt = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_UK NULL
 #define OPTION_VAL_WEAVE_UK "Візерунок"
 #define OPTION_VAL_BOB_UK "Боб"
+#define OPTION_VAL_BOB_OFFSET_UK NULL
+#define OPTION_VAL_FASTMAD_UK NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_UK NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_UK NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_UK NULL
@@ -84698,11 +84780,11 @@ struct retro_core_option_v2_definition option_defs_uk[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_UK },
-         { "bob",   OPTION_VAL_BOB_UK },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_UK },
+         { "bob",        OPTION_VAL_BOB_UK },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_UK },
+         { "fastmad",    OPTION_VAL_FASTMAD_UK },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -85492,6 +85574,8 @@ struct retro_core_options_v2 options_uk = {
 #define BEETLE_OPT_DEINTERLACER_INFO_0_VAL NULL
 #define OPTION_VAL_WEAVE_VAL NULL
 #define OPTION_VAL_BOB_VAL NULL
+#define OPTION_VAL_BOB_OFFSET_VAL NULL
+#define OPTION_VAL_FASTMAD_VAL NULL
 #define BEETLE_OPT_FRAME_DUPING_LABEL_VAL NULL
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_VAL NULL
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_VAL NULL
@@ -86774,11 +86858,11 @@ struct retro_core_option_v2_definition option_defs_val[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_VAL },
-         { "bob",   OPTION_VAL_BOB_VAL },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_VAL },
+         { "bob",        OPTION_VAL_BOB_VAL },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_VAL },
+         { "fastmad",    OPTION_VAL_FASTMAD_VAL },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
@@ -87422,7 +87506,7 @@ struct retro_core_options_v2 options_val = {
 #define BEETLE_OPT_PGXP_VERTEX_LABEL_VN "Bộ nhớ đệm đỉnh PGXP"
 #define BEETLE_OPT_PGXP_VERTEX_INFO_0_VN "Lưu trữ tạm thời các vị trí đỉnh được nâng cấp bởi PGXP để tái sử dụng khi vẽ đa giác. Có thể cải thiện sự căn chỉnh đối tượng và giảm các đường nối hiển thị khi kết xuất kết cấu, nhưng kết quả sai khi truy vấn bộ nhớ đệm có thể gây ra lỗi đồ họa. Hiện tại khuyến nghị giữ tùy chọn này tắt. Tùy chọn này chỉ áp dụng khi chế độ hoạt động PGXP được bật. Chỉ được hỗ trợ bởi các bộ kết xuất phần cứng."
 #define BEETLE_OPT_PGXP_TEXTURE_LABEL_VN "Kết cấu theo phối cảnh PGXP"
-#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_VN "Thay thế việc ánh xạ texture affine gốc của PSX bằng ánh xạ texture đúng phối cảnh. Loại bỏ hiện tượng biến dạng và vênh vị trí của texture, đảm bảo texture được căn chỉnh chính xác. Tùy chọn này chỉ áp dụng khi Chế độ Hoạt động PGXP được bật. Chỉ được hỗ trợ bởi các bộ dựng phần cứng."
+#define BEETLE_OPT_PGXP_TEXTURE_INFO_0_VN "Thay thế ánh xạ texture affine nguyên bản của PSX bằng ánh xạ texture hiệu chỉnh phối cảnh (perspective correct). Loại bỏ hiện tượng méo và biến dạng texture phụ thuộc vào vị trí, giúp texture được căn chỉnh chính xác hơn. Tùy chọn này chỉ được áp dụng khi bật chế độ PGXP Operation Mode. Được hỗ trợ bởi trình dựng phần cứng và cả trình dựng phần mềm."
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_LABEL_VN "Hiển thị FPS nội bộ"
 #define BEETLE_OPT_DISPLAY_INTERNAL_FPS_INFO_0_VN "Hiển thị tốc độ khung hình nội bộ mà hệ thống PlayStation giả lập đang render nội dung. Lưu ý: Cần bật thông báo trên màn hình trong frontend libretro."
 #define BEETLE_OPT_DISPLAY_OSD_LABEL_VN "Hiển thị thông báo OSD"
@@ -87565,9 +87649,11 @@ struct retro_core_options_v2 options_val = {
 #define OPTION_VAL_FORCE_PROGRESSIVE_VN "Buộc tốc độ quét liên tục"
 #define OPTION_VAL_FORCE_INTERLACED_VN "Ép tốc độ xen kẽ"
 #define BEETLE_OPT_DEINTERLACER_LABEL_VN "Phương pháp khử răng cưa"
-#define BEETLE_OPT_DEINTERLACER_INFO_0_VN "‘Weave’ hiển thị cả hai trường hình (fields) trong cùng một khung hình để có ảnh tĩnh đầy đủ độ phân giải cao. ‘Bob’ hy sinh độ nét độ phân giải để đổi lấy độ mượt chuyển động tốt hơn. ‘Off’ làm cho trình dựng hình phần mềm (software renderer) hoạt động giống trình dựng hình phần cứng (Vulkan/OpenGL) bằng cách raster hóa toàn bộ các dòng VRAM ở mỗi khung hình và hoãn việc xuất hình (scanout) đến cuối khung hình, giúp loại bỏ hiện tượng răng cưa/chồng hình khi chuyển động trong các game interlaced. Lưu ý: các chương trình dùng DMA ghi vào VRAM trong lúc scanout (một số demo sử dụng mẹo framebuffer-wrap PAL hơn 512 dòng) có thể xuất hiện các hàng hình cũ khi dùng ‘Off’; hãy dùng ‘Weave’ hoặc ‘Bob’ trong trường hợp đó."
+#define BEETLE_OPT_DEINTERLACER_INFO_0_VN "‘Weave’ hiển thị cả hai trường trên cùng một khung hình để tạo ảnh tĩnh có độ phân giải đầy đủ, còn ‘Bob’ hy sinh độ nét độ phân giải để tăng độ mượt chuyển động. ‘Bob (Offset)’ là Bob nhưng nhân đôi trường hiện tại lên toàn bộ chiều cao hiển thị với độ lệch một dòng giữa các trường, giữ nguyên độ phân giải đầu ra libretro trong khi vẫn duy trì chuyển động mượt kiểu Bob. ‘FastMAD (Motion Adaptive)’ ghép các pixel tĩnh và nội suy theo chiều dọc các pixel đang chuyển động trên từng pixel, cho chiều cao đầu ra đầy đủ mà không gặp hiện tượng răng cưa khi chuyển động như weave hay giảm nửa độ phân giải như bob. ‘Off’ làm cho trình dựng phần mềm hoạt động giống trình dựng phần cứng (Vulkan/OpenGL) bằng cách rasterize lên tất cả các dòng VRAM mỗi khung hình và hoãn quét xuất hình đến cuối khung hình, loại bỏ hiện tượng răng cưa khi chuyển động trong game xen kẽ dòng (interlaced). Lưu ý: các chương trình DMA tới VRAM trong lúc quét xuất hình (một số demo dùng thủ thuật framebuffer-wrap PAL hơn 512 dòng), hoặc cập nhật sprite chuyển động qua truyền ảnh CPU-to-VRAM gắn với trường đang hiển thị (ví dụ Pro Pinball), có thể xuất hiện dòng hình cũ hoặc bóng mờ sprite khi dùng ‘Off’; hãy dùng ‘Weave’, ‘Bob’, ‘Bob (Offset)’ hoặc ‘FastMAD’ trong các trường hợp đó."
 #define OPTION_VAL_WEAVE_VN NULL
 #define OPTION_VAL_BOB_VN NULL
+#define OPTION_VAL_BOB_OFFSET_VN "Bob (Lệch dòng)"
+#define OPTION_VAL_FASTMAD_VN "FastMAD (Thích ứng chuyển động)"
 #define BEETLE_OPT_FRAME_DUPING_LABEL_VN "Nhân bản khung hình"
 #define BEETLE_OPT_FRAME_DUPING_INFO_0_VN "Lặp lại khung hình trước đó nếu lõi giả lập không có nội dung mới để hiển thị."
 #define BEETLE_OPT_PAL_VIDEO_TIMING_OVERRIDE_LABEL_VN "Ghi đè thời gian video PAL"
@@ -88850,11 +88936,11 @@ struct retro_core_option_v2_definition option_defs_vn[] = {
       NULL,
       "video",
       {
-         { "weave", OPTION_VAL_WEAVE_VN },
-         { "bob",   OPTION_VAL_BOB_VN },
-         { "bob_offset", "Bob (Offset)" },
-         { "fastmad",    "FastMAD (Motion Adaptive)" },
-         { "off",   "Off" },
+         { "weave",      OPTION_VAL_WEAVE_VN },
+         { "bob",        OPTION_VAL_BOB_VN },
+         { "bob_offset", OPTION_VAL_BOB_OFFSET_VN },
+         { "fastmad",    OPTION_VAL_FASTMAD_VN },
+         { "off",        "Off" },
          { NULL, NULL },
       },
       "weave"
